@@ -1,0 +1,52 @@
+Package: MMsampling
+Title: What the Package Does (One Line, Title Case)
+Version: 0.0.0.9000
+Authors@R: 
+    person("Tangi", "Tassin", , "tangi.tassin@outlook.fr", role = c("aut", "cre"),
+           comment = c(ORCID = "0009-0004-5956-2910"))
+Description: What the package does (one paragraph).
+License: GPL (>= 3)
+Imports: 
+    checkmate,
+    dplyr,
+    glue,
+    magrittr,
+    MatchIt,
+    methods,
+    purrr,
+    rlang,
+    simstudy,
+    tibble,
+    tidyr,
+    VGAM
+Suggests: 
+    fastglm,
+    igraph,
+    latex2exp,
+    progress,
+    spelling,
+    testthat (>= 3.0.0)
+ByteCompile: true
+Config/potools/style: base
+Config/testthat/edition: 3
+Config/testthat/parallel: true
+Encoding: UTF-8
+Language: en-US
+LazyData: true
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.2.3.9000
+Collate: 
+    'MMData.R'
+    'MMSampler.R'
+    'MMSample.R'
+    'MMsampling-package.R'
+    'tools.R'
+    'arguments.R'
+    'estim_choice_prob.R'
+    'estim_measure_bias.R'
+    'estim_tot_multimode.R'
+    'imputation.R'
+    'multimode.R'
+    'probability.R'
+    'sampling.R'
+    'simulations.R'

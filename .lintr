@@ -1,0 +1,15 @@
+linters: all_linters( # https://cran.r-project.org/web/packages/lintr/vignettes/lintr.html
+    # { can be on an empty line and { + } on a same line
+    brace_linter = NULL,
+    # Update cyclocomplexity from 15 to 30
+    cyclocomp_linter = cyclocomp_linter(30L),
+    # $ operator can be used instead of [[
+    # (useful when there are ReFClasses for instance)
+    extraction_operator_linter = NULL,
+    indentation_linter = indentation_linter(indent = NA, hanging_indent_style  = "tidy", assignment_as_infix = TRUE),
+    # No rule for object names
+    object_name_linter = NULL
+  )
+  # Exclusions are generated with a script because normally excluding a
+  # folder implies to remove all linters
+exclusions: {source("./inst/exclusions_lintr.R") ; make_exclusions_lintr()}
