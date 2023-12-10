@@ -8,6 +8,13 @@
 \description{
 What the package does (one paragraph).
 }
+\seealso{
+Useful links:
+\itemize{
+  \item \url{https://atero18.github.io/MMsampling/}
+}
+
+}
 \author{
 \strong{Maintainer}: Tangi Tassin \email{tangi.tassin@outlook.fr} (\href{https://orcid.org/0009-0004-5956-2910}{ORCID})
 

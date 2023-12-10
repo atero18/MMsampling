@@ -2,7 +2,7 @@
 "_PACKAGE"
 
 ## usethis namespace: start
-#' @importFrom magrittr %>%
+#' @importFrom dplyr %>%
 #' @importFrom rlang abort inform
 #' @importFrom glue glue
 #' @importFrom methods new

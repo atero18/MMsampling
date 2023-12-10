@@ -6,11 +6,11 @@ Authors@R:
            comment = c(ORCID = "0009-0004-5956-2910"))
 Description: What the package does (one paragraph).
 License: GPL (>= 3)
+URL: https://atero18.github.io/MMsampling/
 Imports: 
     checkmate,
     dplyr,
     glue,
-    magrittr,
     MatchIt,
     methods,
     purrr,
