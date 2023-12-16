@@ -10,7 +10,7 @@ genVarMatrix <- function(p, seed = NULL, names = NULL,
 
   if (is.null(sigmas))
   {
-    assertDoubleScalar(maxSigma, lower = 0.0, finite = TRUE)
+    assertNumericScalar(maxSigma, lower = 0.0, finite = TRUE)
     sigmas <- runif(p, 0.0, maxSigma)
   }
   else
@@ -33,23 +33,23 @@ genVarMatrix <- function(p, seed = NULL, names = NULL,
   cor2cov(corMat, sigmas)
 }
 
-#' @importFrom checkmate assertCount
+#' @importFrom checkmate assertCount testScalar
 #' @importFrom simstudy genCorData
 #' @importFrom stats cov2cor
 #' @inheritParams seed
 #' @export
 lin_sim <- function(N = 1000L,
                     meanX = NULL, covarX = NULL,
-                    betaY = NULL, varY = NULL,
-                    Mbar = 1L, covarYMbar = NULL,
-                    betaYMbar = NULL,
+                    betasY = NULL, varY = NULL,
+                    Kbar = 1L, covarYMbar = NULL,
+                    betasYMbar = NULL,
                     meanZ = NULL, covarZ = NULL,
                     gammaYMbar = NULL,
                     pX = nrow(covarX), pZ = length(meanZ),
                     seed = NULL)
 {
   assertCount(N, positive = TRUE)
-  assertCount(Mbar, positive = TRUE)
+  assertCount(Kbar, positive = TRUE)
   assertCount(pX, positive = TRUE)
   assertCount(pZ)
 
@@ -58,58 +58,72 @@ lin_sim <- function(N = 1000L,
   if (is.null(meanX))
     meanX <- runif(pX, -10.0, +10.0)
   else
-    assertMean(meanX)
+    assertMeans(meanX, len = pX)
 
   if (is.null(covarX))
     covarX <- genVarMatrix(pX)
   else
+  {
+    covarX <- as.matrix(covarX)
     assertCovarMat(covarX, pX)
+  }
 
   sigmaX <- diag(covarX) %>% sqrt()
 
   nomsVarX <- paste0("X", seq_along(meanX))
 
 
-  if (is.null(betaY))
-    betaY <- runif(pX + 1L, -10.0, +10.0)
+  if (is.null(betasY))
+    betasY <- runif(pX + 1L, -10.0, +10.0)
   else
   {
-    assertNumericVector(betaY, finite = FALSE, len = pX + 1L,
+    assertNumericVector(betasY, finite = FALSE, len = pX + 1L,
                         any.missing = FALSE, all.missing = FALSE,
                         null.ok = FALSE)
   }
 
-  names(betaY) <- nomsBetas <- c("cst", nomsVarX)
+  names(betasY) <- nomsBetas <- c("cst", nomsVarX)
 
 
 
   if (is.null(varY))
     varY <- runif(1L, 0.0, 10.0)
   else
-    assertVariance(varY)
+    assertVariances(varY, len = 1L)
 
   sigmaY <- sqrt(varY)
 
-  nomsVarYMbar <- paste0("Y", seq_len(Mbar))
-  nomsEpsYMbar <- paste0("eps", seq_len(Mbar))
+  nomsVarYMbar <- paste0("Y", seq_len(Kbar))
+  nomsEpsYMbar <- paste0("eps", seq_len(Kbar))
 
-  if (is.null(betaYMbar))
+  if (is.null(betasYMbar))
   {
-    betaYMbar <-
-      runif(Mbar * (pX + 1L), -10.0, +10.0) %>%
-      matrix(nrow = pX + 1L, ncol = Mbar)
+    betasYMbar <-
+      runif(Kbar * (pX + 1L), -10.0, +10.0) %>%
+      matrix(nrow = pX + 1L, ncol = Kbar)
   }
+  else if (Kbar == 1L && is.vector(betasYMbar))
+  {
+    assertNumericVector(betasYMbar, finite = TRUE,
+                        any.missing = FALSE, all.missing = FALSE,
+                        len = Kbar + 1L)
+    betasYMbar <- matrix(betasYMbar, nrow = pX + 1L, ncol = 1L)
+  }
+  else
+    assertTable(betasYMbar, ncols = Kbar, nrows = pX + 1L)
 
-  rownames(betaYMbar) <- nomsBetas
-  colnames(betaYMbar) <- nomsVarYMbar
+  rownames(betasYMbar) <- nomsBetas
+  colnames(betasYMbar) <- nomsVarYMbar
 
   if (is.null(covarYMbar))
-    covarYMbar <- genVarMatrix(Mbar)
+    covarYMbar <- genVarMatrix(Kbar)
   else
-    assertCovarMat(covarX, Mbar)
+  {
+    covarYMbar <- as.matrix(covarYMbar)
+    assertCovarMat(covarX, Kbar)
+  }
 
   sigmaYMbar <- diag(covarYMbar) %>% sqrt()
-
 
   if (pZ > 0L)
   {
@@ -122,7 +136,7 @@ lin_sim <- function(N = 1000L,
     if (is.null(gammaYMbar))
     {
       gammaYMbar <-
-        runif(Mbar * pZ, -10.0, +10.0) %>% matrix(nrow = pZ, ncol = Mbar)
+        runif(Kbar * pZ, -10.0, +10.0) %>% matrix(nrow = pZ, ncol = Kbar)
     }
 
     nomsVarZ <- nomsGamma <- paste0("Z", seq_len(pZ))
@@ -145,8 +159,8 @@ lin_sim <- function(N = 1000L,
   }
 
   covar <- matrix(0.0,
-                  ncol = pX + 1L + Mbar + pZ,
-                  nrow = pX + 1L + Mbar + pZ)
+                  ncol = pX + 1L + Kbar + pZ,
+                  nrow = pX + 1L + Kbar + pZ)
   rownames(covar) <-
     colnames(covar) <- c(nomsVarX, "eps", nomsVarZ, nomsEpsYMbar)
 
@@ -168,21 +182,21 @@ lin_sim <- function(N = 1000L,
 
 
   data <- genCorData(N,
-                     mu = c(meanX, numeric(1L + Mbar), meanZ),
+                     mu = c(meanX, numeric(1L + Kbar), meanZ),
                      sigma = sigmas, corMatrix = corrMat, rho = 0.0,
                      cnames = c(nomsVarX, "eps",
                                 nomsEpsYMbar, nomsGamma))[, -1L]
   data <- as.matrix(data)
 
-  Y <- betaY[1L] + data[, nomsVarX, drop = FALSE] %*% betaY[-1L] + data[, "eps"]
+  Y <- betasY[1L] + data[, nomsVarX, drop = FALSE] %*% betasY[-1L] + data[, "eps"]
   colnames(Y) <- "Y"
 
   data <- cbind(data, Y = Y)
 
   YMbar <-
-    betaYMbar["cst", , drop = TRUE] +
+    betasYMbar["cst", , drop = TRUE] +
     data[, nomsVarX, drop = FALSE] %*%
-    betaYMbar[-1L, , drop = FALSE] +
+    betasYMbar[-1L, , drop = FALSE] +
     data[, nomsEpsYMbar]
 
   if (pZ > 0L)
@@ -192,17 +206,17 @@ lin_sim <- function(N = 1000L,
 
   data <- cbind(data, YMbar)
 
-  coefsReg <- rbind(betaYMbar, gammaYMbar)
-  coefsReg <- cbind(Y = c(betaY, numeric(pZ)), coefsReg)
+  coefsReg <- rbind(betasYMbar, gammaYMbar)
+  coefsReg <- cbind(Y = c(betasY, numeric(pZ)), coefsReg)
   rownames(coefsReg) <- c(nomsBetas, nomsVarZ)
 
 
-  probsM <- runif(N * (Mbar + 2L)) %>% matrix(nrow = N, ncol = Mbar + 2L)
+  probsM <- runif(N * (Kbar + 2L)) %>% matrix(nrow = N, ncol = Kbar + 2L)
   probsM <-
     apply(probsM, MARGIN = 1L, function(probs) probs / sum(probs)) %>% t()
   colnames(probsM) <- c("Y", nomsVarYMbar, "nr")
 
-  phi_tab <- matrix(1.0 / (Mbar + 1L), ncol = Mbar + 1L, nrow = N)
+  phi_tab <- matrix(1.0 / (Kbar + 1L), ncol = Kbar + 1L, nrow = N)
   colnames(phi_tab) <- c("Y", nomsVarYMbar)
 
   list(covar = covar, data = data,
@@ -213,7 +227,7 @@ lin_sim <- function(N = 1000L,
 
 #' @importFrom purrr partial
 sim_2_modes_1_X_1_Z <- partial(lin_sim, covarX = NULL,
-                               Mbar = 1L, covarYMbar = 1L,
+                               Kbar = 1L, covarYMbar = 1L,
                                covarZ = NULL, pX = 1L, pZ = 1L)
 
 #' @importFrom purrr compose
@@ -367,14 +381,14 @@ make_grid_sim <- function(N = 10000L, seed = NULL)
   probasGrid <- tibble(N = probasGrid, pi = listPis)
 
 
-  phi <- N <- KRef <- KRefBar <- pX <- pZ <- samplerType <- prop <-
+  phi <- N <- KRef <- Kbar <- pX <- pZ <- samplerType <- prop <-
     imputation <- deltaEstim <- n <- NULL
   # Creation of the hyperparameters grid
   grid <-
     expand_grid(phi = phiList,
                 N = N,
                 KRef = KRefList,
-                KRefBar = KRefBarList,
+                Kbar = KRefBarList,
                 pX = pXList,
                 pZ = pZList,
                 samplerType = samplerTypeList,
@@ -407,7 +421,7 @@ make_grid_sim <- function(N = 10000L, seed = NULL)
 
   grid <-
     grid %>%
-    group_by(N, KRef, KRefBar, pX, pZ, phi) %>%
+    group_by(N, KRef, Kbar, pX, pZ, phi) %>%
     mutate(idProblem = cur_group_id()) %>%
     group_by(n, .add = TRUE) %>%
     mutate(idSample = cur_group_id()) %>%
@@ -421,7 +435,37 @@ make_grid_sim <- function(N = 10000L, seed = NULL)
 make_grid_int_tel <- function(N = 10000L, seed = NULL)
 {
   make_grid_sim(seed) %>%
-    filter(pZ <= 1L, pX <= 2L, KRef == 1L, KRefBar == 1L) # nolint: object_usage_linter
+    filter(pZ <= 1L, pX <= 2L, KRef == 1L, Kbar == 1L) # nolint: object_usage_linter
+}
+
+## À supprimer
+sim_CH <- function(N = 10L, delta = 0.25, ratioVar = 1.0, seed = 123L)
+{
+    fix_seed(seed)
+
+    assertNumericScalar(delta, finite = TRUE)
+    assertNumericScalar(ratioVar, lower = 1L, finite = TRUE)
+
+    meanX <- 1.0
+    varX <- 1.5
+    betasYtel <- c(5.0, 2.0) # Intercept + fonction linéaire X pour réponse téléphone
+    betasYint <- c(5.0, 2.0 + delta) # intercept + fonction linéaire X pour réponse internet
+    varYtel <- 1.0 # Variance des résidus pour le mode téléphone
+    varYint <- varYtel * ratioVar # Variance des résidus pour le mode internet
+    simulation <- lin_sim(N, pX = 1L, pZ = 0L, Kbar = 1L,
+                          meanX = meanX, covarX = varX,
+                          betasY = betasYtel, varY = varYtel,
+                          betasYMbar = betasYint, covarYMbar = varYint,
+                          seed = NULL)
+
+    NOMSMODES <- c("tel", "int")
+    colnames(simulation$data)[ncol(simulation$data) + -1:0] <- NOMSMODES
+    colnames(simulation$phi_tab) <- NOMSMODES
+    colnames(simulation$coefs) <- NOMSMODES
+    colnames(simulation$probsM) <- c(NOMSMODES, "nr")
+
+    return(simulation)
+
 }
 
 

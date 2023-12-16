@@ -162,7 +162,9 @@ checkMeans <- partial(checkNumericVector, finite = TRUE,
                       null.ok = FALSE)
 
 #' @importFrom checkmate makeAssertionFunction
-assertMeans <- makeAssertionFunction(checkMeans)
+assertMeans <- partial(assertNumericVector, finite = TRUE,
+                       any.missing = FALSE, all.missing = FALSE,
+                       null.ok = FALSE)
 
 
 #' @importFrom purrr partial

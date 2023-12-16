@@ -73,14 +73,15 @@ checkNumericVector <- function(x, lower = -Inf, upper = Inf, finite = FALSE,
 #' @importFrom checkmate makeAssertionFunction
 assertNumericVector <- makeAssertionFunction(checkNumericVector)
 
-#' @importFrom purrr partial
-checkDoubleScalar <- partial(checkNumericVector,
-                             min.len = 1L, len = 1L, max.len = 1L,
-                             any.missing = FALSE, all.missing = FALSE,
-                             null.ok = FALSE, unique = FALSE, sorted = FALSE)
 
 #' @importFrom purrr partial
-assertDoubleScalar <- partial(assertNumericVector,
+checkNumericScalar <- partial(checkNumericVector,
+                              min.len = 1L, len = 1L, max.len = 1L,
+                              any.missing = FALSE, all.missing = FALSE,
+                              null.ok = FALSE, unique = FALSE, sorted = FALSE)
+
+#' @importFrom purrr partial
+assertNumericScalar <- partial(assertNumericVector,
                               min.len = 1L, len = 1L, max.len = 1L,
                               any.missing = FALSE, all.missing = FALSE,
                               null.ok = FALSE, unique = FALSE, sorted = FALSE)
@@ -89,8 +90,8 @@ assertDoubleScalar <- partial(assertNumericVector,
 #' @importFrom checkmate checkMatrix checkDataFrame checkTibble
 checkTable <- function(table,
                        any.missing = FALSE, all.missing = FALSE,
-                       min.rows = 1L, nrows = NULL,
-                       min.cols = 1L, ncols = NULL,
+                       min.rows = 1L, nrows = NULL, max.rows = NULL,
+                       min.cols = 1L, ncols = NULL, max.cols = NULL,
                        null.ok = FALSE, mode = NULL, col.names = NULL)
 {
 
@@ -131,6 +132,9 @@ checkTable <- function(table,
 
   funCheck(table)
 }
+
+#' @importFrom checkmate makeAssertionFunction
+assertTable <- makeAssertionFunction(checkTable)
 
 #' @importFrom simstudy genCorMat
 get_value_by_mode <- function(data, modes)

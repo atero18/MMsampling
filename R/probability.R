@@ -22,7 +22,7 @@ cor2cov <- function(cor, sigmas)
 
   if (testScalar(cor))
   {
-    assertSD(sigmas)
+    assertSDs(sigmas, len = 1L)
 
     cov <- matrix(sigmas, nrow = 1L, ncol = 1L)
   }
