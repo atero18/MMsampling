@@ -90,13 +90,28 @@ MMSamplerData$methods(
 )
 
 MMSamplerData$methods(
+  proba_resp_ref = function() .self$probaModes[, .self$modesRef, drop = TRUE]
+)
+
+MMSamplerData$methods(
   weights =
   function(modes, inv = TRUE)
   {
     HT_mm_weights(pi = .self$pi, probaMode = .self$pModes(modes), inv = inv)
   },
+  weights_ref = function(inv = TRUE)
+  {
+    weights <- .self$pi *
+      rowSums(.self$probaModes[, .self$modesRef, drop = FALSE])
+
+    if (inv)
+      weights
+    else
+      1.0 / weights
+
+  },
   #' @importFrom checkmate assertSubset
-  completeWeigths =
+  completeWeights =
   function(modes = NULL)
   {
     assertSubset(modes, .self$modes, empty.ok = TRUE)
@@ -105,7 +120,7 @@ MMSamplerData$methods(
       inclusionWeights <-
         matrix(1.0 / pi, nrow = .self$N, ncol = .self$K, byrow = FALSE)
 
-      modeAndNRWeigths <- .self$probaModes
+      modeAndNRWeights <- .self$probaModes
     }
     else
     {
@@ -114,15 +129,15 @@ MMSamplerData$methods(
       inclusionWeights <- numeric(.self$N)
       inclusionWeights[respondants] <- 1.0 / .self$pi[respondants]
 
-      modeAndNRWeigths <- numeric(.self$N)
-      modeAndNRWeigths[respondants] <-
+      modeAndNRWeights <- numeric(.self$N)
+      modeAndNRWeights[respondants] <-
         1.0 /
         get_value_by_mode(.self$probaModes[respondants, ],
                           modes[respondants])
 
     }
 
-    inclusionWeights * modeAndNRWeigths
+    inclusionWeights * modeAndNRWeights
   }
 )
 
@@ -155,9 +170,10 @@ MMSamplerData$methods(
 # Generation of samples (MMSampler) ---------------------------------------
 
 #' @importFrom methods setRefClass
-MMSampler <- setRefClass("MMSampler", contains = "MMSamplerData",
-                         methods = list(
-                           initialize = function(...) callSuper(...))
+MMSampler <-
+  setRefClass("MMSampler", contains = "MMSamplerData",
+              methods = list(
+                initialize = function(...) callSuper(...))
 )
 
 MMSampler$methods(

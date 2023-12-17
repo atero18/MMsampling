@@ -108,6 +108,8 @@ MMSample$methods(
 )
 
 MMSample$methods(
+  Xm = function(mode) .self$X[.self$respondents_mode(mode), , drop = FALSE],
+  Xref = function() .self$X[.self$respondents_ref(), , drop = FALSE],
   #' @importFrom checkmate assertFlag
   Ytilde = function(answersOnly = FALSE)
   {
@@ -137,6 +139,10 @@ MMSample$methods(
   Yref_resp = function(answersOnly = TRUE)
   {
     .self$extract_Y(.self$respondents_ref(), answersOnly)
+  },
+  HT_Ym = function(mode)
+  {
+    HT_Ym(self$pi, .self$Ytilde(), mode, .self$phi, .self$probaModes, .self$mode)
   }
 )
 
@@ -216,7 +222,7 @@ plot.MMSample <- function(x, ...)
   edges[2L + 2L * seq_len(x$K + 1L)] <- seq_len(x$K + 1L) + 2L
 
   layout <- matrix(c(0.0, 1.0, # U
-                     0.0, 0.5),# S
+                     0.0, 0.5), # S
                    ncol = 2L, byrow = TRUE)
 
   xModes <- -1.0 + 2.0 * (0L:x$K) / x$K

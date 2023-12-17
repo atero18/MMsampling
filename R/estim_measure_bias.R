@@ -6,18 +6,18 @@
 #' @importFrom stats lm
 #' @keywords internal
 #' @name regression_Ym
-MCO_Ym <- function(Xm, Ym, m = NULL, choixMode = NULL)
+MCO_Ym <- function(sample, m)
 {
-  if (is.null(m))
-    mask <- rep(TRUE, length(Ym))
-  else
-  {
-    mask <- choixMode == m
-    if (!any(mask))
-      glue("Nobody answered with the mode {m}") %>% abort()
-  }
+  maskMode <- sample$respondents_mode(m)
 
-  lm(Ym ~ Xm, subset = mask)
+  if (!any(maskMode))
+    glue("Nobody answered with the mode {m}") %>% abort()
+
+  Ym <- sample$Ym_resp(m) # nolint: object_usage_linter
+  Xm <- sample$Xm(m) # nolint: object_usage_linter
+
+
+  lm(Ym ~ Xm)
 }
 
 #' @inheritParams regression_Ym
@@ -54,29 +54,54 @@ estim_delta_G_comp_MCO <- function(X, Ytilde, choixMode, modesRef, modes = NULL)
 }
 
 #' @importFrom checkmate assertFlag
-#' @export
-modelisation_delta_MCO <- function(Xm, Ym, Ycf, addYm = TRUE)
+#' @importFrom stats lm coef
+coefs_MB_MCO_cf <- function(sample, m, Ycf)
 {
-  assertY(Ym)
-  assertFlag(addYm)
-
-  n <- length(Ym)
-
+  maskMode <- sample$respondents_mode(m)
+  n <- sum(maskMode)
   assertY(Ycf, N = n)
 
-  ## Assert X
-
-  if (addYm)
-    Xm <- cbind(Xm, Ym)
-
-  lm(Ym - Ycf ~ Xm)
+  lm(sample$Ytilde() - Ycf ~ sample$X, subset = maskMode) %>% coef()
 }
 
-#' @importFrom stats predict.lm
-estim_delta_MCO <- function(Xm, Ym, Ycf)
+#' @importFrom checkmate assertChoice
+coefs_MB_MCO_tot <- function(sample, m, typeTot = "doubleHT", Ycf = NULL)
 {
-  model <- modelisation_delta_MCO(Xm, Ym, Ycf)
-  predict.lm(model, newdata = Xm)
+  assertChoice(typeTot, c("doubleHT", "totYcf", "doubleHT"))
+  maskMode <- sample$respondents_mode(m)
+
+  phi <- sample$phi_tab[, m]
+  inverseMat <- (t(sample$X) %*% diag(phi) %*% sample$X) %>% solve()
+  Xm <- sample$Xm(m)
+  Ym <- sample$Ym_resp(answersOnly = TRUE)
+  phim <- phi[maskMode]
+  weightsm <- sample$weights(m, inv = FALSE)[maskMode]
+
+  if (typeTot == "estimDeltaCF")
+  {
+    delta <- Ym - Ycf[maskMode]
+    HTdelta <- Xm %*% delta * phim * weightsm
+    inverseMat %*% HTdelta
+  }
+  else if (typeTot == "totYcf")
+  {
+    totYcf <- sum(Ycf)
+    HTm <- Xm %*% Ym * phim * weightsm
+    inverseMat %*% (HTm - totYcf)
+  }
+
+  else if (typeTot == "doubleHT")
+  {
+    Xref <- sample$Xref()
+    Yref <- sample$Yref_resp(answersOnly = TRUE)
+    weightsref <- sample$weights_ref(inv = FALSE)
+    phiref <- phi[sample$respondents_ref()]
+
+    HTm <- Xm %*% Ym * phim * weightsm
+    HTref <- Xref %*% Yref * phiref * weightsref
+
+    inverseMat %*% (HTm - HTref)
+  }
 }
 
 #' @importFrom stats qf
@@ -122,7 +147,7 @@ check_nullity_bias_MCO <- function(sample, Ycf, alpha = 0.01,
       else
         delta[masqueMode] <- 0.0
 
-      modifs <- c(modifs, paste0(mode, "->", problem$modesRef[1L]))
+      modifs <- c(modifs, paste0(mode, "->", sample$modesRef[1L]))
       unbiasedModes <- c(unbiasedModes, mode)
     }
   }

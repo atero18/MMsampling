@@ -363,7 +363,8 @@ make_grid_sim <- function(N = 10000L, seed = NULL)
   checkEqualityList <- c("no", "MCO", "MCO_agreg")
   imputationList <- c("true_values", "nearest", "optimal", "genetic", "MCO")
   checkNullityBiasList <- c("no", "MCO_Ym", "MCO_CF")
-  deltaEstimList <- c("CF", "MCO", "MCO_Ym", "G-COMP")
+  deltaEstimList <- c("CF", "MCO", "MCO_Ym", "G-COMP", "MCO_tots",
+                      "MCO_cf", "MCO_tot_cf")
   deltaGHBList <- c("no", "k-means", "k-means_agreg")
   pmEstimList <- c("true_values", "multinomial")
   pmRGHList <- c("no", "k-means", "k-means_agreg")
@@ -435,21 +436,25 @@ make_grid_sim <- function(N = 10000L, seed = NULL)
 make_grid_int_tel <- function(N = 10000L, seed = NULL)
 {
   make_grid_sim(seed) %>%
-    filter(pZ <= 1L, pX <= 2L, KRef == 1L, Kbar == 1L) # nolint: object_usage_linter
+    filter(pZ <= 1L, pX <= 2L, KRef == 1L, Kbar == 1L) %>%
+    filter(checkEquality == "no", checkNullityBias == "no") # nolint: object_usage_linter
 }
 
 ## À supprimer
-sim_CH <- function(N = 10L, delta = 0.25, ratioVar = 1.0, seed = 123L)
+sim_CH <- function(N = 10L, intercept = 5.0, betaXtel = 2.0,
+                   delta = 0.25, ratioVar = 1.0, seed = 123L)
 {
     fix_seed(seed)
 
+    assertNumericScalar(intercept)
+    assertNumericScalar(betaXtel)
     assertNumericScalar(delta, finite = TRUE)
-    assertNumericScalar(ratioVar, lower = 1L, finite = TRUE)
+    assertNumericScalar(ratioVar, lower = 0.0, finite = TRUE)
 
-    meanX <- 1.0
-    varX <- 1.5
-    betasYtel <- c(5.0, 2.0) # Intercept + fonction linéaire X pour réponse téléphone
-    betasYint <- c(5.0, 2.0 + delta) # intercept + fonction linéaire X pour réponse internet
+    meanX <- 0.0
+    varX <- 1
+    betasYtel <- c(intercept, betaXtel) # Intercept + fonction linéaire X pour réponse téléphone
+    betasYint <- c(intercept, betaXtel + delta) # intercept + fonction linéaire X pour réponse internet
     varYtel <- 1.0 # Variance des résidus pour le mode téléphone
     varYint <- varYtel * ratioVar # Variance des résidus pour le mode internet
     simulation <- lin_sim(N, pX = 1L, pZ = 0L, Kbar = 1L,
@@ -555,19 +560,21 @@ grid_sim <- function(B = 100L, grid = NULL, seed = NULL)
 
     for (idSample in idSamples)
     {
-
       paramsSampling <-
         grid[grid$idSample == idSample, ][1L, ]
 
       n <- paramsSampling$n
       samplerType <- paramsSampling$samplerType
-      pi <- paramsSampling$pi[[1L]]
+
 
       if (samplerType == "SRS")
         sampler <- MMSRS$new(X = X, n = n, N = N, probaModes = probaModes)
 
       else if (samplerType == "Poisson")
+      {
+        pi <- paramsSampling$pi[[1L]]
         sampler <- MMPoisson$new(X = X, N = N, pi = pi, probaModes = probaModes)
+      }
 
 
       plans <- sampler$samplings(B)

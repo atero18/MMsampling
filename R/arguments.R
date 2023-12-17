@@ -291,12 +291,12 @@ checkCorMat <- function(mat, p = nrow(mat))
 assertCorMat <- makeAssertionFunction(checkCorMat)
 
 #' @importFrom checkmate checkMatrix
-checkBiasesMes <- function(biases, N, K = ncol(mat))
+checkBiasesMes <- function(biases, N, K = ncol(biases))
 {
 
   if (is.matrix(biases))
   {
-    checkMat <- checkMatrix(mat, mode = "numeric",
+    checkMat <- checkMatrix(biases, mode = "numeric",
                             any.missing = FALSE, all.missing = FALSE,
                             min.rows = 1L, nrows = N,
                             min.cols = 1L, ncols = K,
@@ -306,10 +306,10 @@ checkBiasesMes <- function(biases, N, K = ncol(mat))
     if (!isTRUE(checkMat))
       return(checkMat)
 
-    if (all(mat == 0.0))
+    if (all(biases == 0.0))
       return("There is no biased mode")
 
-    if (any(is.infinite(mat)))
+    if (any(is.infinite(biases)))
       return("Biases must be finite")
   }
   else if (is.vector(biases))

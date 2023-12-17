@@ -157,7 +157,7 @@ MMContext$methods(
   Ym = function(m) .self$Y_tab[, m],
   Yref = function() .self$Ym(.self$modesRef[1L]),
   yPhi = function() .self$Y_tab * .self$phi_tab,
-  yPhim = function(m) .self$Y_tab[, m] * .self$phi_tab[, m],
+  yPhim = function(mY, mPhi = mY) .self$Y_tab[, mY] * .self$phi_tab[, mPhi],
   #' @importFrom checkmate testChoice
   mesBias = function(m = NULL)
   {

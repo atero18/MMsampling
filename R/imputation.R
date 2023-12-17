@@ -5,15 +5,16 @@ estim_tot_imput <- function(X, model)
   sum(Ypred)
 }
 
-#' @importFrom stats lm
-MCO_Y <- function(X, Ytilde, modesRef, choixMode)
+#' @importFrom stats lm predict
+MCO_Y <- function(sample)
 {
-  masqueRepRef <- choixMode %in% modesRef
+  maskRespRef <- sample$respondents_ref()
 
-  if (!any(masqueRepRef))
-    stop("Nobody answered via a reference mode")
+  Ytilde <- sample$Yref() # nolint: object_usage_linter
+  Xref <- sample$Xref() # nolint: object_usage_linter
 
-  lm(Ytilde ~ X, subset = masqueRepRef)
+  lm(Ytilde ~ Xref, subset = maskRespRef) %>%
+    predict(newdata = sample$X)
 }
 
 #' @importFrom checkmate assertChoice
@@ -33,11 +34,6 @@ estim_tot_MCO_Y <- function(plan, modesRef, X, Y, type = "pred")
     betaSR <- coef(modele)
     (t(X) %*% X %*% betaSR)[1L]
   }
-}
-
-estim_tot_1GH <- function(sample)
-{
-  Y <- mean(sample$Yref_resp()) * sample$N
 }
 
 #' @importFrom checkmate assertVector
@@ -82,16 +78,18 @@ nearest_neighbor_reference <- function(sample, distance)
   nn
 }
 
-#' @importFrom MatchIt matchit
 Y_matching <- function(sample, method)
 {
 
+  if (!requireNamespace("MatchIt", quietly = TRUE))
+    abort("Package MatchIt is needed")
+
   masqueRepsRef <- sample$respondants_ref()
   class <- !masqueRepsRef %>% as.integer() # nolint: object_usage_linter
-  resImp <- matchit(class ~ sample$X, replace = TRUE)$match.matrix[, 1L]
+  resImp <- MatchIt::matchit(class ~ sample$X, replace = TRUE)$match.matrix[, 1L]
 
-  Ytilde <- sample$Ytilde()
-  Ytilde[!masqueRepsRef] <- problem$Y[resImp]
+  Ycf <- sample$Ytilde()
+  Ycf[!masqueRepsRef] <- sample$Yref()[resImp]
 
-  return(Ytilde)
+  return(Ycf)
 }

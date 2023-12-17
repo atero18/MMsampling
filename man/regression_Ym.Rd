@@ -5,7 +5,7 @@
 \alias{MCO_Ym}
 \title{Parametric regression for modes}
 \usage{
-MCO_Ym(Xm, Ym, m = NULL, choixMode = NULL)
+MCO_Ym(sample, m)
 }
 \description{
 Estimate Ym on the whole population based

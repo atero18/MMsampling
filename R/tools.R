@@ -41,8 +41,10 @@ testColnamed <- makeTestFunction(checkColnamed)
 
 
 #' @importFrom checkmate assertFlag checkVector checkNumeric
-checkNumericVector <- function(x, lower = -Inf, upper = Inf, finite = FALSE,
-                               any.missing = TRUE, all.missing = TRUE,
+checkNumericVector <- function(x, lower = -Inf, lowerAuthorized = TRUE,
+                               upper = Inf, upperAuthorized = TRUE,
+                               finite = FALSE,
+                               any.missing = FALSE, all.missing = FALSE,
                                len = NULL, min.len = NULL, max.len = NULL,
                                unique = FALSE, sorted = FALSE,
                                names = NULL, typed.missing = FALSE,
@@ -51,6 +53,7 @@ checkNumericVector <- function(x, lower = -Inf, upper = Inf, finite = FALSE,
   assertFlag(null.ok)
   if (null.ok && is.null(x))
     return(TRUE)
+
 
   vectorCheck <- checkVector(x,
                              len = len,
@@ -61,12 +64,25 @@ checkNumericVector <- function(x, lower = -Inf, upper = Inf, finite = FALSE,
   if (!isTRUE(vectorCheck))
     return(vectorCheck)
 
-  checkNumeric(x,
-               any.missing = any.missing, all.missing = all.missing,
-               lower = lower, upper = upper, finite = finite,
-               unique = unique, sorted = sorted,
-               names = names, typed.missing = typed.missing,
-               null.ok = FALSE)
+  numCheck <- checkNumeric(x,
+                           any.missing = any.missing, all.missing = all.missing,
+                           lower = lower, upper = upper, finite = finite,
+                           unique = unique, sorted = sorted,
+                           names = names, typed.missing = typed.missing,
+                           null.ok = FALSE)
+  if (!isTRUE(numCheck))
+    return(numCheck)
+
+  assertFlag(lowerAuthorized)
+  if (lowerAuthorized && !is.infinite(lower) && any(x == lower))
+    return("minimum value shouldn't be used")
+
+  assertFlag(upperAuthorized)
+  if (upperAuthorized && !is.infinite(upper) && any(x == upper))
+    return("maximum value shouldn't be used")
+
+
+  TRUE
 
 }
 
