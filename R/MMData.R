@@ -41,6 +41,7 @@ MMContext$methods(
                         modesRef = NULL, Y_tab = NULL, ...)
   {
     ## À terminer
+    ##
 
     # Check if there is a constant column in X. In that case the column is
     # removed because the constant is used by default in each model used
@@ -122,7 +123,8 @@ validate_MMContext <- function(object)
   if (!isTRUE(check))
     return(check)
 
-  checkPhi <- assertPhi_tab(object$phi_tab, N = object$N, M = object$M)
+
+  checkPhi <- checkPhi_tab(object$phi_tab, N = object$N, M = object$M)
 
   if (!isTRUE(checkPhi))
     return(check)

@@ -3,10 +3,10 @@
 #' Estimate Ym on the whole population based
 #' on the subpopulation that used this mode
 #' to answer
-#' @importFrom stats lm
+#' @importFrom stats lm predict.lm
 #' @keywords internal
 #' @name regression_Ym
-MCO_Ym <- function(sample, m)
+estim_Ym_MCO <- function(sample, m)
 {
   maskMode <- sample$respondents_mode(m)
 
@@ -14,94 +14,100 @@ MCO_Ym <- function(sample, m)
     glue("Nobody answered with the mode {m}") %>% abort()
 
   Ym <- sample$Ym_resp(m) # nolint: object_usage_linter
-  Xm <- sample$Xm(m) # nolint: object_usage_linter
+  Xm <- sample$Xm(m) %>% as.matrix()# nolint: object_usage_linter
 
 
-  lm(Ym ~ Xm)
+  lm(Ym ~ Xm) %>% predict.lm(newdata = sample$X)
 }
 
 #' @inheritParams regression_Ym
 #' @importFrom stats predict.lm
-#' @export
-estim_delta_G_comp_MCO <- function(X, Ytilde, choixMode, modesRef, modes = NULL)
+estim_delta_G_comp_MCO <- function(sample)
 {
-  N <- length(Ytilde)
+  Ycf <- MCO_Y(sample)
 
-  if (is.null(modes))
-    modes <- setdiff(unique(choixMode), modesRef)
-  else
-    modes <- unique(modes)
 
-  if (length(modes) == 0L)
-    abort("No mode asked fort bias estimation")
+  usedBiasedModes <- sample$used_biased_modes()
 
-  modeleY <- MCO_Y(X, Ytilde, modesRef, choixMode)
-  predY <- predict.lm(modeleY, newdata = X)
+  if (length(usedBiasedModes) == 0L)
+    return(numeric(sample$N))
 
-  estimYm <- function(m)
+  delta <- rep(NA_real_, sample$N)
+  delta[sample$respondents_ref()] <- 0.0
+
+
+  for (m in usedBiasedModes)
   {
-    if (m %in% modesRef)
-      return(numeric(N))
-
-    else
-    {
-      modeleYm <- MCO_Ym(Xm = X, Ym = Ytilde, m = m, choixMode = choixMode)
-      predict.lm(modeleYm, newdata = X) - predY
-    }
+    maskRespMode <- sample$respondents_mode(m)
+    delta[maskRespMode] <- (estim_Ym_MCO(sample, m) - Ycf)[maskRespMode]
   }
 
-  vapply(modes, estimYm, numeric(N))
+  return(delta)
 }
 
 #' @importFrom checkmate assertFlag
 #' @importFrom stats lm coef
-coefs_MB_MCO_cf <- function(sample, m, Ycf)
+estim_MB_MCO_cf <- function(sample, m, Ycf)
 {
   maskMode <- sample$respondents_mode(m)
   n <- sum(maskMode)
   assertY(Ycf, N = n)
 
-  lm(sample$Ytilde() - Ycf ~ sample$X, subset = maskMode) %>% coef()
+  lm(sample$Ytilde() - Ycf ~ sample$X, subset = maskMode) %>%
+    coef(newdata = sample$X)
 }
 
 #' @importFrom checkmate assertChoice
-coefs_MB_MCO_tot <- function(sample, m, typeTot = "doubleHT", Ycf = NULL)
+estim_MB_MCO_tot <- function(sample, m, typeTot = "doubleHT", Ycf = NULL)
 {
-  assertChoice(typeTot, c("doubleHT", "totYcf", "doubleHT"))
+  assertChoice(typeTot, c("doubleHT", "totYimp", "estimDeltaCF"))
   maskMode <- sample$respondents_mode(m)
 
+  if (!any(maskMode))
+    return(numeric(sample$N))
+
+  X <- sample$X %>% as.matrix()
+  X <- cbind(rep(1.0, nrow(X)), X)
   phi <- sample$phi_tab[, m]
-  inverseMat <- (t(sample$X) %*% diag(phi) %*% sample$X) %>% solve()
-  Xm <- sample$Xm(m)
-  Ym <- sample$Ym_resp(answersOnly = TRUE)
+  inverseMat <- (t(X) %*% diag(phi) %*% X) %>% solve()
+  Xm <- sample$Xm(m) %>% as.matrix()
+  Xm <- cbind(rep(1.0, nrow(Xm)), Xm)
+  Ym <- sample$Ym_resp(mode = m, answersOnly = TRUE)
   phim <- phi[maskMode]
-  weightsm <- sample$weights(m, inv = FALSE)[maskMode]
+  weightsm <- sample$weights(rep(m, sample$N), inv = FALSE)[maskMode]
 
   if (typeTot == "estimDeltaCF")
   {
+    assertNumericVector(Ycf, len = sample$N, null.ok = FALSE)
+
     delta <- Ym - Ycf[maskMode]
-    HTdelta <- Xm %*% delta * phim * weightsm
-    inverseMat %*% HTdelta
+    HTdelta <- apply(diag(delta * phim * weightsm) %*% Xm, 2L, sum)
+    coefs <- inverseMat %*% HTdelta
   }
-  else if (typeTot == "totYcf")
+  else if (typeTot == "totYimp")
   {
-    totYcf <- sum(Ycf)
-    HTm <- Xm %*% Ym * phim * weightsm
-    inverseMat %*% (HTm - totYcf)
+    weightsref <- sample$weights_ref(inv = FALSE)
+    totYcf <- apply(diag(Ycf * phi) %*% X, 2L, sum)
+    HTm <- apply(diag(Ym * phim * weightsm) %*% Xm, 2L, sum)
+    coefs <- inverseMat %*% (HTm - totYcf)
   }
 
   else if (typeTot == "doubleHT")
   {
-    Xref <- sample$Xref()
+    Xref <- sample$Xref() %>% as.matrix()
     Yref <- sample$Yref_resp(answersOnly = TRUE)
-    weightsref <- sample$weights_ref(inv = FALSE)
+    weightsref <- sample$weights_ref(inv = FALSE)[sample$respondents_ref()]
     phiref <- phi[sample$respondents_ref()]
 
-    HTm <- Xm %*% Ym * phim * weightsm
-    HTref <- Xref %*% Yref * phiref * weightsref
+    HTm <- apply(diag(Ym * phim * weightsm) %*% Xm, 2L, sum)
+    HTref <- apply(diag(Yref * phiref * weightsref) %*% Xref, 2L, sum)
 
-    inverseMat %*% (HTm - HTref)
+    coefs <- inverseMat %*% (HTm - HTref)
   }
+
+  coefs <- as.vector(coefs)
+
+  X %*% coefs
 }
 
 #' @importFrom stats qf

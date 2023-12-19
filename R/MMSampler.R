@@ -95,9 +95,9 @@ MMSamplerData$methods(
 
 MMSamplerData$methods(
   weights =
-  function(modes, inv = TRUE)
+  function(chosenModes, inv = TRUE)
   {
-    HT_mm_weights(pi = .self$pi, probaMode = .self$pModes(modes), inv = inv)
+    HT_mm_weights(pi = .self$pi, probaModes = .self$probaModes, chosenModes = chosenModes, inv = inv)
   },
   weights_ref = function(inv = TRUE)
   {
@@ -203,7 +203,8 @@ MMSampler$methods(
     plan <- data.frame(I = I, pi = .self$pi, C = C)
     rownames(plan) <- .self$U
 
-    sim_choix_mode_Poisson(plan = plan, p = .self$probaModes)
+    sim_choix_mode_Poisson(I, p = .self$probaModes)
+
   },
   #' @inheritParams seed
   #' @importFrom rlang inject
@@ -215,10 +216,12 @@ MMSampler$methods(
 
     samplingModes <- .self$samplingMode(I, seed = NULL)
 
-    Ytilde <- get_value_by_mode(.self$Y_tab, samplingModes$mode)
+    R <- I & !samplingModes %in% c("nr", NA)
 
-    inject(MMSample$new(I = I, R = samplingModes$R,
-                        mode = samplingModes$mode,
+    Ytilde <- get_value_by_mode(.self$Y_tab, samplingModes)
+
+    inject(MMSample$new(I = I, R = R,
+                        mode = samplingModes,
                         Ytilde = Ytilde,
                         !!!as.list.environment(.self)))
   },

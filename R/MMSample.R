@@ -103,8 +103,8 @@ MMSample$methods(
   respondents_ref = function() .self$respondents_modes(.self$modesRef),
   respondents_with_biais = function() .self$R & !.self$mode %in% .self$modesRef,
   non_respondents = function() .self$I & !.self$R,
-  used_modes = function() .self$mode[.self$mode != c(NA, "nr")] %>% unique(),
-  used_biased_modes = function() setdiff(.self$used_modes, .self$modesRef)
+  used_modes = function() .self$mode[!.self$mode %in% c(NA, "nr")] %>% unique(),
+  used_biased_modes = function() setdiff(.self$used_modes(), .self$modesRef)
 )
 
 MMSample$methods(
@@ -161,13 +161,13 @@ MMSample$methods(
                         nbResp = .self$nbRespondents,
                         nbNonResp = .self$n - .self$nbRespondents,
                         nbRef = .self$nbRef,
-                        YREsp_mean = mean(.self$Ytilde, na.rm = TRUE))
+                        YREsp_mean = mean(.self$Ytilde(), na.rm = TRUE))
 
     nbModes <- vapply(.self$M, compose(sum, .self$respondents_mode), integer(1L))
     names(nbModes) <- paste0("nb_", .self$M)
 
     modesResp <- .self$mode[.self$R] %>% droplevels("nr")
-    meansYm <- tapply(.self$Ytilde[.self$R], modesResp, mean)
+    meansYm <- tapply(.self$Ytilde()[.self$R], modesResp, mean)
     names(meansYm) <- paste0("Ymean_", names(meansYm))
 
     cbind(infos, t(nbModes), t(meansYm))
@@ -203,7 +203,7 @@ plot.MMSample <- function(x, ...)
       edgeLabels <- c(edgeLabels, "0")
     else
     {
-      meanYMode <- x$Ym(mode) %>% mean() %>% ceiling()
+      meanYMode <- x$Ym_resp(mode) %>% mean() %>% ceiling()
       edgeLabels <- c(edgeLabels,
                       glue("{nbPerMode[mode]} ({symbolY} = {meanYMode})"))
     }

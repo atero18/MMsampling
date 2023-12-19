@@ -1,6 +1,6 @@
 #' @importFrom checkmate assertFlag assertSubset
 #' @export
-HT_mm_weights <- function(pi, probaModes, chosenModes = NULL, inv = TRUE)
+HT_mm_weights <- function(pi, probaModes, chosenModes = NULL, inv = FALSE)
 {
   assertFlag(inv)
 
@@ -12,8 +12,7 @@ HT_mm_weights <- function(pi, probaModes, chosenModes = NULL, inv = TRUE)
 
   modeAndNRWeights <-
     data_proba_to_vec(probaModes, N = n, modes = chosenModes,
-                      probVec = TRUE, addNr = TRUE,
-                      strictlyPos = TRUE, striclyUnsure = FALSE)
+                      probVec = TRUE)
 
   weights <- inclusionWeights * modeAndNRWeights
 
@@ -68,11 +67,12 @@ HT_mm_weights_with_control <-
 }
 
 #' @export
-HT_mm <- function(pi, Y, phi, delta = NULL, probaModes, chosenModes = NULL,
+HT_mm <- function(pi, Y, phi, delta = NULL,
+                  probaModes, chosenModes = NULL,
                   initialWeights = NULL)
 {
   n <- length(pi)
-  weights <- HT_mm_weights(pi, probaModes, chosenModes, inv = TRUE)
+  weights <- HT_mm_weights(pi, probaModes, chosenModes, inv = FALSE)
 
   assertY(Y, N = n)
 
@@ -90,15 +90,18 @@ HT_mm <- function(pi, Y, phi, delta = NULL, probaModes, chosenModes = NULL,
 
 
   phi <- data_proba_to_vec(phi, N = n, modes = chosenModes,
-                           probVec = TRUE, addNr = FALSE,
-                           strictlyPos = FALSE, striclyUnsure = FALSE)
+                           probVec = TRUE)
 
-  assertBiasesMes(delta, N = N)
 
   if (is.null(delta))
     delta <- numeric(n)
   else
+  {
     delta <- get_value_by_mode(delta, chosenModes)
+    assertBiasesMes(delta, N = n)
+
+  }
+
 
 
 
@@ -324,7 +327,10 @@ HT_mm_with_fitting <- function(sample,
                                checkEquality = "no", checkNullityBias = "no")
 {
 
+
   N <- sample$N
+
+  maskResp <- sample$R
 
   if (checkEquality != "no" || checkNullityBias != "no")
     sample <- sample$copy(deep = TRUE)
@@ -334,8 +340,8 @@ HT_mm_with_fitting <- function(sample,
   if (checkEquality %in% c("MCO", "MCO_agreg"))
   {
     mergeEquivalents <- checkEquality == "MCO_agreg"
-    plan <-
-      check_modes_equality_MCO(problem, plan,
+    sample <-
+      check_modes_equality_MCO(sample,
                                mergeEquivalents = mergeEquivalents)$plan
   }
 
@@ -343,7 +349,7 @@ HT_mm_with_fitting <- function(sample,
 
   # Some measure biases estimators don't need
   # calculation of contrefactuals
-  if (estimMesBias %in% c("G-COMP", "MCO_tots"))
+  if (is.null(estimMesBias) || estimMesBias %in% c("G-COMP", "MCO_tots"))
     imputationY <- NULL
   else
   {
@@ -358,26 +364,28 @@ HT_mm_with_fitting <- function(sample,
   }
 
   # Estimation of measure biases
-  usedBiasedModes <- modes_biaises_utilises(plan, problem$modesRef)
+  usedBiasedModes <- sample$used_biased_modes()
 
-  if (estimMesBias == "G-COMP")
-  {
-    for (biasedMode in usedBiasedModes)
-    {
-      masqueMode <- sample$respondents_ref()
-      delta[masqueMode] <- estim_delta_G_comp_MCO(sample, biasedMode)[masqueMode] ## À terminer
-    }
-  }
+  if (is.null(estimMesBias) || estimMesBias == "true_values")
+    delta <- sample$Ytilde() - sample$Yref()
+  else if (estimMesBias == "CF")
+    delta <- sample$Ytilde() - Ycf
+  else if (estimMesBias == "G-COMP")
+    delta <- estim_delta_G_comp_MCO(sample)
+
+  # Estimation with totals
   else if (estimMesBias %in% c("MCO_tots", "MCO_cf", "MCO_tot_cf"))
   {
-    typeTot <- switch(MCO_tots = "double_HT",
+    typeTot <- switch(estimMesBias,
+                      MCO_tots = "doubleHT",
                       MCO_cf = "estimDeltaCF",
-                      MCO_tot_cf = "totYcf")
+                      MCO_tot_cf = "totYimp")
 
     for (biasedMode in usedBiasedModes)
     {
       masqueMode <- sample$respondents_mode(biasedMode)
       delta[masqueMode] <-
+        estim_MB_MCO_tot(sample, biasedMode, typeTot = typeTot, Ycf = Ycf)[masqueMode]
     }
   }
 
@@ -385,10 +393,10 @@ HT_mm_with_fitting <- function(sample,
   else
   {
     if (imputationY == "true_value")
-      Ycf <- problem$Y
+      Ycf <- sample$Yref()
 
     else if (imputationY == "MCO")
-      Ycf <- MCO_Y(sample) %>% fitted()
+      Ycf <- MCO_Y(sample)
 
     else
       Ycf <- Y_matching(sample, imputationY)
@@ -401,7 +409,7 @@ HT_mm_with_fitting <- function(sample,
     }
 
     # Case when we want to check if there is negligeable biases
-    else if (checkNullityBias == "no")
+    else if (checkNullityBias != "no")
     {
       # MCO_Ym : Ym is maintaned if the bias is negligeable
       # MCO_CF : Ym is replaced by its counterfactual if the bias is negligeable
@@ -410,37 +418,27 @@ HT_mm_with_fitting <- function(sample,
         replaceByCF <- checkNullityBias == "MCO_CF"
         resCheck <-
           check_nullity_bias_MCO(sample, Ycf, replaceByCF = replaceByCF)
+
+        delta <- resCheck$delta
+        usedBiasedModes <- resCheck$remainingBiasedModes
+
       }
-
-      delta <- resCheck$delta
-
-      usedBiasedModes <- resCheck$remainingBiasedModes
     }
 
-    # For the remaining biased modes with biaises to determine
-    # we do some estimations
-    for (biasedMode in usedBiasedModes)
-    {
-      masqueMode <- masque_repondants_mode(plan, biasedMode)
-      delta[masqueMode] <- estimMesBias(Xm = problem$Xm(masqueMode),
-                                        Ym = Ytilde[masqueMode],
-                                        Ycf = Ycf[masqueMode])
-    }
   }
 
-  masqueRepRef <-
-    masque_repondants_reference(plan, problem$modesRef)
+  masqueRepRef <- sample$respondents_ref()
   delta[masqueRepRef] <- 0.0
 
 
-  if (estimPm == "true_values")
-    pHat <- problem$probaModes
+  if (is.null(estimPm) || estimPm == "true_values")
+    pHat <- sample$probaModes
 
   else if (estimPm == "multinomial")
   {
     pHat <- estim_response_prob_global(plan, problem, regroupModesRef = TRUE)
   }
 
-  HT_mm(plan, Ytilde, delta,
-        problem$modesRef, pHat, K = problem$K)
+  HT_mm(sample$pi[maskResp], Ytilde[maskResp],
+        sample$phi_tab[maskResp, , drop = FALSE], delta[maskResp], pHat[maskResp, , drop = FALSE], chosenModes = sample$mode[maskResp])
 }

@@ -74,11 +74,11 @@ checkNumericVector <- function(x, lower = -Inf, lowerAuthorized = TRUE,
     return(numCheck)
 
   assertFlag(lowerAuthorized)
-  if (lowerAuthorized && !is.infinite(lower) && any(x == lower))
+  if (!lowerAuthorized && !is.infinite(lower) && any(x < lower, na.rm = TRUE))
     return("minimum value shouldn't be used")
 
   assertFlag(upperAuthorized)
-  if (upperAuthorized && !is.infinite(upper) && any(x == upper))
+  if (!upperAuthorized && !is.infinite(upper) && any(x > upper, na.rm = TRUE))
     return("maximum value shouldn't be used")
 
 
@@ -98,9 +98,9 @@ checkNumericScalar <- partial(checkNumericVector,
 
 #' @importFrom purrr partial
 assertNumericScalar <- partial(assertNumericVector,
-                              min.len = 1L, len = 1L, max.len = 1L,
-                              any.missing = FALSE, all.missing = FALSE,
-                              null.ok = FALSE, unique = FALSE, sorted = FALSE)
+                               min.len = 1L, len = 1L, max.len = 1L,
+                               any.missing = FALSE, all.missing = FALSE,
+                               null.ok = FALSE, unique = FALSE, sorted = FALSE)
 
 #' @importFrom tibble is_tibble
 #' @importFrom checkmate checkMatrix checkDataFrame checkTibble
@@ -165,11 +165,13 @@ get_value_by_mode <- function(data, modes)
 
   maskMissing <- is.na(modes) | modes == "nr"
 
+  rownames(data) <- seq_len(nrow(data))
+
   res[maskMissing] <- NA_real_
 
-  if (any(maskMissing))
+  if (!all(maskMissing))
   {
-    indexMatrix <-  cbind(which(!maskMissing, modes[!maskMissing]))
+    indexMatrix <-  cbind(which(!maskMissing), modes[!maskMissing])
 
     res[!maskMissing] <-  data[indexMatrix]
   }
@@ -187,11 +189,13 @@ data_proba_to_vec <- function(data, N = NULL, modes = NULL,
   {
     assertProbTable(data, probVec = probVec, addNR = addNR)
     assertModes(modes, len = N)
-    assertSubset(modes, colnames(data))
+    if (is.factor(modes))
+      modes <- as.vector(modes)
+    assertSubset(modes, c(colnames(data), NA))
     data <- get_value_by_mode(data, modes)
   }
 
-  assertProbabilityVec(data, len = N, striclyPos = FALSE, striclyUnsure = FALSE)
+  assertProbabilityVec(data, len = N, striclyPos = striclyPos, striclyUnsure = striclyUnsure, any.missing = TRUE)
 
   return(data)
 }
@@ -206,8 +210,7 @@ checkProbTable <- function(probsTable,
 
   checkType <- checkTable(probsTable,
                           mode = "numeric",
-                          nrows = N, ncols = p,
-                          col.names = col.names)
+                          nrows = N, ncols = p)
 
   if (!isTRUE(checkType))
     return(checkType)

@@ -91,49 +91,24 @@ sim_ind_MM_eq_prob <- function(N, modes, addNR = TRUE)
   factor(res, levels = modes)
 }
 
+#' @importFrom checkmate assertLogical
 #' @importFrom stats runif
-sim_choix_mode_Poisson <- function(plan, p, q = NULL, seed = NULL)
+sim_choix_mode_Poisson <- function(I, p, seed = NULL)
 {
-  N <- taille_pop(plan)
-
+  assertLogical(I, any.missing = FALSE, all.missing = FALSE, min.len = 1L)
+  mode <- rep(NA, sum(I)) %>%
+    factor(levels = c(colnames(p),
+                      colnames(q), "nr", NA) %>% unique())
   fix_seed(seed)
 
-  plan$mode <- factor(NA,
-                      levels = c(colnames(p),
-                                 colnames(q), "nr", NA) %>% unique())
+  mode <- factor(NA,
+                 levels = c(colnames(p), "nr", NA) %>% unique())
 
-  if (!"C" %in% colnames(plan))
-    plan$C <- FALSE
 
-  echantControle <- masque_controle(plan)
-  echantNonControle <- masque_echant(plan) & !echantControle
+  p <- add_nr_prob(p, "nr")
 
-  R <- logical(N)
+  mode[I] <- sim_ind_MM(p[I, , drop = FALSE])
 
-  if (any(echantControle))
-  {
-    assertProbTable(q, N)
-    q <- add_nr_prob(q, "nr")
 
-    R[echantControle] <-
-    vapply(which(echantControle),
-           function(i) runif(1L) <= q[i, plan$mode[i]], logical(1L))
-  }
-
-  if (any(echantNonControle))
-  {
-
-    checkProbTable(p, N)
-    ##assertProbTable(p, N)
-    p <- add_nr_prob(p, "nr")
-
-    plan$mode[echantNonControle] <-
-      sim_ind_MM(p[echantNonControle, , drop = FALSE])
-
-    R[echantNonControle] <- plan$mode[echantNonControle] != "nr"
-  }
-
-  plan$R <- R
-
-  return(plan)
+  return(mode)
 }

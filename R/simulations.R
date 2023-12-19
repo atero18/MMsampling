@@ -302,9 +302,10 @@ MC_mm <- function(sampler, B = 1000L,
   estimFun <- function(sample) HT_mm_with_fitting(sample, ...)
   estimsTot <- vapply(samples, estimFun, numeric(1L))
 
+  totYref <- sampler$totYref()
   res <- tibble(itMC = seq_len(B),
-                HT = estimsTot, totY = problem$totY,
-                bias = estimsTot - problem$totY)
+                HT = estimsTot, totY = totYref,
+                bias = estimsTot - totYref)
 
   if (!is.null(dataSamples))
     res <- res %>% cbind(dataSamples)
@@ -351,6 +352,7 @@ CV_MC <- function(estims, target = mean(estims)) sd_MC(estims) / target
 #' @export
 make_grid_sim <- function(N = 10000L, seed = NULL)
 {
+
   fix_seed(seed)
 
   phiList <- c(0.0, NA_real_)
@@ -362,9 +364,9 @@ make_grid_sim <- function(N = 10000L, seed = NULL)
   samplerTypeList <- "SRS" ## c("SRS", "Poisson")
   checkEqualityList <- c("no", "MCO", "MCO_agreg")
   imputationList <- c("true_values", "nearest", "optimal", "genetic", "MCO")
-  checkNullityBiasList <- c("no", "MCO_Ym", "MCO_CF")
   deltaEstimList <- c("CF", "MCO", "MCO_Ym", "G-COMP", "MCO_tots",
                       "MCO_cf", "MCO_tot_cf")
+  checkNullityBiasList <- c("no", "MCO_Ym", "MCO_CF")
   deltaGHBList <- c("no", "k-means", "k-means_agreg")
   pmEstimList <- c("true_values", "multinomial")
   pmRGHList <- c("no", "k-means", "k-means_agreg")
@@ -382,7 +384,7 @@ make_grid_sim <- function(N = 10000L, seed = NULL)
   probasGrid <- tibble(N = probasGrid, pi = listPis)
 
 
-  phi <- N <- KRef <- Kbar <- pX <- pZ <- samplerType <- prop <-
+  phi <- KRef <- Kbar <- pX <- pZ <- samplerType <- prop <-
     imputation <- deltaEstim <- n <- NULL
   # Creation of the hyperparameters grid
   grid <-
@@ -411,11 +413,11 @@ make_grid_sim <- function(N = 10000L, seed = NULL)
                       ceiling(N * prop), NA_integer_)) %>%
     select(-prop)
 
-  # With estimation for measure bias with G-COMP
-  # There is no method of imputation used
+  # Some measure bias estimators do not require to estimate
+  # a counterfactual.
   grid <-
     grid %>%
-    mutate(imputation = ifelse(deltaEstim != "G-COMP",
+    mutate(imputation = ifelse(!deltaEstim %in% c("G-COMP", "MCO_tots"),
                                imputation, NA_character_))
 
   grid <- distinct(grid)
@@ -435,8 +437,8 @@ make_grid_sim <- function(N = 10000L, seed = NULL)
 #' @importFrom purrr partial
 make_grid_int_tel <- function(N = 10000L, seed = NULL)
 {
-  make_grid_sim(seed) %>%
-    filter(pZ <= 1L, pX <= 2L, KRef == 1L, Kbar == 1L) %>%
+  make_grid_sim(N, seed) %>%
+    filter(pZ <= 1L, pX <= 1L, KRef == 1L, Kbar == 1L) %>%
     filter(checkEquality == "no", checkNullityBias == "no") # nolint: object_usage_linter
 }
 
@@ -463,7 +465,7 @@ sim_CH <- function(N = 10L, intercept = 5.0, betaXtel = 2.0,
                           betasYMbar = betasYint, covarYMbar = varYint,
                           seed = NULL)
 
-    NOMSMODES <- c("tel", "int")
+    NOMSMODES <- c("Ytel", "Yint")
     colnames(simulation$data)[ncol(simulation$data) + -1:0] <- NOMSMODES
     colnames(simulation$phi_tab) <- NOMSMODES
     colnames(simulation$coefs) <- NOMSMODES
@@ -474,7 +476,7 @@ sim_CH <- function(N = 10L, intercept = 5.0, betaXtel = 2.0,
 }
 
 
-#' @importFrom dplyr select
+#' @importFrom dplyr select distinct
 #' @importFrom tidyr expand_grid
 #' @inheritParams seed
 #' @export
@@ -492,8 +494,8 @@ grid_sim <- function(B = 100L, grid = NULL, seed = NULL)
 
   nbProblems <- max(grid$idProblem)
 
-  dataProblems <- grid %>% select(idProblem, N, pX, pZ, phi)
-  dataProblems$totY <- 0.0
+  dataProblems <- grid %>% select(idProblem, N, pX, pZ, phi) %>% distinct()
+  dataProblems$totY <- NA_real_
 
   dataSamples <- grid %>% select(idSample, samplerType, n)
 
@@ -501,15 +503,21 @@ grid_sim <- function(B = 100L, grid = NULL, seed = NULL)
 
   dataModes <- grid %>% select(idProblem)
 
-  dataModels <- grid %>% select(idProblem, idSample, idModel)
+  dataModels <- grid %>%
+    select(idModel, idProblem, idSample,
+           imputation, checkEquality, deltaEstim,
+           checkNullityBias, pmEstim, pi)
+
+  dataModels <- add_column(dataModels, B = B,
+                           mean_HT = rep(NA_real_, nrow(dataModels)),
+                           var_HT = rep(NA_real_, nrow(dataModels)))
 
   dataMC <-
-    expand_grid(idModel = seq_len(nbSamples),
+    expand_grid(idModel = grid$idModel,
                 itMC = seq_len(B))
 
-  dataMCbis <- NULL
 
-  dataMC$HT <- 0.0
+  dataMC$HT <- NA_real_
 
   idModel <- 0.0 ##
 
@@ -525,35 +533,45 @@ grid_sim <- function(B = 100L, grid = NULL, seed = NULL)
     bar$tick(0L)
   }
 
-  for (idProblem in unique(grid$idProblem))
+  for (idProblem in dataProblems$idProblem)
   {
     # Select hyperparameters of the problem
-    paramsProblem <- grid[which(grid$idProblem == idProblem)[1L], ]
+    paramsProblem <- dataProblems[idProblem, ]
 
     N <- paramsProblem$N
     pX <- paramsProblem$pX
     pZ <- paramsProblem$pZ
-    phi <- paramsProblem$phi
+    # phi <- paramsProblem$phi
+    #
+    #
+    # if (is.na(phi))
+    #   phi <- NULL
 
-    if (is.na(phi))
-      phi <- NULL
+    ##simulation <- lin_sim(N = N, pX = pX, pZ = pZ)
 
-    simulation <- lin_sim(N = N, pX = pX, pZ = pZ)
 
-    X <- extract_data_from_sim(simulation, "X")
+    simulation <-  sim_CH(N) ##
 
-    Y_tab <- extract_data_from_sim(simulation, "Y")
+    X <- extract_X_from_sim(simulation)
 
-    modes <- colnames(simulation$probsM)
-    modesRef <- "Y"
+    Y_tab <- extract_Y_tab_from_sim(simulation)
+
+    totY <- sum(Y_tab[, 1L])
+
+    dataProblems[idProblem, "totY"] <- totY
+
+    phi <- simulation$phi_tab ##
+
+    modes <- colnames(simulation$probszM)
+    modesRef <- colnames(Y_tab)[1L]
 
     probaModes <- simulation$probsM
 
     problem <-
-      MMProblem$new(X = X, Y_tab = Y_tab,
+      MMContext$new(X = X, phi_tab = simulation$phi_tab, Y_tab = Y_tab,
                     probaModes = simulation$probsM, modesRef = modesRef)
 
-    dataProblems$totY[idProblem] <- problem$totY
+    dataProblems$totY[idProblem] <- problem$totYref()
 
     idSamples <-
       grid$idSample[grid$idProblem == idProblem] %>% unique()
@@ -568,21 +586,21 @@ grid_sim <- function(B = 100L, grid = NULL, seed = NULL)
 
 
       if (samplerType == "SRS")
-        sampler <- MMSRS$new(X = X, n = n, N = N, probaModes = probaModes)
+        sampler <- MMSRS$new(X = X, n = n, N = N, phi_tab = phi, Y_tab = Y_tab, probaModes = probaModes)
 
       else if (samplerType == "Poisson")
       {
         pi <- paramsSampling$pi[[1L]]
-        sampler <- MMPoisson$new(X = X, N = N, pi = pi, probaModes = probaModes)
+        sampler <- MMPoisson$new(X = X, N = N, pi = pi, phi_tab = phi, probaModes = probaModes)
       }
 
 
-      plans <- sampler$samplings(B)
+      samples <- sampler$samplings(B)
 
-      infosPlans <-
-        lapply(plans, about_plan, modes = modes, modesRef = modesRef)
+      # infosPlans <-
+      #   lapply(plans, about_plan, modes = modes, modesRef = modesRef)
 
-      dataMCbis <- rbind(dataMCbis, do.call("rbind", infosPlans))
+      # dataMCbis <- rbind(dataMCbis, do.call("rbind", infosPlans))
 
       idModels <-
         which(grid$idProblem == idProblem & grid$idSample == idSample)
@@ -592,14 +610,30 @@ grid_sim <- function(B = 100L, grid = NULL, seed = NULL)
         paramsModel <- grid[i, ]
 
         imputation <- paramsModel$imputation
+
+        if (is.na(imputation))
+          imputation <- NULL
+
         deltaEstim <- paramsModel$deltaEstim
         pmEstim <- paramsModel$pmEstim
 
         if (pmEstim == "true_values")
           pmEstim <- NULL
 
-        resMM <- MC_mm(problem = problem, B = B, plans = plans)
+
+
+
+
+        resMM <- MC_mm(sampler = sampler, B = B, samples = samples,
+                       imputationY = imputation,
+                       estimMesBias = deltaEstim,
+                       estimPm = pmEstim)
+
         dataMC$HT[seq((i - 1L) * B + 1L, i * B)] <- resMM$HT
+
+        dataModels[i, "mean_HT"] <- mean(resMM$HT)
+
+        dataModels[i, "var_HT"] <- var(resMM$HT)
 
         if (useProgressBar)
           bar$tick(1L)
@@ -610,5 +644,5 @@ grid_sim <- function(B = 100L, grid = NULL, seed = NULL)
   list(problems = dataProblems,
        samples = dataSamples,
        models = dataModels,
-       MC = cbind(dataMC, dataMCbis))
+       MC = dataMC)
 }

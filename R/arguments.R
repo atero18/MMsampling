@@ -107,13 +107,13 @@ set_I <- function(I, N)
 #' @importFrom checkmate checkVector
 checkModes <-
   partial(checkmate::checkVector,
-          any.missing = FALSE, all.missing = FALSE,
+          all.missing = FALSE,
           min.len = 1L, null.ok = FALSE)
 
 #' @importFrom purrr partial
 #' @importFrom checkmate assertVector
 assertModes <- partial(checkmate::assertVector,
-                       any.missing = FALSE, all.missing = FALSE,
+                       all.missing = FALSE,
                        min.len = 1L, null.ok = FALSE)
 
 #' @importFrom purrr partial
@@ -185,7 +185,8 @@ assertVariances <- assertSDs <-
 checkProbabilityVec <- function(x,
                                 len = NULL, min.len = 1L, max.len = NULL,
                                 unique = FALSE,
-                                striclyPos = FALSE, striclyUnsure = FALSE)
+                                striclyPos = FALSE, striclyUnsure = FALSE,
+                                any.missing = FALSE)
 {
   assertFlag(striclyPos)
   assertFlag(striclyUnsure)
@@ -195,15 +196,16 @@ checkProbabilityVec <- function(x,
                                   max.len = max.len,
                                   lower = 0.0, upper = 1.0,
                                   finite = TRUE,
-                                  unique = unique)
+                                  unique = unique,
+                                  any.missing = any.missing)
 
   if (!isTRUE(checkProb))
     return(checkProb)
 
-  if (striclyPos && any(x == 0.0))
+  if (striclyPos && any(x == 0.0, na.rm = TRUE))
     return("probabilities are supposed to be stricly positive")
 
-  if (striclyUnsure && any(x == 1.0))
+  if (striclyUnsure && any(x == 1.0, na.rm = TRUE))
     return("probabilities are supposed to be inferior to one")
 
   TRUE

@@ -11,9 +11,9 @@ MCO_Y <- function(sample)
   maskRespRef <- sample$respondents_ref()
 
   Ytilde <- sample$Yref() # nolint: object_usage_linter
-  Xref <- sample$Xref() # nolint: object_usage_linter
+  X <- sample$X %>% as.matrix() # nolint: object_usage_linter
 
-  lm(Ytilde ~ Xref, subset = maskRespRef) %>%
+  lm(Ytilde ~ X, subset = maskRespRef) %>%
     predict(newdata = sample$X)
 }
 
@@ -61,7 +61,7 @@ estim_tot_GH <- function(sample, groups)
 nearest_neighbor_reference <- function(sample, distance)
 {
   N <- sample$N
-  masqueRepRef <- sample$respondants_ref()
+  masqueRepRef <- sample$respondents_ref()
   masqueNonRep <- !masqueRepRef
 
   nn <- seq_len(N)
@@ -84,9 +84,12 @@ Y_matching <- function(sample, method)
   if (!requireNamespace("MatchIt", quietly = TRUE))
     abort("Package MatchIt is needed")
 
-  masqueRepsRef <- sample$respondants_ref()
+  masqueRepsRef <- sample$respondents_ref()
   class <- !masqueRepsRef %>% as.integer() # nolint: object_usage_linter
-  resImp <- MatchIt::matchit(class ~ sample$X, replace = TRUE)$match.matrix[, 1L]
+
+  X <- sample$X
+  data <- cbind(class, X)
+  resImp <- MatchIt::matchit(class ~ ., data = data, replace = TRUE)$match.matrix[, 1L]
 
   Ycf <- sample$Ytilde()
   Ycf[!masqueRepsRef] <- sample$Yref()[resImp]
