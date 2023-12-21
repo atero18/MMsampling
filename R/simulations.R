@@ -363,9 +363,10 @@ make_grid_sim <- function(N = 10000L, seed = NULL)
   propList <- c(5.0, 10.0, 20.0, 40.0) / 100.0
   samplerTypeList <- "SRS" ## c("SRS", "Poisson")
   checkEqualityList <- c("no", "MCO", "MCO_agreg")
-  imputationList <- c("true_values", "nearest", "optimal", "genetic", "MCO")
-  deltaEstimList <- c("CF", "MCO", "MCO_Ym", "G-COMP", "MCO_tots",
-                      "MCO_cf", "MCO_tot_cf")
+  imputationList <- c("true_values", "nearest", "MCO") # genetic & optimal
+  deltaEstimList <- c("CF", #"MCO", "MCO_Ym",
+                      "G-COMP",
+                      "estimDeltaCF", "doubleHT", "totYcf")
   checkNullityBiasList <- c("no", "MCO_Ym", "MCO_CF")
   deltaGHBList <- c("no", "k-means", "k-means_agreg")
   pmEstimList <- c("true_values", "multinomial")
@@ -420,6 +421,10 @@ make_grid_sim <- function(N = 10000L, seed = NULL)
     mutate(imputation = ifelse(!deltaEstim %in% c("G-COMP", "MCO_tots"),
                                imputation, NA_character_))
 
+  grid <- grid %>%
+    mutate(deltaEstim = ifelse(imputation == "true_values" & deltaEstim == "CF",
+                               "true_values", deltaEstim))
+
   grid <- distinct(grid)
 
   grid <-
@@ -435,6 +440,7 @@ make_grid_sim <- function(N = 10000L, seed = NULL)
 }
 
 #' @importFrom purrr partial
+#' @importFrom dplyr filter
 make_grid_int_tel <- function(N = 10000L, seed = NULL)
 {
   make_grid_sim(N, seed) %>%
@@ -444,7 +450,7 @@ make_grid_int_tel <- function(N = 10000L, seed = NULL)
 
 ## À supprimer
 sim_CH <- function(N = 10L, intercept = 5.0, betaXtel = 2.0,
-                   delta = 0.25, ratioVar = 1.0, seed = 123L)
+                   delta = 0.25, ratioVar = 1.0, seed = 123L, pZ = 0L)
 {
     fix_seed(seed)
 
@@ -459,7 +465,7 @@ sim_CH <- function(N = 10L, intercept = 5.0, betaXtel = 2.0,
     betasYint <- c(intercept, betaXtel + delta) # intercept + fonction linéaire X pour réponse internet
     varYtel <- 1.0 # Variance des résidus pour le mode téléphone
     varYint <- varYtel * ratioVar # Variance des résidus pour le mode internet
-    simulation <- lin_sim(N, pX = 1L, pZ = 0L, Kbar = 1L,
+    simulation <- lin_sim(N, pX = 1L, pZ = pZ, Kbar = 1L,
                           meanX = meanX, covarX = varX,
                           betasY = betasYtel, varY = varYtel,
                           betasYMbar = betasYint, covarYMbar = varYint,
@@ -476,11 +482,11 @@ sim_CH <- function(N = 10L, intercept = 5.0, betaXtel = 2.0,
 }
 
 
-#' @importFrom dplyr select distinct
+#' @importFrom dplyr select distinct mutate
 #' @importFrom tidyr expand_grid
 #' @inheritParams seed
 #' @export
-grid_sim <- function(B = 100L, grid = NULL, seed = NULL)
+grid_sim <- function(B = 100L, grid = NULL, seed = NULL, simulations = NULL)
 {
   fix_seed(seed)
 
@@ -541,16 +547,20 @@ grid_sim <- function(B = 100L, grid = NULL, seed = NULL)
     N <- paramsProblem$N
     pX <- paramsProblem$pX
     pZ <- paramsProblem$pZ
-    # phi <- paramsProblem$phi
-    #
-    #
-    # if (is.na(phi))
-    #   phi <- NULL
-
-    ##simulation <- lin_sim(N = N, pX = pX, pZ = pZ)
+    phi <- paramsProblem$phi
 
 
-    simulation <-  sim_CH(N) ##
+    if (is.na(phi))
+       phi <- NULL
+
+    if (is.null(simulations))
+      simulation <- lin_sim(N = N, pX = pX, pZ = pZ)
+
+    else
+      simulation <- simulations[[idProblem]]
+
+
+    #simulation <-  sim_CH(N) ##
 
     X <- extract_X_from_sim(simulation)
 
@@ -621,9 +631,6 @@ grid_sim <- function(B = 100L, grid = NULL, seed = NULL)
           pmEstim <- NULL
 
 
-
-
-
         resMM <- MC_mm(sampler = sampler, B = B, samples = samples,
                        imputationY = imputation,
                        estimMesBias = deltaEstim,
@@ -640,6 +647,8 @@ grid_sim <- function(B = 100L, grid = NULL, seed = NULL)
       }
     }
   }
+
+  dataModels <- mutate(dataModels, CV_tot = sqrt(var_HT) / abs(mean_HT))
 
   list(problems = dataProblems,
        samples = dataSamples,

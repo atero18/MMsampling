@@ -58,25 +58,6 @@ estim_tot_GH <- function(sample, groups)
   crossprod(tapply(sample$Yref_resp(), groups, mean), groupSizes)
 }
 
-nearest_neighbor_reference <- function(sample, distance)
-{
-  N <- sample$N
-  masqueRepRef <- sample$respondents_ref()
-  masqueNonRep <- !masqueRepRef
-
-  nn <- seq_len(N)
-
-  XRR <- X[masqueRepRef, ]
-  XnRR <- X[masqueNonRep, ]
-
-  distances <- apply(XnRR, MARGIN = 1L,
-                     function(xnRR) apply(XRR, MARGIN = 1L,
-                                          function(xRR) distance(xnRR, XRR)))
-  nn[masqueNonRep] <-
-    which(masqueRepRef)[apply(distances, MARGIN = 1L, which.min)]
-
-  nn
-}
 
 Y_matching <- function(sample, method)
 {
@@ -89,7 +70,10 @@ Y_matching <- function(sample, method)
 
   X <- sample$X
   data <- cbind(class, X)
-  resImp <- MatchIt::matchit(class ~ ., data = data, replace = TRUE)$match.matrix[, 1L]
+  resImp <-
+    MatchIt::matchit(class ~ ., data = data,
+                     replace = TRUE, method = method)$match.matrix[, 1L] %>%
+    as.integer()
 
   Ycf <- sample$Ytilde()
   Ycf[!masqueRepsRef] <- sample$Yref()[resImp]

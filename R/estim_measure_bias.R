@@ -14,10 +14,11 @@ estim_Ym_MCO <- function(sample, m)
     glue("Nobody answered with the mode {m}") %>% abort()
 
   Ym <- sample$Ym_resp(m) # nolint: object_usage_linter
-  Xm <- sample$Xm(m) %>% as.matrix()# nolint: object_usage_linter
+  Xm <- sample$Xm(m) # nolint: object_usage_linter
 
+  data <- cbind(Ym, Xm)
 
-  lm(Ym ~ Xm) %>% predict.lm(newdata = sample$X)
+  lm(Ym ~ ., data = data) %>% predict.lm(newdata = sample$X)
 }
 
 #' @inheritParams regression_Ym
@@ -46,7 +47,7 @@ estim_delta_G_comp_MCO <- function(sample)
 }
 
 #' @importFrom checkmate assertFlag
-#' @importFrom stats lm coef
+#' @importFrom stats lm predict.lm
 estim_MB_MCO_cf <- function(sample, m, Ycf)
 {
   maskMode <- sample$respondents_mode(m)
@@ -54,13 +55,13 @@ estim_MB_MCO_cf <- function(sample, m, Ycf)
   assertY(Ycf, N = n)
 
   lm(sample$Ytilde() - Ycf ~ sample$X, subset = maskMode) %>%
-    coef(newdata = sample$X)
+    predict.lm(newdata = sample$X)
 }
 
 #' @importFrom checkmate assertChoice
 estim_MB_MCO_tot <- function(sample, m, typeTot = "doubleHT", Ycf = NULL)
 {
-  assertChoice(typeTot, c("doubleHT", "totYimp", "estimDeltaCF"))
+  assertChoice(typeTot, c("estimDeltaCF", "doubleHT", "totYcf"))
   maskMode <- sample$respondents_mode(m)
 
   if (!any(maskMode))
@@ -84,7 +85,7 @@ estim_MB_MCO_tot <- function(sample, m, typeTot = "doubleHT", Ycf = NULL)
     HTdelta <- apply(diag(delta * phim * weightsm) %*% Xm, 2L, sum)
     coefs <- inverseMat %*% HTdelta
   }
-  else if (typeTot == "totYimp")
+  else if (typeTot == "totYcf")
   {
     weightsref <- sample$weights_ref(inv = FALSE)
     totYcf <- apply(diag(Ycf * phi) %*% X, 2L, sum)

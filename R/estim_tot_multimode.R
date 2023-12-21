@@ -117,7 +117,7 @@ HT_Ym <- function(pi, Y, mode, phi,
   assertChoice(mode, chosenModes)
 
   Ym <- Y
-  Ym[chosenModes != mode] <- O.0
+  Ym[chosenModes != mode] <- 0.0
 
   HT_mm(pi, Ym, phi, delta = NULL, probaModes, chosenModes)
 }
@@ -321,6 +321,7 @@ estim_var_HT_mm <- function(mode, pi2, p_tab, phi, Ytilde, delta)
 }
 
 #' @importFrom stats fitted
+#' @importFrom checkmate assertChoice
 HT_mm_with_fitting <- function(sample,
                                imputationY = NULL,
                                estimMesBias = NULL, estimPm = NULL,
@@ -328,13 +329,24 @@ HT_mm_with_fitting <- function(sample,
 {
 
 
+  # Size of the population
   N <- sample$N
 
+  # Mask of respondents
   maskResp <- sample$R
 
+  maskRespRef <- sample$respondents_ref()
+
+  assertChoice()
+
+  # If some values in the sample might be changed we
+  # make a copy of it
   if (checkEquality != "no" || checkNullityBias != "no")
     sample <- sample$copy(deep = TRUE)
 
+  # Get answers of each unit
+  # (NA when the unit haven't been selected and "nr" when the unit has been
+  # selected but didn't answer)
   Ytilde <- sample$Ytilde()
 
   if (checkEquality %in% c("MCO", "MCO_agreg"))
@@ -345,26 +357,28 @@ HT_mm_with_fitting <- function(sample,
                                mergeEquivalents = mergeEquivalents)$plan
   }
 
-  delta <- numeric(N)
 
   # Some measure biases estimators don't need
-  # calculation of contrefactuals
+  # calculation of countefactuals
   if (is.null(estimMesBias) || estimMesBias %in% c("G-COMP", "MCO_tots"))
     imputationY <- NULL
   else
   {
+    assertString(imputationY)
+
     if (imputationY == "true_values")
       Ycf <- sample$Yref()
     else if (imputationY == "MCO")
       Ycf <- MCO_Y(sample)
     else # Use of MatchIt package
       Ycf <- Y_matching(sample, imputationY)
-    assertString(imputationY, null.ok = TRUE)
-
   }
 
   # Estimation of measure biases
   usedBiasedModes <- sample$used_biased_modes()
+
+  # Vector of measure biases
+  delta <- numeric(N)
 
   if (is.null(estimMesBias) || estimMesBias == "true_values")
     delta <- sample$Ytilde() - sample$Yref()
@@ -374,33 +388,20 @@ HT_mm_with_fitting <- function(sample,
     delta <- estim_delta_G_comp_MCO(sample)
 
   # Estimation with totals
-  else if (estimMesBias %in% c("MCO_tots", "MCO_cf", "MCO_tot_cf"))
+  else if (estimMesBias %in% c("estimDeltaCF", "doubleHT", "totYcf"))
   {
-    typeTot <- switch(estimMesBias,
-                      MCO_tots = "doubleHT",
-                      MCO_cf = "estimDeltaCF",
-                      MCO_tot_cf = "totYimp")
-
     for (biasedMode in usedBiasedModes)
     {
       masqueMode <- sample$respondents_mode(biasedMode)
       delta[masqueMode] <-
-        estim_MB_MCO_tot(sample, biasedMode, typeTot = typeTot, Ycf = Ycf)[masqueMode]
+        estim_MB_MCO_tot(sample, biasedMode,
+                         typeTot = estimMesBias, Ycf = Ycf)[masqueMode]
     }
   }
 
   # Estimation with imputation
   else
   {
-    if (imputationY == "true_value")
-      Ycf <- sample$Yref()
-
-    else if (imputationY == "MCO")
-      Ycf <- MCO_Y(sample)
-
-    else
-      Ycf <- Y_matching(sample, imputationY)
-
     # Case when Y^m is replaced by its counterfactuel
     if (estimMesBias == "CF")
     {
@@ -440,5 +441,7 @@ HT_mm_with_fitting <- function(sample,
   }
 
   HT_mm(sample$pi[maskResp], Ytilde[maskResp],
-        sample$phi_tab[maskResp, , drop = FALSE], delta[maskResp], pHat[maskResp, , drop = FALSE], chosenModes = sample$mode[maskResp])
+        sample$phi_tab[maskResp, , drop = FALSE],
+        delta[maskResp], pHat[maskResp, , drop = FALSE],
+        chosenModes = sample$mode[maskResp])
 }
