@@ -51,10 +51,11 @@ estim_delta_G_comp_MCO <- function(sample)
 estim_MB_MCO_cf <- function(sample, m, Ycf)
 {
   maskMode <- sample$respondents_mode(m)
-  n <- sum(maskMode)
-  assertY(Ycf, N = n)
+  assertY(Ycf, N = sample$N)
 
-  lm(sample$Ytilde() - Ycf ~ sample$X, subset = maskMode) %>%
+  data <- cbind(Ytilde = sample$Ytilde(), Ycf, sample$X)
+
+  lm(Ytilde - Ycf ~ ., data = data, subset = maskMode) %>%
     predict.lm(newdata = sample$X)
 }
 

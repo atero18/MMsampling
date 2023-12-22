@@ -337,8 +337,6 @@ HT_mm_with_fitting <- function(sample,
 
   maskRespRef <- sample$respondents_ref()
 
-  assertChoice()
-
   # If some values in the sample might be changed we
   # make a copy of it
   if (checkEquality != "no" || checkNullityBias != "no")
@@ -407,6 +405,15 @@ HT_mm_with_fitting <- function(sample,
     {
       delta <- Ytilde - Ycf
       usedBiasedModes <- NULL
+    }
+    else if (estimMesBias == "MCO")
+    {
+      for (biasedMode in usedBiasedModes)
+      {
+        masqueMode <- sample$respondents_mode(biasedMode)
+        delta[masqueMode] <-
+          estim_MB_MCO_cf(sample, biasedMode, Ycf)[masqueMode]
+      }
     }
 
     # Case when we want to check if there is negligeable biases

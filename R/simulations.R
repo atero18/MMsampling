@@ -364,7 +364,7 @@ make_grid_sim <- function(N = 10000L, seed = NULL)
   samplerTypeList <- "SRS" ## c("SRS", "Poisson")
   checkEqualityList <- c("no", "MCO", "MCO_agreg")
   imputationList <- c("true_values", "nearest", "MCO") # genetic & optimal
-  deltaEstimList <- c("CF", #"MCO", "MCO_Ym",
+  deltaEstimList <- c("CF", "MCO", #"MCO_Ym",
                       "G-COMP",
                       "estimDeltaCF", "doubleHT", "totYcf")
   checkNullityBiasList <- c("no", "MCO_Ym", "MCO_CF")
