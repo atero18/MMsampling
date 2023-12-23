@@ -43,3 +43,9 @@ res$MC %>% group_by(idModel) %>% summarize(meanHT = mean(HT)) %>% print(n = 40)
 res$models %>% group_by(idProblem) %>%
   arrange(CV_tot, .by_group = TRUE) %>%
   select(imputation, deltaEstim, CV_tot)
+
+res$models %>%
+  filter(imputation != "true_values") %>%
+  group_by(idSample) %>%
+  arrange(CV_tot, .by_group = TRUE) %>%
+  slice_min(CV_tot, n = 1L)

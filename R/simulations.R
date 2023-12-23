@@ -36,6 +36,7 @@ genVarMatrix <- function(p, seed = NULL, names = NULL,
 #' @importFrom checkmate assertCount testScalar
 #' @importFrom simstudy genCorData
 #' @importFrom stats cov2cor
+#' @importFrom tibble tibble
 #' @inheritParams seed
 #' @export
 lin_sim <- function(N = 1000L,
@@ -53,7 +54,7 @@ lin_sim <- function(N = 1000L,
   assertCount(pX, positive = TRUE)
   assertCount(pZ)
 
-  params <- c(N = N, Kbar = Kbar, pX = pX, pZ = pZ)
+  params <- tibble(N = N, Kbar = Kbar, pX = pX, pZ = pZ)
 
   fix_seed(seed)
 
@@ -506,7 +507,6 @@ grid_sim <- function(B = 100L, grid = NULL, seed = NULL, simulations = NULL)
       do.call("rbind", lapply(simulations, function(sim) sim$params)) %>%
       as.data.frame()
     params <- add_column(params, idProblem = seq_len(nrow(params)), .before = 1L)
-    browser()
     alreadyHere <- colnames(grid) %in% c(colnames(params), "idModel", "idProblem",  "idSample")
     grid <- grid[, !alreadyHere, drop = FALSE] %>% distinct()
 
@@ -518,8 +518,6 @@ grid_sim <- function(B = 100L, grid = NULL, seed = NULL, simulations = NULL)
       group_by(idProblem, n, pi, samplerType) %>%
       mutate(idSample = cur_group_id()) %>%
       ungroup()
-
-    #grid <- add_column(grid, idSample = seq_len(nrow(grid)), .after = "idProblem")
   }
 
   nbProblems <- unique(grid$idProblem) %>% length()
@@ -698,7 +696,7 @@ grid_sim <- function(B = 100L, grid = NULL, seed = NULL, simulations = NULL)
 
   dataModels <- mutate(dataModels, CV_tot = sqrt(var_HT) / abs(mean_HT))
 
-  list(problems = dataProblems,
+  list(problems = as.data.frame(dataProblems),
        samples = dataSamples,
        models = dataModels,
        MC = dataMC)
