@@ -53,6 +53,8 @@ lin_sim <- function(N = 1000L,
   assertCount(pX, positive = TRUE)
   assertCount(pZ)
 
+  params <- c(N = N, Kbar = Kbar, pX = pX, pZ = pZ)
+
   fix_seed(seed)
 
   if (is.null(meanX))
@@ -219,7 +221,9 @@ lin_sim <- function(N = 1000L,
   phi_tab <- matrix(1.0 / (Kbar + 1L), ncol = Kbar + 1L, nrow = N)
   colnames(phi_tab) <- c("Y", nomsVarYMbar)
 
-  list(covar = covar, data = data,
+  list(covar = covar,
+       params = params,
+       data = data,
        phi_tab = phi_tab,
        coefs = coefsReg,
        probsM = probsM)
@@ -471,6 +475,9 @@ sim_CH <- function(N = 10L, intercept = 5.0, betaXtel = 2.0,
                           betasYMbar = betasYint, covarYMbar = varYint,
                           seed = NULL)
 
+    simulation$params <- c(simulation$params, delta = delta,
+                           ratioVar = ratioVar, betaXtel = betaXtel)
+
     NOMSMODES <- c("Ytel", "Yint")
     colnames(simulation$data)[ncol(simulation$data) + -1:0] <- NOMSMODES
     colnames(simulation$phi_tab) <- NOMSMODES
@@ -482,8 +489,9 @@ sim_CH <- function(N = 10L, intercept = 5.0, betaXtel = 2.0,
 }
 
 
-#' @importFrom dplyr select distinct mutate
+#' @importFrom dplyr select distinct mutate inner_join join_by arrange pull
 #' @importFrom tidyr expand_grid
+#' @importFrom tibble add_column
 #' @inheritParams seed
 #' @export
 grid_sim <- function(B = 100L, grid = NULL, seed = NULL, simulations = NULL)
@@ -492,31 +500,61 @@ grid_sim <- function(B = 100L, grid = NULL, seed = NULL, simulations = NULL)
 
   if (is.null(grid))
     grid <- make_grid_sim()
+  else if (!is.null(simulations))
+  {
+    params <-
+      do.call("rbind", lapply(simulations, function(sim) sim$params)) %>%
+      as.data.frame()
+    params <- add_column(params, idProblem = seq_len(nrow(params)), .before = 1L)
+    browser()
+    alreadyHere <- colnames(grid) %in% c(colnames(params), "idModel", "idProblem",  "idSample")
+    grid <- grid[, !alreadyHere, drop = FALSE] %>% distinct()
 
-  sizeGrid <- nrow(grid)
-  grid$idModel <- seq_len(sizeGrid)
+    grid <- expand_grid(idProblem = params$idProblem, grid)
+    grid <- inner_join(grid, params, by = join_by(idProblem))
 
-  nbParameters <- ncol(grid)
+    grid <-
+      grid %>%
+      group_by(idProblem, n, pi, samplerType) %>%
+      mutate(idSample = cur_group_id()) %>%
+      ungroup()
 
-  nbProblems <- max(grid$idProblem)
+    #grid <- add_column(grid, idSample = seq_len(nrow(grid)), .after = "idProblem")
+  }
 
-  dataProblems <- grid %>% select(idProblem, N, pX, pZ, phi) %>% distinct()
+  nbProblems <- unique(grid$idProblem) %>% length()
+
+
+  grid <- add_column(grid, idModel = seq_len(nrow(grid)), .after = "idSample")
+
+  nbModels <- nrow(grid)
+
+  if (is.null(simulations))
+    dataProblems <- grid %>% select(idProblem, N, pX, pZ, phi) %>% distinct()
+  else
+  {
+    dataProblems <- params
+    rm(params)
+  }
+
   dataProblems$totY <- NA_real_
 
-  dataSamples <- grid %>% select(idSample, samplerType, n)
+  dataSamples <- grid %>%
+    select(idProblem, idSample, samplerType, n, pi) %>%
+    distinct()
 
   nbSamples <- max(dataSamples$idSample)
-
-  dataModes <- grid %>% select(idProblem)
 
   dataModels <- grid %>%
     select(idModel, idProblem, idSample,
            imputation, checkEquality, deltaEstim,
-           checkNullityBias, pmEstim, pi)
+           checkNullityBias, pmEstim)
 
   dataModels <- add_column(dataModels, B = B,
                            mean_HT = rep(NA_real_, nrow(dataModels)),
-                           var_HT = rep(NA_real_, nrow(dataModels)))
+                           bias_HT = rep(NA_real_, nrow(dataModels)),
+                           var_HT = rep(NA_real_, nrow(dataModels))) %>%
+    arrange(idModel)
 
   dataMC <-
     expand_grid(idModel = grid$idModel,
@@ -525,7 +563,7 @@ grid_sim <- function(B = 100L, grid = NULL, seed = NULL, simulations = NULL)
 
   dataMC$HT <- NA_real_
 
-  idModel <- 0.0 ##
+  ##idModel <- 0.0 ##
 
   useProgressBar <- requireNamespace("progress", quietly = TRUE)
 
@@ -533,28 +571,30 @@ grid_sim <- function(B = 100L, grid = NULL, seed = NULL, simulations = NULL)
   {
     bar <-
       progress::progress_bar$new(
-        total = sizeGrid,
+        total = nbModels,
         format = paste0(":current / :total,:percent - ",
                         "elapsed: :elapsedfull | eta : :eta"))
     bar$tick(0L)
   }
 
-  for (idProblem in dataProblems$idProblem)
+  for (idProblem in seq_len(nbProblems))
   {
     # Select hyperparameters of the problem
     paramsProblem <- dataProblems[idProblem, ]
 
-    N <- paramsProblem$N
-    pX <- paramsProblem$pX
-    pZ <- paramsProblem$pZ
-    phi <- paramsProblem$phi
-
-
-    if (is.na(phi))
-       phi <- NULL
-
     if (is.null(simulations))
+    {
+      N <- paramsProblem$N
+      pX <- paramsProblem$pX
+      pZ <- paramsProblem$pZ
+      phi <- paramsProblem$phi
+
+
+      if (is.na(phi))
+        phi <- NULL
+
       simulation <- lin_sim(N = N, pX = pX, pZ = pZ)
+    }
 
     else
       simulation <- simulations[[idProblem]]
@@ -568,11 +608,11 @@ grid_sim <- function(B = 100L, grid = NULL, seed = NULL, simulations = NULL)
 
     totY <- sum(Y_tab[, 1L])
 
-    dataProblems[idProblem, "totY"] <- totY
+    dataProblems$totY[idProblem] <- totY
 
     phi <- simulation$phi_tab ##
 
-    modes <- colnames(simulation$probszM)
+    modes <- colnames(simulation$probsM)
     modesRef <- colnames(Y_tab)[1L]
 
     probaModes <- simulation$probsM
@@ -581,27 +621,30 @@ grid_sim <- function(B = 100L, grid = NULL, seed = NULL, simulations = NULL)
       MMContext$new(X = X, phi_tab = simulation$phi_tab, Y_tab = Y_tab,
                     probaModes = simulation$probsM, modesRef = modesRef)
 
-    dataProblems$totY[idProblem] <- problem$totYref()
-
     idSamples <-
       grid$idSample[grid$idProblem == idProblem] %>% unique()
 
     for (idSample in idSamples)
     {
-      paramsSampling <-
-        grid[grid$idSample == idSample, ][1L, ]
+      paramsSampling <- dataSamples[idSample, ]
+        #grid[grid$idSample == idSample, ][1L, ]
 
       n <- paramsSampling$n
       samplerType <- paramsSampling$samplerType
 
 
       if (samplerType == "SRS")
-        sampler <- MMSRS$new(X = X, n = n, N = N, phi_tab = phi, Y_tab = Y_tab, probaModes = probaModes)
+      {
+        sampler <- MMSRS$new(X = X, n = n, N = N,
+                             phi_tab = phi, Y_tab = Y_tab,
+                             probaModes = probaModes)
+      }
 
       else if (samplerType == "Poisson")
       {
         pi <- paramsSampling$pi[[1L]]
-        sampler <- MMPoisson$new(X = X, N = N, pi = pi, phi_tab = phi, probaModes = probaModes)
+        sampler <- MMPoisson$new(X = X, N = N, pi = pi,
+                                 phi_tab = phi, probaModes = probaModes)
       }
 
 
@@ -612,12 +655,14 @@ grid_sim <- function(B = 100L, grid = NULL, seed = NULL, simulations = NULL)
 
       # dataMCbis <- rbind(dataMCbis, do.call("rbind", infosPlans))
 
-      idModels <-
-        which(grid$idProblem == idProblem & grid$idSample == idSample)
+      idModels <- dataModels %>%
+        filter(idProblem == .env$idProblem,
+               idSample == .env$idSample) %>% pull(idModel)
+
 
       for (i in idModels)
       {
-        paramsModel <- grid[i, ]
+        paramsModel <- dataModels[i, ]
 
         imputation <- paramsModel$imputation
 
@@ -631,7 +676,8 @@ grid_sim <- function(B = 100L, grid = NULL, seed = NULL, simulations = NULL)
           pmEstim <- NULL
 
 
-        resMM <- MC_mm(sampler = sampler, B = B, samples = samples,
+        resMM <- MC_mm(sampler = sampler, B = B,
+                       samples = samples,
                        imputationY = imputation,
                        estimMesBias = deltaEstim,
                        estimPm = pmEstim)
@@ -639,6 +685,8 @@ grid_sim <- function(B = 100L, grid = NULL, seed = NULL, simulations = NULL)
         dataMC$HT[seq((i - 1L) * B + 1L, i * B)] <- resMM$HT
 
         dataModels[i, "mean_HT"] <- mean(resMM$HT)
+
+        dataModels[i, "bias_HT"] <- dataModels[i, "mean_HT"] - totY
 
         dataModels[i, "var_HT"] <- var(resMM$HT)
 

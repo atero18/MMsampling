@@ -69,11 +69,12 @@ estim_MB_MCO_tot <- function(sample, m, typeTot = "doubleHT", Ycf = NULL)
     return(numeric(sample$N))
 
   X <- sample$X %>% as.matrix()
-  X <- cbind(rep(1.0, nrow(X)), X)
+  X <- cbind(cst = rep(1.0, nrow(X)), X)
+
   phi <- sample$phi_tab[, m]
   inverseMat <- (t(X) %*% diag(phi) %*% X) %>% solve()
-  Xm <- sample$Xm(m) %>% as.matrix()
-  Xm <- cbind(rep(1.0, nrow(Xm)), Xm)
+
+  Xm <- X[maskMode, , drop = FALSE]
   Ym <- sample$Ym_resp(mode = m, answersOnly = TRUE)
   phim <- phi[maskMode]
   weightsm <- sample$weights(rep(m, sample$N), inv = FALSE)[maskMode]
@@ -88,7 +89,7 @@ estim_MB_MCO_tot <- function(sample, m, typeTot = "doubleHT", Ycf = NULL)
   }
   else if (typeTot == "totYcf")
   {
-    weightsref <- sample$weights_ref(inv = FALSE)
+
     totYcf <- apply(diag(Ycf * phi) %*% X, 2L, sum)
     HTm <- apply(diag(Ym * phim * weightsm) %*% Xm, 2L, sum)
     coefs <- inverseMat %*% (HTm - totYcf)
@@ -96,10 +97,11 @@ estim_MB_MCO_tot <- function(sample, m, typeTot = "doubleHT", Ycf = NULL)
 
   else if (typeTot == "doubleHT")
   {
-    Xref <- sample$Xref() %>% as.matrix()
+    maskRespRef <- sample$respondents_ref()
+    Xref <- X[maskRespRef, , drop = FALSE]
     Yref <- sample$Yref_resp(answersOnly = TRUE)
-    weightsref <- sample$weights_ref(inv = FALSE)[sample$respondents_ref()]
-    phiref <- phi[sample$respondents_ref()]
+    weightsref <- sample$weights_ref(inv = FALSE)[maskRespRef]
+    phiref <- phi[maskRespRef]
 
     HTm <- apply(diag(Ym * phim * weightsm) %*% Xm, 2L, sum)
     HTref <- apply(diag(Yref * phiref * weightsref) %*% Xref, 2L, sum)
