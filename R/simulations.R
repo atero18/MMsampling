@@ -284,11 +284,16 @@ extract_Y_tab_from_sim <-
 
 #' @importFrom checkmate assertCount
 #' @importFrom tibble tibble
+#' @importFrom parallel detectCores
 #' @keywords internal
 MC_mm <- function(sampler, B = 1000L,
-                  samples = NULL, seed = NULL, ...)
+                  samples = NULL, seed = NULL,
+                  nbCores = detectCores() - 1L, ...)
 {
   assertCount(B, positive = TRUE)
+  assertCount(nbCores)
+  if (nbCores == 0L)
+    nbCores <- 1L
 
   fix_seed(seed)
 
@@ -305,7 +310,9 @@ MC_mm <- function(sampler, B = 1000L,
 
 
   estimFun <- function(sample) HT_mm_with_fitting(sample, ...)
-  estimsTot <- vapply(samples, estimFun, numeric(1L))
+  #estimsTot <- vapply(samples, estimFun, numeric(1L))
+  estimsTot <- mclapply(samples, estimFun)
+  estimsTot <- unlist(estimsTot)
 
   totYref <- sampler$totYref()
   res <- tibble(itMC = seq_len(B),
