@@ -284,7 +284,7 @@ extract_Y_tab_from_sim <-
 
 #' @importFrom checkmate assertCount
 #' @importFrom tibble tibble
-#' @importFrom parallel detectCores
+#' @importFrom parallel mclapply detectCores
 #' @keywords internal
 MC_mm <- function(sampler, B = 1000L,
                   samples = NULL, seed = NULL,
