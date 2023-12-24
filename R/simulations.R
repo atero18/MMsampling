@@ -311,7 +311,7 @@ MC_mm <- function(sampler, B = 1000L,
 
   estimFun <- function(sample) HT_mm_with_fitting(sample, ...)
   #estimsTot <- vapply(samples, estimFun, numeric(1L))
-  estimsTot <- mclapply(samples, estimFun)
+  estimsTot <- mclapply(samples, estimFun, mc.cores = nbCores)
   estimsTot <- unlist(estimsTot)
 
   totYref <- sampler$totYref()
