@@ -22,8 +22,7 @@ for (i in seq_len(nrow(gridParams)))
                              betaXtel = gridParams$betaX[i])
 }
 
-#sim1 <- sim_CH(N = N, pZ = 0L)
-#sim2 <- sim_CH(N = N, pZ = 1L)
+
 gridIntTel <- make_grid_int_tel(N, seed = 123L)
 
 gridIntTel <- gridIntTel %>%
