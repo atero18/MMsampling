@@ -1,3 +1,4 @@
+#' Simulation parameter
 #' @param seed graine aléatoire à utiliser pour la reproductibilité. Si vaut
 #' `NULL` alors la graine n'est pas fixée.
 #' @keywords internal

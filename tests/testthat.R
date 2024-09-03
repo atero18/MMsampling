@@ -7,6 +7,6 @@
 # * https://testthat.r-lib.org/articles/special-files.html
 
 library(testthat)
-library(biaismm)
+library(MMsampling)
 
-test_check("biaismm")
+test_check("MMsampling")

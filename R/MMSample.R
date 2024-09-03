@@ -1,7 +1,9 @@
 #' @include MMSampler.R
 
 
+#' @title About `sample` object
 #' @param sample object containing data about a sample and its context
+#' @keywords internal
 #' @name sample
 NULL
 

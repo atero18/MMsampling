@@ -1,5 +1,29 @@
 #' @include tools.R
 
+#' @title Definition of the mode list `M`
+#' @param M list of expected modes. Must be non-empty, composed of strings
+#' and has to be made of unique values. (character vector)
+#' @keywords internal
+#' @name param_M
+NULL
+
+#' Definition of the sample indicator vector `I`
+#' @param I vector of boolean indicating for each unit if it has been selected
+#' (TRUE) or not (FALSE) in the sample `S`.
+#' @keywords internal
+#' @name param_I
+NULL
+
+#' Definition of the number of units `N`
+#' @param N number of statistical units. (stricly positive integer)
+#' @keywords internal
+#' @name param_N
+NULL
+
+
+#' Check covariates
+#' @inheritParams param_N
+#' @keywords internal
 checkX <- function(X, N = nrow(X), p = ncol(X))
 {
   checkTable(X, nrows = N, ncols = p)
@@ -8,6 +32,9 @@ checkX <- function(X, N = nrow(X), p = ncol(X))
 #' @importFrom checkmate makeAssertionFunction
 assertX <- makeAssertionFunction(checkX)
 
+## À vérifier
+#' Check outcomes
+#' @keywords internal
 checkY <- function(Y, N = length(Y))
 {
   checkNumericVector(Y, finite = TRUE,
@@ -18,9 +45,26 @@ checkY <- function(Y, N = length(Y))
 #' @importFrom checkmate makeAssertionFunction
 assertY <- makeAssertionFunction(checkY)
 
+
+#' Check the table of outcomes.
+#'
+#' One row is a unit and one column a mode
+#' @param Y_tab table containing outcome values for the different modes
+#' available. May contain missing values. Available values must be finite.
+#' @inheritParams param_N
+#' @inheritParams param_M
+#' @keywords internal
 #' @importFrom checkmate checkSetEqual
-checkY_tab <- function(Y_tab, N = nrow(Y_tab), K = ncol(Y_tab), M, modesRef = NULL)
+checkY_tab <- function(Y_tab, N = nrow(Y_tab),
+                       K = ncol(Y_tab), M = colnames(Y_tab))
 {
+  # Assert the name of the modes are correct
+  assertM(M)
+
+
+
+  # Check that Y_tab is a table of numeric values with
+  # the right number of rows and columns
   check <-
     checkTable(Y_tab,
                nrows = N, ncols = K,
@@ -29,38 +73,29 @@ checkY_tab <- function(Y_tab, N = nrow(Y_tab), K = ncol(Y_tab), M, modesRef = NU
   if (!isTRUE(check))
     return(check)
 
-  assertM(M)
+
 
   checkCols <- checkSetEqual(colnames(Y_tab), M)
 
   if (!isTRUE(checkCols))
     return(checkCols)
 
+  # Values are supposed to be finite
   if (any(is.infinite(Y_tab)))
     return("At least one value for Y is infinite")
 
-  if (!is.null(modesRef))
-  {
-    assertModesRef(modesRef, M)
 
-    Kref <- length(modesRef)
-    if (Kref > 1L)
-    {
-      mat <-
-        as.matrix(Y_tab[, modesRef[-1L]]) -
-        matrix(Y_tab[, modesRef[1L]], nrow = N, ncol = Kref - 1L, byrow = FALSE)
-
-      if (any(mat != 0.0))
-        return("Some reference modes gave different results.")
-
-    }
-  }
   TRUE
 }
 
 #' @importFrom checkmate makeAssertionFunction
 assertY_tab <- makeAssertionFunction(checkY_tab)
 
+
+#' Check if the ponderation for each unit is a convex weight
+#' @inheritParams param_N
+#' @inheritParams param_M
+#' @keywords internal
 checkPhi_tab <- function(phi_tab, N = nrow(phi_tab), M)
 {
   assertM(M)
@@ -71,10 +106,18 @@ checkPhi_tab <- function(phi_tab, N = nrow(phi_tab), M)
 #' @importFrom checkmate makeAssertionFunction
 assertPhi_tab <- makeAssertionFunction(checkPhi_tab)
 
+#' Assert the `I` vector
+#' Assert if the indicator vector `I` is correct, and return it as a boolean
+#' vector if it is made of integers
 #' @importFrom checkmate assertInteger assertVector
-set_I <- function(I, N)
+#' @inheritParams param_I
+#' @inheritParams param_N
+#' @keywords internal
+assertI <- function(I, N)
 {
   assertVector(I, any.missing = FALSE, all.missing = FALSE, min.len = 1L)
+
+  assertCount(N, positive = TRUE)
 
   ERRORMESSAGE <- "I is supposed to be a vector with logical or integer values"
   if (is.logical(I))
@@ -102,16 +145,28 @@ set_I <- function(I, N)
     abort(ERRORMESSAGE)
 }
 
+#' Check if a vector supposedly containing mode affectation for each
+#' unit is correct.
+#'
+#' Can contain NA values. We must have at least one unit
+#' which answered.
+#' @keywords internal
+#' @name check_modes
+NULL
 
+#' @describeIn check_modes Do a check
 #' @importFrom purrr partial
 #' @importFrom checkmate checkVector
+#' @keywords internal
 checkModes <-
   partial(checkmate::checkVector,
           all.missing = FALSE,
           min.len = 1L, null.ok = FALSE)
 
+#' @describeIn check_modes Do an assertion
 #' @importFrom purrr partial
 #' @importFrom checkmate assertVector
+#' @keywords internal
 assertModes <- partial(checkmate::assertVector,
                        all.missing = FALSE,
                        min.len = 1L, null.ok = FALSE)

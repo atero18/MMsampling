@@ -3,6 +3,7 @@
 #' Les fonctions suivantes transforment des matrices contenant des
 #' informations sur les interactions entre variables (ex : corrélation)
 #' en d'autres matrices.
+#' @keywords internal
 #' @name mats_interaction
 NULL
 
