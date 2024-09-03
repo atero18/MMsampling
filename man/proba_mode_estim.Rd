@@ -14,7 +14,8 @@ estim_response_prob_global(
 )
 
 estim_response_prob_sequential(
-  sample,
+  X,
+  modes,
   orderModes,
   RGH = NULL,
   constRGH = TRUE,
@@ -37,6 +38,7 @@ Estimation of mode choising probabilities
 \item \code{estim_response_prob_global()}: Estimation by a multimodal point of view
 
 \item \code{estim_response_prob_sequential()}: Estimation sequentialy with conditional
-probabilities (interesting particularly with sequential multimode protocoles)
+probabilities (interesting particularly with sequential mixed-modes protocoles)
 
 }}
+\keyword{internal}

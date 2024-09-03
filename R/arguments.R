@@ -113,7 +113,7 @@ assertPhi_tab <- makeAssertionFunction(checkPhi_tab)
 #' @inheritParams param_I
 #' @inheritParams param_N
 #' @keywords internal
-assertI <- function(I, N)
+set_I <- function(I, N)
 {
   assertVector(I, any.missing = FALSE, all.missing = FALSE, min.len = 1L)
 
@@ -171,6 +171,24 @@ assertModes <- partial(checkmate::assertVector,
                        all.missing = FALSE,
                        min.len = 1L, null.ok = FALSE)
 
+#' @describeIn check_modes Do a check for a unique mode
+#' @keywords internal
+#' @importFrom purrr partial
+checkMode <- partial(checkModes, len = 1L)
+
+#' @describeIn check_modes Do an assertion for a unique mode
+#' @keywords internal
+#' @importFrom checkmate makeAssertionFunction
+assertMode <- makeAssertionFunction(checkMode)
+
+
+#' Check if a vector of values is a vector of unique modes
+#' @keywords internal
+#' @name check_M
+NULL
+
+#' @describeIn check_M check the vector M
+#' @keywords internal
 #' @importFrom purrr partial
 #' @importFrom checkmate checkVector
 checkM <-
@@ -179,62 +197,20 @@ checkM <-
           min.len = 2L, null.ok = FALSE, unique = TRUE)
 
 
+#' @describeIn check_M assert the vector M
+#' @keywords internal
 #' @importFrom purrr partial
 #' @importFrom checkmate assertVector
 assertM <- partial(checkmate::assertVector,
                    any.missing = FALSE, all.missing = FALSE,
                    min.len = 2L, null.ok = FALSE, unique = TRUE)
 
-#' @importFrom purrr partial
-checkMode <- partial(checkModes, len = 1L)
+#' Check if a vector is a vector of probability
+#' @keywords internal
+#' @name check_probability
+NULL
 
-#' @importFrom checkmate makeAssertionFunction
-assertMode <- makeAssertionFunction(checkMode)
-
-#' @importFrom checkmate checkVector checkSubset
-checkModesRef <- function(modesRef, allModes = NULL)
-{
-  check <- checkVector(modesRef,
-                       any.missing = FALSE, all.missing = FALSE,
-                       min.len = 1L, unique = TRUE,
-                       null.ok = FALSE)
-
-  if (!isTRUE(check))
-    return(check)
-
-  if (!is.null(allModes))
-    return(checkSubset(modesRef, allModes))
-  else
-    return(TRUE)
-}
-
-#' @importFrom checkmate makeAssertionFunction
-assertModesRef <- makeAssertionFunction(checkModesRef)
-
-#' @importFrom purrr partial
-checkMeans <- partial(checkNumericVector, finite = TRUE,
-                      any.missing = FALSE, all.missing = FALSE,
-                      null.ok = FALSE)
-
-#' @importFrom checkmate makeAssertionFunction
-assertMeans <- partial(assertNumericVector, finite = TRUE,
-                       any.missing = FALSE, all.missing = FALSE,
-                       null.ok = FALSE)
-
-
-#' @importFrom purrr partial
-checkVariances <- checkSDs <-
-  partial(checkNumericVector, lower = 0.0, finite = TRUE,
-          any.missing = FALSE, all.missing = FALSE,
-          null.ok = FALSE)
-
-#' @importFrom purrr partial
-assertVariances <- assertSDs <-
-  partial(assertNumericVector, lower = 0.0, finite = TRUE,
-          any.missing = FALSE, all.missing = FALSE,
-          null.ok = FALSE)
-
-
+#' @describeIn check_probability check a vector of probability
 #' @importFrom checkmate assertFlag
 #' @keywords internal
 checkProbabilityVec <- function(x,
@@ -266,18 +242,48 @@ checkProbabilityVec <- function(x,
   TRUE
 }
 
+#' @describeIn check_probability assert a vector of probability
 #' @importFrom checkmate makeAssertionFunction
 #' @keywords internal
 assertProbabilityVec <- makeAssertionFunction(checkProbabilityVec)
 
+#' @describeIn check_probability check a scalar of probability
+#' @importFrom checkmate assertFlag
+#' @keywords internal
 checkProbabilityScalar <- partial(checkProbabilityVec,
                                   len = 1L, max.len = 1L,
                                   unique = FALSE)
 
+#' @describeIn check_probability assert a scalar of probability
+#' @importFrom checkmate assertFlag
+#' @keywords internal
 assertProbabilityScalar <- partial(assertProbabilityVec,
                                    len = 1L, max.len = 1L,
                                    unique = FALSE)
 
+#' Check related to variances
+#' @keywords internal
+#' @name check_variances
+NULL
+
+#' @describeIn check_variances Check variances and standard deviations
+#' @keywords internal
+#' @importFrom purrr partial
+checkVariances <- checkSDs <-
+  partial(checkNumericVector, lower = 0.0, finite = TRUE,
+          any.missing = FALSE, all.missing = FALSE,
+          null.ok = FALSE)
+
+#' @describeIn check_variances Assert variances and standard deviations
+#' @keywords internal
+#' @importFrom purrr partial
+assertVariances <- assertSDs <-
+  partial(assertNumericVector, lower = 0.0, finite = TRUE,
+          any.missing = FALSE, all.missing = FALSE,
+          null.ok = FALSE)
+
+#' @describeIn check_variances Check a variance-covariance matrix
+#' @keywords internal
 #' @importFrom checkmate checkMatrix
 checkCovarMat <- function(mat, p = nrow(mat))
 {
@@ -305,8 +311,30 @@ checkCovarMat <- function(mat, p = nrow(mat))
   TRUE
 }
 
+#' @describeIn check_variances Assert a variance-covariance matrix
+#' @keywords internal
 #' @importFrom checkmate makeAssertionFunction
 assertCovarMat <- makeAssertionFunction(checkCovarMat)
+
+#' @describeIn check_variances Check a correlation matrix
+#' @keywords internal
+checkCorMat <- function(mat, p = nrow(mat))
+{
+  checkCovar <- checkCovarMat(mat, p)
+
+  if (!isTRUE(checkCovar))
+    return(checkCovar)
+
+  if (!all(diag(mat) == 1.0))
+    return("Some elements on the diagonal are not equal to 0")
+
+  TRUE
+}
+
+#' @describeIn check_variances Assert a correlation matrix
+#' @keywords internal
+#' @importFrom checkmate makeAssertionFunction
+assertCorMat <- makeAssertionFunction(checkCorMat)
 
 checkPi2 <- function(mat, N = nrow(mat), pi = diag(mat))
 {
@@ -331,62 +359,6 @@ checkPi2 <- function(mat, N = nrow(mat), pi = diag(mat))
 #' @importFrom checkmate makeAssertionFunction
 assertPi2 <- makeAssertionFunction(checkPi2)
 
-checkCorMat <- function(mat, p = nrow(mat))
-{
-  checkCovar <- checkCovarMat(mat, p)
-
-  if (!isTRUE(checkCovar))
-    return(checkCovar)
-
-  if (!all(diag(mat) == 1.0))
-    return("Some elements on the diagonal are not equal to 0")
-
-  TRUE
-}
-
-#' @importFrom checkmate makeAssertionFunction
-assertCorMat <- makeAssertionFunction(checkCorMat)
-
-#' @importFrom checkmate checkMatrix
-checkBiasesMes <- function(biases, N, K = ncol(biases))
-{
-
-  if (is.matrix(biases))
-  {
-    checkMat <- checkMatrix(biases, mode = "numeric",
-                            any.missing = FALSE, all.missing = FALSE,
-                            min.rows = 1L, nrows = N,
-                            min.cols = 1L, ncols = K,
-                            col.names = "named",
-                            null.ok = FALSE)
-
-    if (!isTRUE(checkMat))
-      return(checkMat)
-
-    if (all(biases == 0.0))
-      return("There is no biased mode")
-
-    if (any(is.infinite(biases)))
-      return("Biases must be finite")
-  }
-  else if (is.vector(biases))
-  {
-    checkVec <- checkNumericVector(biases, len = N, finite = TRUE,
-                                   any.missing = FALSE, all.missing = FALSE)
-
-    if (!isTRUE(checkVec))
-      return(checkVec)
-  }
-  else
-    return("Biases must be in a matrix or a numerical vector")
-
-
-  TRUE
-}
-
-#' @importFrom checkmate makeAssertionFunction
-assertBiasesMes <- makeAssertionFunction(checkBiasesMes)
-
 #' @importFrom checkmate checkVector
 #' @importFrom purrr partial
 checkNames <- partial(checkmate::checkVector,
@@ -399,15 +371,18 @@ assertNames <- partial(checkmate::assertVector,
                        any.missing = FALSE, all.missing = FALSE,
                        unique = TRUE, min.len = 1L, null.ok = FALSE)
 
-checkRGH <- checkNames
-assertRGH <- assertNames
-
 set_RGH <- function(RGH, N = length(RGH))
 {
-  if (is.null(RGH))
-    RGH <- rep(1L, N)
-  else
-    assertRGH(len = N)
 
-  RGH
+  if (is.null(RGH) || all(is.na(RGH)))
+  {
+    RGH <- rep(1L, N)
+  }
+  else if (anyNA(RGH))
+    RGH[is.na(RGH)] <- max(RGH) + 1L
+
+  return(RGH)
 }
+
+checkRGH <- checkNames
+assertRGH <- assertNames

@@ -9,3 +9,4 @@
 \description{
 About \code{sample} object
 }
+\keyword{internal}
