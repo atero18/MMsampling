@@ -22,6 +22,7 @@ Suggests:
     fastglm,
     igraph,
     latex2exp,
+    MASS,
     MatchIt,
     progress,
     spelling,

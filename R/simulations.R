@@ -517,6 +517,7 @@ grid_sim <- function(B = 100L, grid = NULL, seed = NULL, simulations = NULL)
     alreadyHere <- colnames(grid) %in% c(colnames(params), "idModel", "idProblem",  "idSample")
     grid <- grid[, !alreadyHere, drop = FALSE] %>% distinct()
 
+    idProblem <- NULL
     grid <- expand_grid(idProblem = params$idProblem, grid)
     grid <- inner_join(grid, params, by = join_by(idProblem))
 

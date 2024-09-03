@@ -1,8 +1,8 @@
 set.seed(245L)
 
-N <- 1000L
+N <- 100L
 
-p <- 3L
+p <- 2L
 
 varMat <- genVarMatrix(p)
 
@@ -39,7 +39,7 @@ glue("MSE between p2 and estimated unconditional :")
 mean((estimProbs$unconditional[, "2"] - p2)^2L)
 
 # With NMAR
-betaNMAR <- c(-10, 100, 10)
+betaNMAR <- sample(c(-10L, 10L), size = p)
 p2 <- p2 <- 1.0 / (1 + exp(-X %*% beta2 + ifelse(R1, -X %*% betaNMAR, 0))) %>% as.vector()
 
 R2 <- runif(N) <= p2
