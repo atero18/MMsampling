@@ -7,7 +7,7 @@ NULL
 #' @describeIn proba_mode_estim Estimation by a multimodal point of view
 #' @importFrom checkmate assertFlag
 #' @importFrom VGAM vglm multinomial predictvglm
-estim_response_prob_global <- function(I, mode, X,
+estim_response_prob_global <- function(I, modes, X,
                                        RGH = NULL, constRGH = TRUE,
                                        chosenOnly = FALSE)
 {
@@ -67,15 +67,17 @@ estim_response_prob_global <- function(I, mode, X,
 #' @importFrom stats glm binomial predict.glm predict
 #' @importFrom checkmate assertFlag assertVector
 estim_response_prob_sequential <- function(I, X, modes, orderModes,
-                                           RGH = NULL, constRGH = TRUE,
+                                           RGH = NULL, constRGH = FALSE,
                                            link = "logit",
                                            chosenOnly = FALSE)
 {
 
   ## Ajouter vérification arguments ?
+  if (anyNA(modes))
+    modes[is.na(modes)] <- "nr"
   modes <- as.factor(modes)
   M <- levels(modes)
-  N <- length(mode)
+  N <- length(modes)
   I <- set_I(I, N)
 
   assertX(X, N = N)
@@ -83,7 +85,7 @@ estim_response_prob_sequential <- function(I, X, modes, orderModes,
   assertFlag(constRGH)
   assertFlag(chosenOnly)
 
-  RGH <- set_RGH(RGH)
+  RGH <- set_RGH(RGH, N)
 
   RGHNames <- unique(RGH)
 
@@ -96,6 +98,8 @@ estim_response_prob_sequential <- function(I, X, modes, orderModes,
                min.len = 1L, unique = TRUE)
 
   assertSubset(orderModes, M)
+
+
 
 
   # Will contain the conditional probs for each mode
@@ -122,11 +126,11 @@ estim_response_prob_sequential <- function(I, X, modes, orderModes,
 
   # For each mode (in the correct order) we will do the regression, considering
   # only the people which didn't answer yet
-  for (i in seq_len(orderModes))
+  for (i in seq_along(orderModes))
   {
     mode <- orderModes[i]
     # We set to TRUE the unit in the subset that used this mode to answer
-    response[subset] <- sample$mode[subset] == mode
+    response[subset] <- modes[subset] == mode
 
     # One evaluation is made per mode, per RGH
     for (group in RGHNames)
@@ -142,9 +146,9 @@ estim_response_prob_sequential <- function(I, X, modes, orderModes,
         conditionalProbs[maskGroup, orderModes[i]] <- 0.0
         unconditionalProbs[maskGroup, orderModes[i]] <- 0.0
       }
-      else if (all(maskGroup[subset]))
+      else if (all(response[maskGroup]))
       {
-        group("Everyone in {group} answered with mode {mode}. \\
+        glue("Everyone in {group} answered with mode {mode}. \\
               Probability fixed to one") %>% inform()
 
         conditionalProbs[maskGroup, orderModes[i]] <- 1.0
@@ -158,23 +162,25 @@ estim_response_prob_sequential <- function(I, X, modes, orderModes,
 
         if (usefastglm)
         {
-          subResponse <- response[subset & maskGroup] # nolint: object_usage_linter
+          subResponse <- response[subset & maskGroup] %>% as.numeric() # nolint: object_usage_linter
           subX <- X[subset & maskGroup, , drop = FALSE] # nolint: object_usage_linter
           modelGroup <-
-            fastglm::fastglm(subResponse ~ subX,
+            fastglm::fastglm(x = subX, y = subResponse,
                              family = binomial, link = link)
 
-          fittedProbsGroup <- modelGroup$fitted.values
+          #fittedProbsGroup <- modelGroup$fitted.values
         }
         else
         {
           modelGroup <- glm(response ~ X, family = binomial,
                             subset = subset & maskGroup, link = link)
 
-          fittedProbsGroup <- predict.glm(modelGroup,
-                                      newdata = X[maskGroup, , drop = FALSE],
-                                      type = "response")
+
         }
+
+        fittedProbsGroup <- predict(modelGroup,
+                                    newdata = X[maskGroup, , drop = FALSE],
+                                    type = "response")
 
         if (constRGH)
           fittedProbsGroup <- rep(mean(fittedProbsGroup), nbElemsGroup)
@@ -197,13 +203,16 @@ estim_response_prob_sequential <- function(I, X, modes, orderModes,
   conditionalProbs[, "nr"] <-
     1.0 - conditionalProbs[, mode]
 
-  unconditionalProbs$nr <- 1.0 - apply(unconditionalProbs, MARGIN = 1L, sum)
+  unconditionalProbs[, "nr"] <- 1.0 - apply(unconditionalProbs, MARGIN = 1L, sum)
 
   if (chosenOnly)
   {
     unconditionalProbs <- get_value_by_mode(unconditionalProbs, sample$mode)
     conditionalProbs <- get_value_by_mode(conditionalProbs, sample$mode)
   }
+
+  unconditionalProbs[unconditionalProbs <= .Machine$double.eps] <- 0.0
+  conditionalProbs[conditionalProbs <= .Machine$double.eps] <- 0.0
 
   list(unconditional = unconditionalProbs,
        conditional = conditionalProbs)
