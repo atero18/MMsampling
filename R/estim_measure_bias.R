@@ -6,114 +6,116 @@
 #' @importFrom stats lm predict.lm
 #' @keywords internal
 #' @name regression_Ym
-estim_Ym_MCO <- function(sample, m)
+estim_coefs_Ym_MCO <- function(Z, Yobs, m, modes)
 {
-  maskMode <- sample$respondents_mode(m)
+  maskMode <- modes == m
 
   if (!any(maskMode))
     glue("Nobody answered with the mode {m}") %>% abort()
 
-  Ym <- sample$Ym_resp(m) # nolint: object_usage_linter
-  Xm <- sample$Xm(m) # nolint: object_usage_linter
+  Ym <- Yobs[maskMode] # nolint: object_usage_linter
+  Zm <- Z[maskMode, , drop = FALSE] # nolint: object_usage_linter
 
-  data <- cbind(Ym, Xm)
+  data <- cbind(Ym, Zm) %>% as.data.frame()
 
-  lm(Ym ~ ., data = data) %>% predict.lm(newdata = sample$X)
+  lm(Ym ~ . -1L, data = data) %>% coef()
 }
+
+estim_MB_by_MCO <- function(delta, Z,
+                            weights = rep(1.0, nrow(Z)),
+                            phi = rep(1/2, nrow(Z)))
+{
+  diag(weights * phi) %*% Z %*% delta
+}
+
+estim_delta_MCO_by_totals <- function(Z, totalBiased, totalRef)
+{
+  solve(t(Z) %*% Z) %*% (totalBiased - totalRef)
+}
+
+
+estim_MB_by_delta_MCO_HT <- function(delta, Z, pi,
+                                     m, modes,
+                                     probsSelect,
+                                     phi = rep(1.0 / 2.0, nrow(Z)))
+{
+  mask <- modes == m
+  Z <- Z[mask, , drop = FALSE]
+  pi <- pi[mask]
+  probsSelect <- probsSelect[mask]
+  phi <- phi[mask]
+
+  weights <- (pi * probSelect)^-1L
+
+  estim_MB_by_MCO(delta, Z, weights, phi)
+}
+
 
 #' @inheritParams regression_Ym
 #' @importFrom stats predict.lm
-estim_delta_G_comp_MCO <- function(sample)
+estim_delta_G_comp_MCO <- function(Z, Yobs, modes, biasedMode, refMode)
 {
-  Ycf <- MCO_Y(sample)
+  coefsBiased <- estim_coefs_Ym_MCO(Z, Yobs, biasedMode, modes)
+  coefsRef <- estim_coefs_Ym_MCO(Z, Yobs, refMode, modes)
 
-
-  usedBiasedModes <- sample$used_biased_modes()
-
-  if (length(usedBiasedModes) == 0L)
-    return(numeric(sample$N))
-
-  delta <- rep(NA_real_, sample$N)
-  delta[sample$respondents_ref()] <- 0.0
-
-
-  for (m in usedBiasedModes)
-  {
-    maskRespMode <- sample$respondents_mode(m)
-    delta[maskRespMode] <- (estim_Ym_MCO(sample, m) - Ycf)[maskRespMode]
-  }
-
-  return(delta)
+  coefsBiased - coefsRef
 }
 
-#' @importFrom checkmate assertFlag
-#' @importFrom stats lm predict.lm
-estim_MB_MCO_cf <- function(sample, m, Ycf)
+estim_delta_MCO <- function(Z, Yobs,
+                            modes, biasedMode, refMode,
+                            modeTotBiased = "HT", modeTotRef = "HT",
+                            pi, probsSelect)
 {
-  maskMode <- sample$respondents_mode(m)
-  assertY(Ycf, N = sample$N)
 
-  data <- cbind(Ytilde = sample$Ytilde(), Ycf, sample$X)
 
-  lm(Ytilde - Ycf ~ ., data = data, subset = maskMode) %>%
-    predict.lm(newdata = sample$X)
+  # Special case of G-computation
+  if (modeTotBiased == "MCO" && modeTotRef == "MCO")
+    return(estim_delta_G_comp_MCO(Z, Yobs, modes, biasedMode, refMode))
+
+  if (modeTotBiased == "HT" || modeTotRef == "HT")
+  {
+    weights <- (pi * probsSelect)^-1L
+  }
+
+  if (modeTotBiased == "HT")
+  {
+    maskBiased <- modes == biasedMode
+    totBiased <- t(Z[maskBiased, , drop = FALSE]) %*%
+      diag(weights[maskBiased]) %*%
+      Yobs[maskBiased]
+
+    coefsBiased <- solve(t(Z) %*% Z) %*% totBiased
+  }
+  else if (modeTotBiased == "MCO")
+  {
+    coefsBiased <- estim_coefs_Ym_MCO(Z, Yobs, biasedMode, modes)
+  }
+  else
+    abort("No method recognized for the total of the bias mode.")
+
+  if (modeTotRef == "HT")
+  {
+    maskRef <- modes == refMode
+    totRef <- t(Z[maskRef, , drop = FALSE]) %*%
+      diag(weights[maskRef]) %*%
+      Yobs[maskRef]
+
+    coefsRef <- solve(t(Z) %*% Z) %*% totRef
+  }
+  else if (modeTotRef == "MCO")
+  {
+    coefsRef <-  estim_coefs_Ym_MCO(Z, Yobs, refMode, modes)
+  }
+  else
+    abort("No method recognized for the total of the reference mode.")
+
+  delta <- coefsBiased - coefsRef
+
+  delta
 }
 
-#' @importFrom checkmate assertChoice
-estim_MB_MCO_tot <- function(sample, m, typeTot = "doubleHT", Ycf = NULL)
-{
-  assertChoice(typeTot, c("estimDeltaCF", "doubleHT", "totYcf"))
-  maskMode <- sample$respondents_mode(m)
 
-  if (!any(maskMode))
-    return(numeric(sample$N))
-
-  X <- sample$X %>% as.matrix()
-  X <- cbind(cst = rep(1.0, nrow(X)), X)
-
-  phi <- sample$phi_tab[, m]
-  inverseMat <- (t(X) %*% diag(phi) %*% X) %>% solve()
-
-  Xm <- X[maskMode, , drop = FALSE]
-  Ym <- sample$Ym_resp(mode = m, answersOnly = TRUE)
-  phim <- phi[maskMode]
-  weightsm <- sample$weights(rep(m, sample$N), inv = FALSE)[maskMode]
-
-  if (typeTot == "estimDeltaCF")
-  {
-    assertNumericVector(Ycf, len = sample$N, null.ok = FALSE)
-
-    delta <- Ym - Ycf[maskMode]
-    HTdelta <- apply(diag(delta * phim * weightsm) %*% Xm, 2L, sum)
-    coefs <- inverseMat %*% HTdelta
-  }
-  else if (typeTot == "totYcf")
-  {
-
-    totYcf <- apply(diag(Ycf * phi) %*% X, 2L, sum)
-    HTm <- apply(diag(Ym * phim * weightsm) %*% Xm, 2L, sum)
-    coefs <- inverseMat %*% (HTm - totYcf)
-  }
-
-  else if (typeTot == "doubleHT")
-  {
-    maskRespRef <- sample$respondents_ref()
-    Xref <- X[maskRespRef, , drop = FALSE]
-    Yref <- sample$Yref_resp(answersOnly = TRUE)
-    weightsref <- sample$weights_ref(inv = FALSE)[maskRespRef]
-    phiref <- phi[maskRespRef]
-
-    HTm <- apply(diag(Ym * phim * weightsm) %*% Xm, 2L, sum)
-    HTref <- apply(diag(Yref * phiref * weightsref) %*% Xref, 2L, sum)
-
-    coefs <- inverseMat %*% (HTm - HTref)
-  }
-
-  coefs <- as.vector(coefs)
-
-  X %*% coefs
-}
-
+## À vérifier
 #' @importFrom stats qf
 #' @importFrom checkmate assertFlag
 check_nullity_bias_MCO <- function(sample, Ycf, alpha = 0.01,

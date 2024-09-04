@@ -1,16 +1,15 @@
 set.seed(245L)
 
-N <- 100L
+N <- 1000L
 
 p <- 2L
 
 varMat <- genVarMatrix(p)
 
-#' @importFrom MASS mvrnorm
+library(MASS)
 X <- mvrnorm(N, rep(0.0, p), varMat)
 
 I <- rep(TRUE, N)
-#' @importFrom VGAM logistic
 beta1 <- rnorm(n = p, mean = 0, sd = .5)
 p1 <- 1.0 / (1 + exp(-X %*% beta1)) %>% as.vector()
 R1 <- runif(N) <= p1
