@@ -64,8 +64,17 @@ estim_delta_G_comp_MCO <- function(Z, Yobs, modes, biasedMode, refMode)
 estim_delta_MCO <- function(Z, Yobs,
                             modes, biasedMode, refMode,
                             modeTotBiased = "HT", modeTotRef = "HT",
-                            pi, probsSelect)
+                            pi, probsSelect, sampleMatrix = FALSE)
 {
+
+
+  Z <- as.matrix(Z)
+  if ((modeTotBiased == "MCO" && modeTotRef == "MCO") ||
+      modeTotBiased == "G-COMP" ||
+      modeTotRef == "G-COMP")
+  {
+    return(estim_delta_G_comp_MCO(Z, Yobs, modes, biasedMode, refMode))
+  }
 
   N <- length(Yobs)
   if (modeTotBiased == "HT" || modeTotRef == "HT")
@@ -78,11 +87,20 @@ estim_delta_MCO <- function(Z, Yobs,
   if (modeTotBiased == "HT")
   {
     maskBiased <- modes == biasedMode
-    totBiased <- t(Z[maskBiased, , drop = FALSE]) %*%
+    Zbiased <- Z[maskBiased, , drop = FALSE]
+    totBiased <- t(Zbiased) %*%
       diag(weights[maskBiased]) %*%
       Yobs[maskBiased]
 
-    coefsBiased <- solve(t(Z) %*% Z) %*% totBiased
+    if (sampleMatrix)
+    {
+      coefsBiased <- solve(t(Zbiased) %*%
+                             diag(weights[maskBiased]) %*%
+                             Zbiased) %*%
+      totBiased
+    }
+    else
+      coefsBiased <- solve(t(Z) %*% Z) %*% totBiased
   }
   else if (modeTotBiased == "MCO")
     coefsBiased <- estim_coefs_Ym_MCO(Z, Yobs, biasedMode, modes)
@@ -92,15 +110,24 @@ estim_delta_MCO <- function(Z, Yobs,
   if (modeTotRef == "HT")
   {
     maskRef <- modes == refMode
-    totRef <- t(Z[maskRef, , drop = FALSE]) %*%
+    Zref <- Z[maskRef, , drop = FALSE]
+    totRef <- t(Zref) %*%
       diag(weights[maskRef]) %*%
       Yobs[maskRef]
 
-    coefsRef <- solve(t(Z) %*% Z) %*% totRef
+    if (sampleMatrix)
+    {
+      coefsRef <- solve(t(Zref) %*%
+                          diag(weights[maskRef])
+                        %*% Zref) %*%
+      totRef
+    }
+    else
+      coefsRef <- solve(t(Z) %*% Z) %*% totRef
   }
   else if (modeTotRef == "MCO")
   {
-    coefsRef <-  estim_coefs_Ym_MCO(Z, Yobs, refMode, modes)
+    coefsRef <- estim_coefs_Ym_MCO(Z, Yobs, refMode, modes)
   }
   else
     abort("No method recognized for the total of the reference mode.")

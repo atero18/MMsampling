@@ -25,7 +25,8 @@ modes <- rep(NA_character_, N)
 modes[R1] <- "1"
 modes[!R1 & R2] <- "2"
 
-estimProbs <- estim_response_prob_sequential(I, X, modes, c("1", "2"))
+estimProbs <-
+  estim_response_prob_sequential(I, X, modes, c("1", "2"), chosenOnly = FALSE)
 
 glue("MSE between p1 and estimated conditional :")
 mean((estimProbs$conditional[, "1"] - p1)^2L)
@@ -47,7 +48,7 @@ modes <- rep(NA_character_, N)
 modes[R1] <- "1"
 modes[!R1 & R2] <- "2"
 
-estimProbs <- estim_response_prob_sequential(I, X, modes, c("1", "2"))
+estimProbs <- estim_response_prob_sequential(I, X, modes, c("1", "2"), chosenOnly = FALSE)
 
 glue("MSE between p1 and estimated conditional :")
 mean((estimProbs$conditional[, "1"] - p1)^2L)

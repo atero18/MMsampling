@@ -7,25 +7,26 @@
 \title{Estimation of mode choising probabilities}
 \usage{
 estim_response_prob_global(
-  sample,
+  I,
+  modes,
+  Z,
   RGH = NULL,
   constRGH = TRUE,
   chosenOnly = FALSE
 )
 
 estim_response_prob_sequential(
-  X,
+  I,
+  Z,
   modes,
   orderModes,
   RGH = NULL,
-  constRGH = TRUE,
+  constRGH = FALSE,
   link = "logit",
-  chosenOnly = FALSE
+  chosenOnly = TRUE
 )
 }
 \arguments{
-\item{sample}{object containing data about a sample and its context}
-
 \item{orderModes}{the order modes are considered. The first mode will have
 an absolute probability of selection, the second a probability a selection
 conditionaly to the non-selection of the first one, etc.}

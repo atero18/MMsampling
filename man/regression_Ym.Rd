@@ -2,10 +2,10 @@
 % Please edit documentation in R/estim_measure_bias.R
 \name{regression_Ym}
 \alias{regression_Ym}
-\alias{estim_Ym_MCO}
+\alias{estim_coefs_Ym_MCO}
 \title{Parametric regression for modes}
 \usage{
-estim_Ym_MCO(sample, m)
+estim_coefs_Ym_MCO(Z, Yobs, m, modes)
 }
 \description{
 Estimate Ym on the whole population based
