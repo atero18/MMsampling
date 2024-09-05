@@ -7,7 +7,7 @@ NULL
 #' @describeIn proba_mode_estim Estimation by a multimodal point of view
 #' @importFrom checkmate assertFlag
 #' @importFrom VGAM vglm multinomial predictvglm
-estim_response_prob_global <- function(I, modes, X,
+estim_response_prob_global <- function(I, modes, Z,
                                        RGH = NULL, constRGH = TRUE,
                                        chosenOnly = FALSE)
 {
@@ -15,18 +15,18 @@ estim_response_prob_global <- function(I, modes, X,
   ## Ajouter vérification arguments ?
   modes <- as.factor(modes)
   M <- levels(modes)
-  N <- length(mode)
+  N <- length(modes)
   I <- set_I(I, N)
 
-  assertX(X, N = N)
+  assertX(Z, N = N)
 
   assertFlag(constRGH)
   assertFlag(chosenOnly)
 
-  RGH <- set_RGH(RGH)
+  RGH <- set_RGH(RGH, N)
   RGHNames <- unique(RGH)
 
-  data <- cbind(mode = as.factor(modes), X)
+  data <- cbind(mode = as.factor(modes), Z) %>% as.data.frame()
   fittedProbs <- numeric(N)
 
 
@@ -35,7 +35,7 @@ estim_response_prob_global <- function(I, modes, X,
   {
     maskGroup <- RGH == group
 
-    modelGroup <- vglm(mode ~ X, data = data,
+    modelGroup <- vglm(mode ~ Z, data = data,
                        family = multinomial, subset = I & maskGroup)
 
     ## À tester pour savoir quel résultat est rendu ; va bloquer car
@@ -43,7 +43,7 @@ estim_response_prob_global <- function(I, modes, X,
     ## les modes pour tous les groupes ?
     fittedProbsGroup <-
       predictvglm(modelGroup,
-                  newdata = X[maskGroup, , drop = FALSE],
+                  newdata = as.data.frame(Z[maskGroup, , drop = FALSE]),
                   type = "response")
 
     if (constRGH)
@@ -66,12 +66,11 @@ estim_response_prob_global <- function(I, modes, X,
 #' conditionaly to the non-selection of the first one, etc.
 #' @importFrom stats glm binomial predict.glm predict
 #' @importFrom checkmate assertFlag assertVector
-estim_response_prob_sequential <- function(I, X, modes, orderModes,
+estim_response_prob_sequential <- function(I, Z, modes, orderModes,
                                            RGH = NULL, constRGH = FALSE,
                                            link = "logit",
-                                           chosenOnly = FALSE)
+                                           chosenOnly = TRUE)
 {
-
   ## Ajouter vérification arguments ?
   if (anyNA(modes))
     modes[is.na(modes)] <- "nr"
@@ -80,7 +79,7 @@ estim_response_prob_sequential <- function(I, X, modes, orderModes,
   N <- length(modes)
   I <- set_I(I, N)
 
-  assertX(X, N = N)
+  assertX(Z, N = N)
 
   assertFlag(constRGH)
   assertFlag(chosenOnly)
@@ -163,23 +162,23 @@ estim_response_prob_sequential <- function(I, X, modes, orderModes,
         if (usefastglm)
         {
           subResponse <- response[subset & maskGroup] %>% as.numeric() # nolint: object_usage_linter
-          subX <- X[subset & maskGroup, , drop = FALSE] # nolint: object_usage_linter
+          subZ <- Z[subset & maskGroup, , drop = FALSE] # nolint: object_usage_linter
           modelGroup <-
-            fastglm::fastglm(x = subX, y = subResponse,
+            fastglm::fastglm(x = subZ, y = subResponse,
                              family = binomial, link = link)
 
           #fittedProbsGroup <- modelGroup$fitted.values
         }
         else
         {
-          modelGroup <- glm(response ~ X, family = binomial,
+          modelGroup <- glm(response ~ Z, family = binomial,
                             subset = subset & maskGroup, link = link)
 
 
         }
 
         fittedProbsGroup <- predict(modelGroup,
-                                    newdata = X[maskGroup, , drop = FALSE],
+                                    newdata = Z[maskGroup, , drop = FALSE],
                                     type = "response")
 
         if (constRGH)
@@ -207,8 +206,8 @@ estim_response_prob_sequential <- function(I, X, modes, orderModes,
 
   if (chosenOnly)
   {
-    unconditionalProbs <- get_value_by_mode(unconditionalProbs, sample$mode)
-    conditionalProbs <- get_value_by_mode(conditionalProbs, sample$mode)
+    unconditionalProbs <- get_value_by_mode(unconditionalProbs, modes)
+    conditionalProbs <- get_value_by_mode(conditionalProbs, modes)
   }
 
   unconditionalProbs[unconditionalProbs <= .Machine$double.eps] <- 0.0

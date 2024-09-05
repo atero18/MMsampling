@@ -1,6 +1,7 @@
 ```{r}
 library(dplyr)
 library(glue)
+library(tibble)
 ```
 
 # Linear models on both modes
@@ -11,8 +12,6 @@ set.seed(145L)
 
 ```{r}
 N <- 10000L
-
-n <- ceiling(N) # SRS parameter
 ```
 
 
@@ -45,14 +44,10 @@ alphaTel <- rnorm(n = p, mean = 0.0, sd = .5)
 pTel <- 1.0 / (1.0 + exp(-Z %*% alphaTel)) %>% as.vector()
 ```
 
-
 ```{r}
-set.seed(150L)
-```
-
-```{r}
-test <- function()
+test <- function(typeProb = "true", ...)
 {
+  n <- ceiling(N / 4L) # SRS parameter
   selectedSample <- sample(seq_len(N), size = n, replace = FALSE)
   pi <- rep(n / N, N)
   I <- rep(FALSE, N)
@@ -69,17 +64,23 @@ test <- function()
   modes[!Rint & Rtel] <- "tel"
   
   modes[!I] <- "nr"
-  nbInt <- sum(modes == "int")
-  nbTel <- sum(modes == "tel")
   
-  
-  probsSelect <- rep(NA_real_, N)
-  probsSelect[modes == "int"] <- pInt[modes == "int"]
-  probsSelect[modes == "tel"] <- ((1 - pInt) * pTel)[modes == "tel"]
+  if (typeProb == "true")
+  {
+    probsSelect <- rep(NA_real_, N)
+    probsSelect[modes == "int"] <- pInt[modes == "int"]
+    probsSelect[modes == "tel"] <- ((1.0 - pInt) * pTel)[modes == "tel"]
+  }
+  else if (typeProb == "estim")
+  {
+    probsSelect <- 
+    estim_response_prob_sequential(I, Z, modes, c("int", "tel"))$unconditional
+  }
   
   Yint <- Z %*% betaInt + rnorm(n = N)
   Ytel <- Z %*% betaTel + rnorm(n = N)
   
+  phi <- rep(0.5, N)
   totalBias <- sum(phi * (Yint - Ytel))
   
   
@@ -91,97 +92,57 @@ test <- function()
                          pi = pi, probsSelect = probsSelect) %>% 
     estim_MB_by_MCO(Z, phi = phi) %>% sum()
   
-  empTotBiasGCOMP <- estim_delta_MCO(Z, Yobs, modes, "int", "tel", "MCO", "MCO", 
+  empTotBias2MCO <- estim_delta_MCO(Z, Yobs, modes, "int", "tel", "MCO", "MCO", 
                          pi = pi, probsSelect = probsSelect) %>% 
     estim_MB_by_MCO(Z, phi = phi) %>% sum()
   
-  c(trueTot = totalBias, HT = empTotBiasHT - totalBias, GCOMP = empTotBiasGCOMP- totalBias)
+  c(trueBias = totalBias, 
+    HT = empTotBiasHT,
+    MCO = empTotBias2MCO)
 
 }
 ```
 
 ```{r}
-K <- 200L
-res <- matrix(nrow = K, ncol = 3L)
+K <- 100L
 
-for (k in seq_len(K))
-  res[k, ] <- test()
+set.seed(150L)
 
-apply(res, 2L, mean)
-```
+biasesTrueProb <- sapply(seq_len(K), test, typeProb = "true") %>%
+  t() %>% 
+  as.data.frame() %>%
+  add_column(.before = 1L, experiment = seq_len(K)) %>% 
+  pivot_longer(cols = c("HT", "MCO"),
+               names_to = "estimator", values_to = "estBias") %>% 
+  add_column(.before = "estBias", probSelect = "true")
 
-Selecting the units in the sample (Simple Random Sampling):
-
-```{r}
-selectedSample <- sample(seq_len(N), size = n, replace = FALSE)
-pi <- rep(n / N, N)
-I <- rep(FALSE, N)
-I[selectedSample] <- TRUE
-rm(selectedSample)
-```
-
-
-```{r}
-
-Rint <- runif(N) <= pInt
-Rtel <- runif(N) <= pTel
-
-modes <- rep("nr", N)
-modes[Rint] <- "int"
-
-modes[!Rint & Rtel] <- "tel"
-
-modes[!I] <- "nr"
-nbInt <- sum(modes == "int")
-nbTel <- sum(modes == "tel")
-
-glue("Number of respondants by internet / telephone: {nbInt} / {nbTel}")
-```
-Calculating the probability of selecting the associated mode (unconditionally)
-
-```{r}
-probsSelect <- rep(NA_real_, N)
-probsSelect[modes == "int"] <- pInt[modes == "int"]
-probsSelect[modes == "tel"] <- ((1 - pInt) * pTel)[modes == "tel"]
-```
-
-Definining the counterfactuals:
-
-```{r}
-Yint <- Z %*% betaInt + rnorm(n = N)
-Ytel <- Z %*% betaTel + rnorm(n = N)
-```
-
-Calculating measure bias (`tel` as reference):
-
-```{r}
-biases <- Yint - Ytel
-```
-
-Total of the measure bias with $\phi \equiv \frac{1}{2}$ :
-
-```{r}
-phi <- rep(0.5, N)
-sum(phi * biases)
-```
-
-Creating the observed vector:
-
-```{r}
-Yobs <- rep(NA_real_, N)
-Yobs[modes == "int"] <- Yint[modes == "int"]
-Yobs[modes == "tel"] <- Ytel[modes == "tel"]
-
-Yobs[seq_len(15L)]
+head(biasesTrueProb) %>% print()
 ```
 
 ```{r}
-res <- estim_delta_MCO(Z, Yobs, modes, "int", "tel", "HT", "HT", 
-                       pi = pi, probsSelect = probsSelect) %>% 
-  estim_MB_by_MCO(Z, phi = phi)
+set.seed(150L)
+
+biasesEstimProb <- sapply(seq_len(K), test, typeProb = "estim") %>%
+  t() %>% 
+  as.data.frame() %>%
+  add_column(.before = 1L, experiment = seq_len(K)) %>% 
+  pivot_longer(cols = c("HT", "MCO"),
+               names_to = "estimator", values_to = "estBias") %>% 
+  add_column(.before = "estBias", probSelect = "estim")
+
+head(biasesEstimProb) %>% print()
 ```
 
 ```{r}
-sum(res)
+res <- rbind(biasesTrueProb, biasesEstimProb) %>% 
+  arrange(experiment)
+res
 ```
 
+```{r}
+res %>%
+  mutate(diff = estBias - trueBias) %>%
+  group_by(estimator, probSelect) %>% 
+  summarise(diffMean = mean(diff), MSE = mean(diff^2L)) %>% 
+  arrange(MSE)
+```

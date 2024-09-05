@@ -67,14 +67,12 @@ estim_delta_MCO <- function(Z, Yobs,
                             pi, probsSelect)
 {
 
-
-  # Special case of G-computation
-  if (modeTotBiased == "MCO" && modeTotRef == "MCO")
-    return(estim_delta_G_comp_MCO(Z, Yobs, modes, biasedMode, refMode))
-
+  N <- length(Yobs)
   if (modeTotBiased == "HT" || modeTotRef == "HT")
   {
-    weights <- (pi * probsSelect)^-1L
+    weights <- numeric(N)
+    weights[!is.na(probsSelect)] <-
+      (pi[!is.na(probsSelect)] * probsSelect[!is.na(probsSelect)])^-1L
   }
 
   if (modeTotBiased == "HT")
@@ -87,9 +85,7 @@ estim_delta_MCO <- function(Z, Yobs,
     coefsBiased <- solve(t(Z) %*% Z) %*% totBiased
   }
   else if (modeTotBiased == "MCO")
-  {
     coefsBiased <- estim_coefs_Ym_MCO(Z, Yobs, biasedMode, modes)
-  }
   else
     abort("No method recognized for the total of the bias mode.")
 
