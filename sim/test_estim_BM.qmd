@@ -117,6 +117,9 @@ simulation1 <- function(...)
   sample <- MMSample$new(Z = Z, pi = pi, I = I, 
                          modes = modes, Yobs = Yobs, phi = phi)
   
+  tempProbsSelect <- 
+    estim_response_prob_sequential(I, Z, modes, c("int", "tel"))$unconditional
+  
   results <- data.frame(trueBias = numeric(), 
                         estimator = character(), 
                         probSelect = character(),
@@ -153,7 +156,7 @@ simulation1 <- function(...)
   # tic()
   resEval <- 
     estim_delta_MCO(sample$Z, sample$Yobs, sample$modes, 
-                    "int", "tel", "MCO", "MCO", pi, trueProbsSelect) %>% 
+                    "int", "tel", "MCO", "MCO", pi, tempProbsSelect) %>% 
     estim_MB_by_MCO(Z, phi = phi) %>% 
     sum()
   # toc() %>% print()
@@ -161,10 +164,9 @@ simulation1 <- function(...)
   
   results <- results %>% 
     add_row(trueBias = totalBias, estimator = "G-COMP", 
-            probSelect = "true", invMatrix = NA_character_, estBias = resEval)
+            probSelect = NA_character_, invMatrix = NA_character_, estBias = resEval)
   
-  tempProbsSelect <- 
-    estim_response_prob_sequential(I, Z, modes, c("int", "tel"))$unconditional
+  
   
 
   # tic()
