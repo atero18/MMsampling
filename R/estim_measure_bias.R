@@ -67,14 +67,7 @@ estim_delta_MCO <- function(Z, Yobs,
                             pi, probsSelect, sampleMatrix = FALSE)
 {
 
-
   Z <- as.matrix(Z)
-  if ((modeTotBiased == "MCO" && modeTotRef == "MCO") ||
-      modeTotBiased == "G-COMP" ||
-      modeTotRef == "G-COMP")
-  {
-    return(estim_delta_G_comp_MCO(Z, Yobs, modes, biasedMode, refMode))
-  }
 
   N <- length(Yobs)
   if (modeTotBiased == "HT" || modeTotRef == "HT")
@@ -82,8 +75,21 @@ estim_delta_MCO <- function(Z, Yobs,
     weights <- numeric(N)
     weights[!is.na(probsSelect)] <-
       (pi[!is.na(probsSelect)] * probsSelect[!is.na(probsSelect)])^-1L
+
+    # Case when all weights are equal:
+    if (sampleMatrix && all(weights == weights[1L]))
+      modeTotBiased <- modeTotRef <- "MCO"
   }
 
+  if ((modeTotBiased == "MCO" && modeTotRef == "MCO") ||
+      modeTotBiased == "G-COMP" ||
+      modeTotRef == "G-COMP")
+  {
+    return(estim_delta_G_comp_MCO(Z, Yobs, modes, biasedMode, refMode))
+  }
+
+
+  ZtZInv <- NULL
   if (modeTotBiased == "HT")
   {
     maskBiased <- modes == biasedMode
@@ -97,10 +103,14 @@ estim_delta_MCO <- function(Z, Yobs,
       coefsBiased <- solve(t(Zbiased) %*%
                              diag(weights[maskBiased]) %*%
                              Zbiased) %*%
-      totBiased
+        totBiased
     }
     else
-      coefsBiased <- solve(t(Z) %*% Z) %*% totBiased
+    {
+      ZtZInv <- solve(t(Z) %*% Z)
+      coefsBiased <- ZtZInv %*% totBiased
+    }
+
   }
   else if (modeTotBiased == "MCO")
     coefsBiased <- estim_coefs_Ym_MCO(Z, Yobs, biasedMode, modes)
@@ -123,7 +133,13 @@ estim_delta_MCO <- function(Z, Yobs,
       totRef
     }
     else
-      coefsRef <- solve(t(Z) %*% Z) %*% totRef
+    {
+      if (is.null(ZtZInv))
+        ZtZInv <- solve(t(Z) %*% Z)
+
+      coefsRef <- ZtZInv %*% totRef
+    }
+
   }
   else if (modeTotRef == "MCO")
   {
@@ -135,6 +151,68 @@ estim_delta_MCO <- function(Z, Yobs,
   delta <- coefsBiased - coefsRef
 
   delta
+}
+
+# Équivalent G-COMP
+# estim_delta_MCO_unique_model <- function(Z, Yobs,
+#                                          modes, biasedMode, refMode)
+# {
+#   maskBiased <- modes == biasedMode
+#
+#   maskRef <- modes == refMode
+#
+#   Zbiased <- Z[maskBiased, , drop = FALSE]
+#   Zref <- Z[maskRef, , drop = FALSE]
+#
+#   ZtZBiased <- t(Zbiased) %*% Zbiased
+#   ZtZRef <- t(Zref) %*% Zref
+#
+#
+#   Ybiased <- Yobs[maskBiased]
+#   Yref <- Yobs[maskRef]
+#
+#   beta <- solve(ZtZRef) %*% t(Zref) %*% Yref
+#
+#   delta <- solve(ZtZBiased) %*% t(Zbiased) %*% Ybiased - beta
+#
+#   as.numeric(delta)
+#
+# }
+
+estim_delta_MCO_unique_model_const <- function(Z, Yobs,
+                                               modes, biasedMode, refMode)
+{
+  maskBiased <- modes == biasedMode
+  nBiased <- sum(maskBiased)
+  oneBiased <- rep(1.0, nBiased)
+
+  maskRef <- modes == refMode
+
+  Zbiased <- Z[maskBiased, , drop = FALSE]
+  Zref <- Z[maskRef, , drop = FALSE]
+
+  ZtZBiased <- t(Zbiased) %*% Zbiased
+  Ybiased <- Yobs[maskBiased]
+  Yref <- Yobs[maskRef]
+
+
+  A <- ZtZBiased -
+    t(Zbiased) %*% (oneBiased / nBiased) %*% t(oneBiased) %*% Zbiased +
+    t(Zref) %*% Zref
+
+  b <- t(Zbiased) %*% Ybiased -
+    t(Zbiased) %*% oneBiased * (sum(Ybiased) / nBiased) +
+    t(Zref) %*% Yref
+
+  beta <- solve(A, b)
+
+
+  delta <- sum(Ybiased) - t(oneBiased) %*% Zbiased %*% beta
+
+
+  delta <- delta / nBiased
+
+  as.numeric(delta)
 }
 
 

@@ -2,6 +2,8 @@
 library(dplyr)
 library(glue)
 library(tibble)
+library(parallel)
+library(tictoc)
 ```
 
 # Linear models on both modes
@@ -11,7 +13,7 @@ set.seed(145L)
 ```
 
 ```{r}
-N <- 10000L
+N <- 1000L
 ```
 
 
@@ -19,18 +21,28 @@ N <- 10000L
 Creating independent covariates
 
 ```{r}
-p <- 3L
+p <- 1L
 
-Z <- rnorm(n = N * p) %>% matrix(nrow = N, ncol = p)
+Z <- rnorm(n = N * p, mean = 1.0) %>% matrix(nrow = N, ncol = p)
+Z <- cbind(1.0, Z)
 ```
+
+```{r}
+summary(Z)
+```
+
 
 Creating parameters for two modes : "int" and "tel"
 
 ```{r}
-betaInt <- rnorm(n = p, mean = 1.0)
-betaTel <- rnorm(n = p, mean = 2.0)
+betaInt <- rnorm(n = p + 1L, mean = 1.0)
+betaTel <- rnorm(n = p + 1L, mean = 2.0)
 ```
 
+```{r}
+print(betaInt)
+print(betaTel)
+```
 
 
 Simulating a mode selection MAR (Missing At Random) - Creation of the parameters
@@ -38,10 +50,15 @@ Simulating a mode selection MAR (Missing At Random) - Creation of the parameters
 ```{r}
 # With MAR
 
-alphaInt <- rnorm(n = p, mean = 0.0, sd = .5)
+alphaInt <- rnorm(n = p + 1L, mean = 0.0, sd = .5)
 pInt <- 1.0 / (1.0 + exp(-Z %*% alphaInt)) %>% as.vector()
-alphaTel <- rnorm(n = p, mean = 0.0, sd = .5)
+alphaTel <- rnorm(n = p + 1L, mean = 0.0, sd = .5)
 pTel <- 1.0 / (1.0 + exp(-Z %*% alphaTel)) %>% as.vector()
+```
+
+```{r}
+summary(pInt) %>% print()
+summary(pTel) %>% print()
 ```
 
 ```{r}
@@ -64,7 +81,7 @@ gen_choice_bimode <- function(I, p1, p2, mode1 = "int", mode2 = "tel")
 ```
 
 ```{r}
-test <- function(...)
+simulation1 <- function(...)
 {
   n <- ceiling(N / 4L) # SRS parameter
   selectedSample <- sample(seq_len(N), size = n, replace = FALSE)
@@ -82,8 +99,12 @@ test <- function(...)
 
   
   
-  Yint <- Z %*% betaInt + rnorm(n = N)
-  Ytel <- Z %*% betaTel + rnorm(n = N)
+  Yint <- +1.0 + Z %*% betaInt + rnorm(n = N, sd = 2.0)
+  Ytel <- -1.0 + Z %*% betaTel + rnorm(n = N, sd = 1.0)
+  #Ytel <- Yint - 2.0
+  
+  #summary(Yint) %>% print()
+  #summary(Ytel) %>% print()
   
   phi <- rep(0.5, N)
   totalBias <- sum(phi * (Yint - Ytel))
@@ -102,34 +123,40 @@ test <- function(...)
                         invMatrix = character(),
                         estBias = numeric())
   
+  # tic()
   resEval <- 
     estim_delta_MCO(sample$Z, sample$Yobs, sample$modes, 
                            "int", "tel", "HT", "HT", pi, 
                     trueProbsSelect, sampleMatrix = FALSE) %>% 
     estim_MB_by_MCO(Z, phi = phi) %>% 
     sum()
+  # toc() %>% print()
   
   results <- results %>% 
     add_row(trueBias = totalBias, estimator = "HT", 
             probSelect = "true", invMatrix = "true", estBias = resEval)
 
+  # tic()
   resEval <- 
     estim_delta_MCO(sample$Z, sample$Yobs, sample$modes, 
                            "int", "tel", "HT", "HT", pi, 
                     trueProbsSelect, sampleMatrix = TRUE) %>% 
     estim_MB_by_MCO(Z, phi = phi) %>% 
     sum()
+  # toc() %>% print()
   
   results <- results %>% 
     add_row(trueBias = totalBias, estimator = "HT", 
             probSelect = "true", invMatrix = "sample", estBias = resEval)
   
 
+  # tic()
   resEval <- 
     estim_delta_MCO(sample$Z, sample$Yobs, sample$modes, 
                     "int", "tel", "MCO", "MCO", pi, trueProbsSelect) %>% 
     estim_MB_by_MCO(Z, phi = phi) %>% 
     sum()
+  # toc() %>% print()
   
   
   results <- results %>% 
@@ -140,12 +167,14 @@ test <- function(...)
     estim_response_prob_sequential(I, Z, modes, c("int", "tel"))$unconditional
   
 
+  # tic()
   resEval <- 
     estim_delta_MCO(sample$Z, sample$Yobs, sample$modes, 
                          "int", "tel", "HT", "HT", pi, 
                     tempProbsSelect, sampleMatrix = FALSE) %>% 
   estim_MB_by_MCO(Z, phi = phi) %>% 
   sum()
+  # toc() %>% print()
  
   
   results <- results %>% 
@@ -153,32 +182,60 @@ test <- function(...)
             probSelect = "estimation", invMatrix = "true", estBias = resEval)
  
 
+  # tic()
   resEval <- 
     estim_delta_MCO(sample$Z, sample$Yobs, sample$modes, 
                          "int", "tel", "HT", "HT", pi, 
                     tempProbsSelect, sampleMatrix = TRUE) %>% 
   estim_MB_by_MCO(Z, phi = phi) %>% 
   sum()
+  # toc() %>% print()
   
   results <- results %>% 
     add_row(trueBias = totalBias, estimator = "HT", 
             probSelect = "estimation", invMatrix = "sample", estBias = resEval)
+  
+  deltaEval <- estim_delta_MCO_unique_model_const(Z, Yobs, modes, "int", "tel")
+  resEval <- sum(phi * deltaEval)
+  
+  results <- results %>% 
+    add_row(trueBias = totalBias, estimator = "MCO_unique", 
+            probSelect = NA_character_, 
+            invMatrix = NA_character_, estBias = resEval)
+  
+  # Équivalent G-COMP
+  # resEval <- estim_delta_MCO_unique_model(Z, Yobs, modes, "int", "tel") %>% 
+  #   estim_MB_by_MCO(Z, phi = phi) %>% 
+  #   sum()
+  # 
+  # results <- results %>% 
+  #   add_row(trueBias = totalBias, estimator = "MCO_complete", 
+  #           probSelect = NA_character_, 
+  #           invMatrix = NA_character_, estBias = resEval)
   
   results
 }
 ```
 
 ```{r}
-K <- 200L
+#cluster <- makeCluster(detectCores() - 1L)
+```
 
-set.seed(150L)
+```{r}
+K <- 10000L
 
+set.seed(200L)
 
-biases <- lapply(seq_len(K), test, typeProb = "true")
+tic()
+#biases <- parLapply(cluster, X = seq_len(K), fun = test)
+biases <- lapply(seq_len(K), simulation1, typeProb = "true")
+toc()$callback_msg %>% print()
+
 
 biases <- do.call("rbind", biases)
 biases <- biases %>% 
-  add_column(.before = 1L, experiment = factor(rep(seq_len(K), each = nrow(biases) / K)))
+  add_column(.before = 1L, 
+             experiment = factor(rep(seq_len(K), each = nrow(biases) / K)))
 ```
 
 
