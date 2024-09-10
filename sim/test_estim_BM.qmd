@@ -129,6 +129,15 @@ simulation1 <- function(constBias = FALSE, ...)
   I[selectedSample] <- TRUE
   rm(selectedSample)
   
+  
+  # selectedSampleMen <- sample(which(sex == "Man"), size = 2 * n / 3, replace = FALSE)
+  # selectedSampleWomen <- sample(which(sex == "Woman"), size = n / 3, replace = FALSE)
+  # I <- rep(FALSE, N)
+  # I[selectedSampleMen] <- TRUE
+  # I[selectedSampleMen] <- TRUE
+  # pi <- rep(n / 3L)
+  # pi[sex == "Man"] <- 2 * n / 3
+  
   # Mode selection simulation
   modes <- gen_choice_bimode(I, pInt, pTel)
   trueProbsSelect <- rep(NA_real_, N)
@@ -226,7 +235,7 @@ simulation1 <- function(constBias = FALSE, ...)
     estim_response_prob_sequential(I, Z, modes, c("int", "tel"))$unconditional
   
 
-  # Full HT estimation, with full population matrix (Z^tZ)^-1 and
+    # Full HT estimation, with full population matrix (Z^tZ)^-1 and
   # unknown probabilities
   # tic()
   resEval <- 
@@ -268,7 +277,7 @@ simulation1 <- function(constBias = FALSE, ...)
 ## Constant measure bias
 
 ```{r}
-K <- 10000
+K <- 10000L
 ```
 
 
@@ -298,8 +307,8 @@ constBiases <- constBiases %>%
 constBiases %>%
   mutate(diff = estBias - trueBias) %>%
   group_by(estimator, probSelect, invMatrix) %>% 
-  summarise(reldiffMean = round(mean(diff) / abs(expBias), 2L), 
-            relRMSE = round(sqrt(mean(diff^2L)) / abs(expBias), 2L)) %>% 
+  summarise(reldiffMean = round(mean(diff) / abs(expBias), 4L), 
+            relRMSE = round(sqrt(mean(diff^2L)) / abs(expBias), 4L)) %>% 
   arrange(relRMSE)
 ```
 
@@ -347,7 +356,7 @@ relBiases %>%
 relBiases %>%
   mutate(diff = estBias - trueBias) %>%
   group_by(estimator, probSelect, invMatrix) %>% 
-  summarise(reldiffMean = round(mean(diff) / abs(expBias), 2L), 
-            relRMSE = round(sqrt(mean(diff^2L)) / abs(expBias), 2L)) %>% 
+  summarise(reldiffMean = round(mean(diff) / abs(expBias), 4L), 
+            relRMSE = round(sqrt(mean(diff^2L)) / abs(expBias), 4L)) %>% 
   arrange(relRMSE)
 ```
