@@ -4,9 +4,12 @@ library(glue)
 library(tibble)
 library(parallel)
 library(tictoc)
+library(ggplot2)
 ```
 
 # Linear models on both modes
+
+## Building constants
 
 ```{r}
 set.seed(145L)
@@ -14,53 +17,88 @@ set.seed(145L)
 
 ```{r}
 N <- 1000L
+phi <- rep(0.5, N)
 ```
-
-
 
 Creating independent covariates
 
 ```{r}
 p <- 1L
 
-Z <- rnorm(n = N * p, mean = 1.0) %>% matrix(nrow = N, ncol = p)
-Z <- cbind(1.0, Z)
+sex <- sample(c(0L, 1L), replace = TRUE, size = N, prob = c(0.5, 0.5))
+age <- rnorm(n = N, mean = sex * 41.1 + (1L - sex) * 43.9, sd = 10.0)
+age[age < 0.0] <- 0.0
+
+Z <- data.frame(const = 1.0, 
+                age = age, 
+                sex = sex)
+
+rm(age)
+sex <- factor(sex)
+levels(sex) <- c("Woman", "Man")
 ```
 
 ```{r}
 summary(Z)
 ```
+```{r}
+data <- Z[, c("sex", "age")]
+data$sex <- sex
+ggplot(data) + geom_density(aes(x = age, colour = sex))
+rm(data)
+```
 
+```{r}
+Z <- as.matrix(Z)
+```
 
 Creating parameters for two modes : "int" and "tel"
 
 ```{r}
-betaInt <- rnorm(n = p + 1L, mean = 1.0)
-betaTel <- rnorm(n = p + 1L, mean = 2.0)
+betaInt <- c(4.5, 0.5, 8.0)
+betaTel <- c(3.5, -0.5, 16.0)
+# betaInt <- rnorm(n = p + 1L, mean = 1.0)
+# betaTel <- rnorm(n = p + 1L, mean = 2.0)
 ```
 
-```{r}
-print(betaInt)
-print(betaTel)
-```
-
-
-Simulating a mode selection MAR (Missing At Random) - Creation of the parameters
+We simulate a mode selection MAR (Missing At Random) under a logistic model, with $Z$ as variables:
 
 ```{r}
 # With MAR
 
-alphaInt <- rnorm(n = p + 1L, mean = 0.0, sd = .5)
-pInt <- 1.0 / (1.0 + exp(-Z %*% alphaInt)) %>% as.vector()
-alphaTel <- rnorm(n = p + 1L, mean = 0.0, sd = .5)
-pTel <- 1.0 / (1.0 + exp(-Z %*% alphaTel)) %>% as.vector()
+expit <- function(x) 1.0 / (1.0 + exp(-x))
+# alphaInt <- rnorm(n = p + 1L, mean = 0.0, sd = .5)
+alphaInt <- c(0.7, -0.01, -0.5)
+#pInt <- runif(N)
+pInt <- expit(Z %*% alphaInt) %>% as.vector()
+
+# alphaTel <- rnorm(n = p + 1L, mean = 0.0, sd = .5)
+alphaTel <- c(0.3, 0.01, -0.5)
+#pTel <- runif(N)
+pTel <- expit(Z %*% alphaTel) %>% as.vector()
+```
+
+
+
+Here are some details about the $p_{int}$ and $p_{tel}$:
+
+```{r}
+data.frame(mode = factor(rep(c("int", "tel"), each = N)), 
+           prob = c(pInt, pTel)) %>% 
+  ggplot() + geom_density(aes(x = prob, color = mode))
+```
+```{r}
+pInt[sex == "Man"] %>% summary()
+pInt[sex == "Woman"] %>% summary()
 ```
 
 ```{r}
+cat("internet probabilities:\n")
 summary(pInt) %>% print()
+cat("telephone probabilities:\n")
 summary(pTel) %>% print()
 ```
-
+## Simulation functions
 ```{r}
 gen_choice_bimode <- function(I, p1, p2, mode1 = "int", mode2 = "tel")
 {
@@ -81,35 +119,37 @@ gen_choice_bimode <- function(I, p1, p2, mode1 = "int", mode2 = "tel")
 ```
 
 ```{r}
-simulation1 <- function(...)
+simulation1 <- function(constBias = FALSE, ...)
 {
-  n <- ceiling(N / 4L) # SRS parameter
+  # Handle Simple Random Sampling
+  n <- ceiling(N / 4L)
   selectedSample <- sample(seq_len(N), size = n, replace = FALSE)
   pi <- rep(n / N, N)
   I <- rep(FALSE, N)
   I[selectedSample] <- TRUE
   rm(selectedSample)
   
-  
+  # Mode selection simulation
   modes <- gen_choice_bimode(I, pInt, pTel)
-
   trueProbsSelect <- rep(NA_real_, N)
   trueProbsSelect[modes == "int"] <- pInt[modes == "int"]
   trueProbsSelect[modes == "tel"] <- ((1.0 - pInt) * pTel)[modes == "tel"]
 
+  # Affecting values to Y_int and Y_tel
+  Yint <- Z %*% betaInt + rnorm(n = N, sd = 25.0)
   
-  
-  Yint <- +1.0 + Z %*% betaInt + rnorm(n = N, sd = 2.0)
-  Ytel <- -1.0 + Z %*% betaTel + rnorm(n = N, sd = 1.0)
-  #Ytel <- Yint - 2.0
-  
-  #summary(Yint) %>% print()
-  #summary(Ytel) %>% print()
-  
-  phi <- rep(0.5, N)
+  # Case when the measure bias is constant, up to a white noise
+  if (constBias)
+    Ytel <- Yint - (betaInt[1L] - betaTel[1L]) + rnorm(N, 0.0, 25.0)
+  # Case when the measure bias is dependant of the covariates
+  else
+    Ytel <- Z %*% betaTel + rnorm(n = N, sd = 25.0)
+
+  # Evaluating the measure bias total (random value)
   totalBias <- sum(phi * (Yint - Ytel))
   
   
+  # Creating the observed outcome vector
   Yobs <- rep(NA_real_, N)
   Yobs[modes == "int"] <- Yint[modes == "int"]
   Yobs[modes == "tel"] <- Ytel[modes == "tel"]
@@ -117,15 +157,15 @@ simulation1 <- function(...)
   sample <- MMSample$new(Z = Z, pi = pi, I = I, 
                          modes = modes, Yobs = Yobs, phi = phi)
   
-  tempProbsSelect <- 
-    estim_response_prob_sequential(I, Z, modes, c("int", "tel"))$unconditional
-  
   results <- data.frame(trueBias = numeric(), 
-                        estimator = character(), 
+                        estimator = character(),
+                        trueEstimator = logical(),
                         probSelect = character(),
                         invMatrix = character(),
                         estBias = numeric())
   
+  # Full HT estimation, with full population matrix (Z^tZ)^-1 and
+  # known probabilities
   # tic()
   resEval <- 
     estim_delta_MCO(sample$Z, sample$Yobs, sample$modes, 
@@ -136,9 +176,11 @@ simulation1 <- function(...)
   # toc() %>% print()
   
   results <- results %>% 
-    add_row(trueBias = totalBias, estimator = "HT", 
+    add_row(trueBias = totalBias, estimator = "HT", trueEstimator = FALSE,
             probSelect = "true", invMatrix = "true", estBias = resEval)
 
+  # Full HT estimation, with sample matrix (Z_S^TZ_S)^-1 and
+  # known probabilities
   # tic()
   resEval <- 
     estim_delta_MCO(sample$Z, sample$Yobs, sample$modes, 
@@ -149,26 +191,43 @@ simulation1 <- function(...)
   # toc() %>% print()
   
   results <- results %>% 
-    add_row(trueBias = totalBias, estimator = "HT", 
+    add_row(trueBias = totalBias, estimator = "HT", trueEstimator = FALSE,
             probSelect = "true", invMatrix = "sample", estBias = resEval)
   
-
+  
+  # G-COMP estimation, <=> double MCO estimation
   # tic()
   resEval <- 
     estim_delta_MCO(sample$Z, sample$Yobs, sample$modes, 
-                    "int", "tel", "MCO", "MCO", pi, tempProbsSelect) %>% 
+                    "int", "tel", "MCO", "MCO", pi, NULL) %>% 
     estim_MB_by_MCO(Z, phi = phi) %>% 
     sum()
   # toc() %>% print()
   
   
   results <- results %>% 
-    add_row(trueBias = totalBias, estimator = "G-COMP", 
-            probSelect = NA_character_, invMatrix = NA_character_, estBias = resEval)
+    add_row(trueBias = totalBias, estimator = "G-COMP", trueEstimator = TRUE,
+            probSelect = NA_character_, 
+            invMatrix = NA_character_, estBias = resEval)
   
   
+  # Estimation on a unique MCO for Y1 and Y2, with beta X and only a constant
+  # delta for the estimation of the measure bias
+  deltaEval <- estim_delta_MCO_unique_model_const(Z, Yobs, modes, "int", "tel")
+  resEval <- sum(phi * deltaEval)
+  
+  results <- results %>% 
+    add_row(trueBias = totalBias, estimator = "MCO_unique", trueEstimator = TRUE,
+            probSelect = NA_character_, 
+            invMatrix = NA_character_, estBias = resEval)
+  
+  # Estimation of mode selection probabilities
+  tempProbsSelect <- 
+    estim_response_prob_sequential(I, Z, modes, c("int", "tel"))$unconditional
   
 
+  # Full HT estimation, with full population matrix (Z^tZ)^-1 and
+  # unknown probabilities
   # tic()
   resEval <- 
     estim_delta_MCO(sample$Z, sample$Yobs, sample$modes, 
@@ -180,10 +239,11 @@ simulation1 <- function(...)
  
   
   results <- results %>% 
-    add_row(trueBias = totalBias, estimator = "HT", 
+    add_row(trueBias = totalBias, estimator = "HT", trueEstimator = TRUE,
             probSelect = "estimation", invMatrix = "true", estBias = resEval)
  
-
+  # Full HT estimation, with sample matrix (Z_S^TZ_S)^-1 and
+  # unknown probabilities
   # tic()
   resEval <- 
     estim_delta_MCO(sample$Z, sample$Yobs, sample$modes, 
@@ -194,26 +254,8 @@ simulation1 <- function(...)
   # toc() %>% print()
   
   results <- results %>% 
-    add_row(trueBias = totalBias, estimator = "HT", 
+    add_row(trueBias = totalBias, estimator = "HT", trueEstimator = TRUE,
             probSelect = "estimation", invMatrix = "sample", estBias = resEval)
-  
-  deltaEval <- estim_delta_MCO_unique_model_const(Z, Yobs, modes, "int", "tel")
-  resEval <- sum(phi * deltaEval)
-  
-  results <- results %>% 
-    add_row(trueBias = totalBias, estimator = "MCO_unique", 
-            probSelect = NA_character_, 
-            invMatrix = NA_character_, estBias = resEval)
-  
-  # Équivalent G-COMP
-  # resEval <- estim_delta_MCO_unique_model(Z, Yobs, modes, "int", "tel") %>% 
-  #   estim_MB_by_MCO(Z, phi = phi) %>% 
-  #   sum()
-  # 
-  # results <- results %>% 
-  #   add_row(trueBias = totalBias, estimator = "MCO_complete", 
-  #           probSelect = NA_character_, 
-  #           invMatrix = NA_character_, estBias = resEval)
   
   results
 }
@@ -223,28 +265,89 @@ simulation1 <- function(...)
 #cluster <- makeCluster(detectCores() - 1L)
 ```
 
+## Constant measure bias
+
 ```{r}
-K <- 10000L
-
-set.seed(200L)
-
-tic()
-#biases <- parLapply(cluster, X = seq_len(K), fun = test)
-biases <- lapply(seq_len(K), simulation1, typeProb = "true")
-toc()$callback_msg %>% print()
-
-
-biases <- do.call("rbind", biases)
-biases <- biases %>% 
-  add_column(.before = 1L, 
-             experiment = factor(rep(seq_len(K), each = nrow(biases) / K)))
+K <- 10000
 ```
 
 
 ```{r}
-biases %>%
+set.seed(200L)
+
+tic()
+#biases <- parLapply(cluster, X = seq_len(K), fun = test)
+constBiases <- lapply(seq_len(K), simulation1, constBias = TRUE)
+toc()
+
+
+expBias <- sum(phi) * (betaInt[1L] - betaTel[1L])
+expBias
+
+constBiases <- do.call("rbind", constBiases)
+constBiases <- constBiases %>% 
+  add_column(.before = 1L, 
+             experiment = factor(rep(seq_len(K), 
+                                     each = nrow(constBiases) / K))) %>% 
+  add_column(.before = 2L,
+             BMtype = "constant") %>% 
+  add_column(.before = "trueBias", expectedBias = expBias)
+```
+
+```{r}
+constBiases %>%
   mutate(diff = estBias - trueBias) %>%
   group_by(estimator, probSelect, invMatrix) %>% 
-  summarise(diffMean = mean(diff), RMSE = sqrt(mean(diff^2L))) %>% 
-  arrange(RMSE)
+  summarise(reldiffMean = round(mean(diff) / abs(expBias), 2L), 
+            relRMSE = round(sqrt(mean(diff^2L)) / abs(expBias), 2L)) %>% 
+  arrange(relRMSE)
+```
+
+
+
+## Variable measure bias
+
+```{r}
+set.seed(201L)
+
+tic()
+relBiases <- lapply(seq_len(K), simulation1, constBias = FALSE)
+toc()#$callback_msg %>% print()
+
+expBias <- (t(phi) %*% Z %*% (betaInt - betaTel)) %>% as.vector()
+expBias
+
+relBiases <- do.call("rbind", relBiases)
+relBiases <- relBiases %>% 
+  add_column(.before = 1L, 
+             experiment = factor(rep(K + seq_len(K), 
+                                     each = nrow(relBiases) / K))) %>% 
+  add_column(.before = 2L,
+             BMtype = "variable") %>% 
+  add_column(.before = "trueBias", expectedBias = expBias)
+
+#biases <- rbind(constBiases, relBiases)
+```
+
+
+
+
+```{r}
+relBiases %>% 
+  distinct(trueBias) %>% 
+  ggplot() + 
+  geom_histogram(aes(x = trueBias)) +
+  geom_vline(aes(xintercept = mean(trueBias)), colour = "red") +
+  geom_vline(xintercept = expBias, col = "green", linetype = "dotted")
+```
+
+
+
+```{r}
+relBiases %>%
+  mutate(diff = estBias - trueBias) %>%
+  group_by(estimator, probSelect, invMatrix) %>% 
+  summarise(reldiffMean = round(mean(diff) / abs(expBias), 2L), 
+            relRMSE = round(sqrt(mean(diff^2L)) / abs(expBias), 2L)) %>% 
+  arrange(relRMSE)
 ```
