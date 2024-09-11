@@ -178,11 +178,10 @@ simulation1 <- function(constBias = FALSE,
   {
     # Case when the measure bias is constant, up to a white noise
     if (constBias)
-      deltas <- (betaInt[1L] - betaTel[1L]) + rnorm(N, 0.0, 25.0)
+      deltas <- rnorm(N, betaInt[1L] - betaTel[1L], 25.0)
     
     # Case when the measure bias is dependant of the covariates
     else
-      ##
       deltas <- Z %*% (betaInt - betaTel) + rnorm(N, 0.0, 25.0)
   }
   else if (deltaLaw == "exponential")
@@ -272,7 +271,7 @@ simulation1 <- function(constBias = FALSE,
   # Estimation on a unique MCO for Y1 and Y2, with beta X and only a constant
   # delta for the estimation of the measure bias
   deltaEval <- estim_delta_MCO_unique_model_const(Z, Yobs, modes, "int", "tel")
-  resEval <- sum(phi * deltaEval)
+  resEval <- sum(phi) * deltaEval
   
   results <- results %>% 
     add_row(trueBias = totalBias, estimator = "MCO_unique", trueEstimator = TRUE,
@@ -317,9 +316,10 @@ simulation1 <- function(constBias = FALSE,
   
   results <- results %>% 
     add_column(.before = 1L, expectedBias = expectedBias) %>% 
-    add_column(.before = 2L, YtelLaw = factor(YtelLaw)) %>% 
-    add_column(.before = 3L, deltaLaw = factor(deltaLaw)) %>% 
-    add_column(.before = 4L, BMtype = factor(ifelse(constBias, "constant", "variable")))
+    add_column(.before = 2L, sampling = sampling) %>% 
+    add_column(.before = 3L, YtelLaw = factor(YtelLaw)) %>% 
+    add_column(.after = "YtelLaw", deltaLaw = factor(deltaLaw)) %>% 
+    add_column(.after = "deltaLaw", BMtype = factor(ifelse(constBias, "constant", "variable")))
   
   results
 }
@@ -332,7 +332,7 @@ simulation1 <- function(constBias = FALSE,
 ## Constant measure bias
 
 ```{r}
-K <- 1000L
+K <- 5000L
 ```
 
 
@@ -374,6 +374,7 @@ for (i in seq_len(nrow(parameters)))
   results <- rbind(results, expResults)
 }
 toc()
+
 results$estimator <- as.factor(results$estimator)
 results$probSelect <- as.factor(results$probSelect)
 results$invMatrix <- as.factor(results$invMatrix)
@@ -395,13 +396,27 @@ results %>%
   #mutate(probSelect = ifelse(is.na(probSelect), "null", probSelect)) %>% 
   #mutate(invMatrix = ifelse(is.na(invMatrix), "null", invMatrix)) %>% 
   mutate(diff = estBias - trueBias) %>% 
-  group_by(BMtype, YtelLaw, deltaLaw, estimator, probSelect, invMatrix) %>% 
+  group_by(BMtype, sampling, YtelLaw, deltaLaw, estimator, probSelect, invMatrix) %>% 
   summarise(reldiffMean = round(mean(diff / abs(expectedBias)) , 4L), 
             relRMSE = round(sqrt(mean(diff^2L / expectedBias^2L)), 4L)) %>% 
   ungroup() %>% 
-  group_by(BMtype, YtelLaw, deltaLaw) %>% 
+  group_by(BMtype, sampling, YtelLaw, deltaLaw) %>% 
   # arrange(relRMSE) %>% 
-  slice_min(relRMSE)
+  slice_min(abs(reldiffMean))
+```
+```{r}
+results %>% 
+  #filter(BMtype == "constant") %>% 
+  #mutate(probSelect = ifelse(is.na(probSelect), "null", probSelect)) %>% 
+  #mutate(invMatrix = ifelse(is.na(invMatrix), "null", invMatrix)) %>% 
+  mutate(diff = estBias - trueBias) %>% 
+  group_by(BMtype, sampling, YtelLaw, deltaLaw, estimator, probSelect, invMatrix) %>% 
+  summarise(reldiffMean = round(mean(diff / abs(expectedBias)) , 4L), 
+            relRMSE = round(sqrt(mean(diff^2L / expectedBias^2L)), 4L)) %>% 
+  ungroup() %>% 
+  filter(YtelLaw == "gaussian", deltaLaw == "gaussian", BMtype == "constant") %>% 
+  group_by(BMtype, sampling) %>% 
+  arrange(relRMSE, .by_group = TRUE)
 ```
 
 ```{r}
