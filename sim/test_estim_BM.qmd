@@ -8,6 +8,10 @@ library(tictoc)
 library(ggplot2)
 ```
 
+```{r}
+devtools::load_all()
+```
+
 # Linear models on both modes
 
 ## Building constants
@@ -42,10 +46,13 @@ levels(sex) <- c("Woman", "Man")
 ```{r}
 summary(Z)
 ```
+
 ```{r}
 data <- Z[, c("sex", "age")]
 data$sex <- sex
-ggplot(data) + geom_density(aes(x = age, colour = sex))
+ggplot(data) + 
+  geom_density(aes(x = age, colour = sex)) +
+  ggtitle("Age ~ sex")
 rm(data)
 ```
 
@@ -58,36 +65,32 @@ Creating parameters for two modes : "int" and "tel"
 ```{r}
 betaInt <- c(4.5, 1.5, 8.0)
 betaTel <- c(3.5, -1.0, 16.0)
-# betaInt <- rnorm(n = p + 1L, mean = 1.0)
-# betaTel <- rnorm(n = p + 1L, mean = 2.0)
 ```
 
-We simulate a mode selection MAR (Missing At Random) under a logistic model, with $Z$ as variables:
+We simulate a mode selection MAR (Missing At Random) under a logistic model, with $Z$ as variable:
 
 ```{r}
 # With MAR
 
 expit <- function(x) 1.0 / (1.0 + exp(-x))
-# alphaInt <- rnorm(n = p + 1L, mean = 0.0, sd = .5)
-alphaInt <- c(0.7, -0.01, -0.5)
-#pInt <- runif(N)
+
+alphaInt <- c(0.7, -0.02, -0.5)
 pInt <- expit(Z %*% alphaInt) %>% as.vector()
 
-# alphaTel <- rnorm(n = p + 1L, mean = 0.0, sd = .5)
-alphaTel <- c(0.3, 0.01, -0.5)
-#pTel <- runif(N)
+alphaTel <- c(0.3, 0.02, -0.5)
 pTel <- expit(Z %*% alphaTel) %>% as.vector()
 ```
-
-
 
 Here are some details about the $p_{int}$ and $p_{tel}$:
 
 ```{r}
 data.frame(mode = factor(rep(c("int", "tel"), each = N)), 
            prob = c(pInt, pTel)) %>% 
-  ggplot() + geom_density(aes(x = prob, color = mode))
+  ggplot() + 
+  geom_density(aes(x = prob, color = mode)) +
+  ggtitle("Distribution of p_int and p_tel")
 ```
+
 ```{r}
 pInt[sex == "Man"] %>% summary()
 pInt[sex == "Woman"] %>% summary()
@@ -99,7 +102,11 @@ summary(pInt) %>% print()
 cat("telephone probabilities:\n")
 summary(pTel) %>% print()
 ```
+
 ## Simulation functions
+
+Randomly affect a mode (or non-response) to each unit
+
 ```{r}
 gen_choice_bimode <- function(I, p1, p2, mode1 = "int", mode2 = "tel")
 {
@@ -119,12 +126,28 @@ gen_choice_bimode <- function(I, p1, p2, mode1 = "int", mode2 = "tel")
 }
 ```
 
+Parameters:
+
+-   the constance of the bias, up to a Gaussian noise (`constBias`)
+-   the sampling type (`sampling`)
+-   the law of $Y_{tel}$ (`YtelLaw`)
+-   the law of $\Delta y$ (`deltaLaw`)
+
 ```{r}
+#| echo: false
+
 simulation1 <- function(constBias = FALSE,
                         sampling = "SRS",
                         YtelLaw = "gaussian", 
-                        deltaLaw = "gaussian", ...)
+                        deltaLaw = "gaussian",
+                        phiType = "eq",
+                        ...)
 {
+  if (phiType == "eq")
+    phi <- rep(0.5, N)
+  
+  else if (phiType == "var")
+    phi <- seq_len(N) / N
   
   # Handling sampling
  
@@ -224,32 +247,32 @@ simulation1 <- function(constBias = FALSE,
   # Full HT estimation, with full population matrix (Z^tZ)^-1 and
   # known probabilities
   # tic()
-  resEval <- 
-    estim_delta_MCO(sample$Z, sample$Yobs, sample$modes, 
-                           "int", "tel", "HT", "HT", pi, 
-                    trueProbsSelect, sampleMatrix = FALSE) %>% 
-    estim_MB_by_MCO(Z, phi = phi) %>% 
-    sum()
+  # resEval <- 
+  #   estim_delta_MCO(sample$Z, sample$Yobs, sample$modes, 
+  #                          "int", "tel", "HT", "HT", pi, 
+  #                   trueProbsSelect, sampleMatrix = FALSE) %>% 
+  #   estim_MB_by_MCO(Z, phi = phi) %>% 
+  #   sum()
   # toc() %>% print()
   
-  results <- results %>% 
-    add_row(trueBias = totalBias, estimator = "HT", trueEstimator = FALSE,
-            probSelect = "true", invMatrix = "true", estBias = resEval)
+  # results <- results %>% 
+  #   add_row(trueBias = totalBias, estimator = "HT", trueEstimator = FALSE,
+  #           probSelect = "true", invMatrix = "true", estBias = resEval)
 
   # Full HT estimation, with sample matrix (Z_S^TZ_S)^-1 and
   # known probabilities
   # tic()
-  resEval <- 
-    estim_delta_MCO(sample$Z, sample$Yobs, sample$modes, 
-                           "int", "tel", "HT", "HT", pi, 
-                    trueProbsSelect, sampleMatrix = TRUE) %>% 
-    estim_MB_by_MCO(Z, phi = phi) %>% 
-    sum()
+  # resEval <- 
+  #   estim_delta_MCO(sample$Z, sample$Yobs, sample$modes, 
+  #                          "int", "tel", "HT", "HT", pi, 
+  #                   trueProbsSelect, sampleMatrix = TRUE) %>% 
+  #   estim_MB_by_MCO(Z, phi = phi) %>% 
+  #   sum()
   # toc() %>% print()
   
-  results <- results %>% 
-    add_row(trueBias = totalBias, estimator = "HT", trueEstimator = FALSE,
-            probSelect = "true", invMatrix = "sample", estBias = resEval)
+  # results <- results %>% 
+  #   add_row(trueBias = totalBias, estimator = "HT", trueEstimator = FALSE,
+  #           probSelect = "true", invMatrix = "sample", estBias = resEval)
   
   
   # G-COMP estimation, <=> double MCO estimation
@@ -319,24 +342,24 @@ simulation1 <- function(constBias = FALSE,
     add_column(.before = 2L, sampling = sampling) %>% 
     add_column(.before = 3L, YtelLaw = factor(YtelLaw)) %>% 
     add_column(.after = "YtelLaw", deltaLaw = factor(deltaLaw)) %>% 
-    add_column(.after = "deltaLaw", BMtype = factor(ifelse(constBias, "constant", "variable")))
+    add_column(.after = "deltaLaw", MBtype = factor(ifelse(constBias, "constant", "variable"))) %>% 
+    add_column(.after = "MBtype", phi = factor(phiType))
   
   results
 }
 ```
 
+## Measure bias evaluation
+
+Evaluation of $K$ experiments
+
 ```{r}
-#cluster <- makeCluster(detectCores() - 1L)
+K <- 1000L
 ```
 
-## Constant measure bias
-
 ```{r}
-K <- 5000L
-```
+#| echo: false
 
-
-```{r}
 set.seed(200L)
 
 results <- NULL
@@ -345,7 +368,8 @@ nbResults <- 0L
 parameters <- expand_grid(constBias = c(TRUE, FALSE), 
                           sampling = c("SRS", "STSRS"),
                           YtelLaw = c("gaussian", "exponential"),
-                          deltaLaw = c("gaussian", "exponential"))
+                          deltaLaw = c("gaussian", "exponential"),
+                          phi = c("eq", "var"))
 
 tic()
 for (i in seq_len(nrow(parameters)))
@@ -357,7 +381,8 @@ for (i in seq_len(nrow(parameters)))
                        sampling = expParams$sampling,
                        constBias = expParams$constBias,
                        YtelLaw = expParams$YtelLaw,
-                       deltaLaw = expParams$deltaLaw)
+                       deltaLaw = expParams$deltaLaw,
+                       phi = expParams$phi)
   
   expResults <- do.call("rbind", expResults)
   
@@ -378,59 +403,69 @@ toc()
 results$estimator <- as.factor(results$estimator)
 results$probSelect <- as.factor(results$probSelect)
 results$invMatrix <- as.factor(results$invMatrix)
-
-# expBias <- sum(phi) * (betaInt[1L] - betaTel[1L])
-# expBias
-# 
-# constBiases <- do.call("rbind", constBiases)
-# constBiases <- constBiases %>% 
-#   add_column(.before = 1L, 
-#              experiment = factor(rep(seq_len(K), 
-#                                      each = nrow(constBiases) / K))) %>% 
-#   add_column(.before = "trueBias", expectedBias = expBias)
+results <- mutate(results, .after = "estBias", diff = estBias - trueBias)
 ```
+
+## Ex : Gaussian constant measure bias
+
+Results of each estimator for the case of SRS with **constant** measure bias and Gaussian laws
+
+$$\text{reldiffMean} = \frac{1}{K}\sum_{k=1}^K \frac{\hat{t}_{\phi\Delta y,k}-t_{\phi\Delta y,k}}{\mathbb{E}[t_{\phi\Delta y}]}$$
+
+$$\text{relRMSE} = \frac{\sqrt{\frac{1}{K}\sum_{k=1}^K (\hat{t}_{\phi\Delta y,k}-t_{\phi\Delta y,k})^2}}{|\mathbb{E}[t_{\phi\Delta y}]|}$$
 
 ```{r}
 results %>% 
-  #filter(BMtype == "constant") %>% 
-  #mutate(probSelect = ifelse(is.na(probSelect), "null", probSelect)) %>% 
-  #mutate(invMatrix = ifelse(is.na(invMatrix), "null", invMatrix)) %>% 
-  mutate(diff = estBias - trueBias) %>% 
-  group_by(BMtype, sampling, YtelLaw, deltaLaw, estimator, probSelect, invMatrix) %>% 
+  filter(YtelLaw == "gaussian", deltaLaw == "gaussian", 
+         sampling == "SRS", MBtype == "constant",
+         probSelect != "true") %>% 
+  select(-sampling, -MBtype) %>% 
+  group_by(phi, estimator, probSelect, invMatrix) %>% 
   summarise(reldiffMean = round(mean(diff / abs(expectedBias)) , 4L), 
             relRMSE = round(sqrt(mean(diff^2L / expectedBias^2L)), 4L)) %>% 
   ungroup() %>% 
-  group_by(BMtype, sampling, YtelLaw, deltaLaw) %>% 
-  # arrange(relRMSE) %>% 
-  slice_min(abs(reldiffMean))
+  arrange(relRMSE)
 ```
+
+Differences between G-COMP and HT with sample inverse matrix results in that case (with constant phi):
+
 ```{r}
 results %>% 
-  #filter(BMtype == "constant") %>% 
-  #mutate(probSelect = ifelse(is.na(probSelect), "null", probSelect)) %>% 
-  #mutate(invMatrix = ifelse(is.na(invMatrix), "null", invMatrix)) %>% 
-  mutate(diff = estBias - trueBias) %>% 
-  group_by(BMtype, sampling, YtelLaw, deltaLaw, estimator, probSelect, invMatrix) %>% 
+  filter(YtelLaw == "gaussian", deltaLaw == "gaussian", 
+         sampling == "SRS", MBtype == "constant",
+         phi == "eq",  trueEstimator, estimator == "G-COMP" | (estimator == "HT" & invMatrix == "sample")) %>% 
+  select(experiment, estimator, invMatrix, diff) %>% 
+  head(n = 8L) %>% 
+  group_by(experiment)
+```
+
+## Ex : Gaussian variable measure bias
+
+Results of each estimator for the case of SRS with **variable** measure bias and Gaussian laws
+
+```{r}
+results %>% 
+  filter(YtelLaw == "gaussian", deltaLaw == "gaussian", 
+         sampling == "SRS", MBtype == "variable",
+         phi == "eq", trueEstimator) %>% 
+  select(-sampling, -MBtype, -phi) %>% 
+  group_by(phi, estimator, probSelect, invMatrix) %>% 
   summarise(reldiffMean = round(mean(diff / abs(expectedBias)) , 4L), 
             relRMSE = round(sqrt(mean(diff^2L / expectedBias^2L)), 4L)) %>% 
   ungroup() %>% 
-  filter(YtelLaw == "gaussian", deltaLaw == "gaussian", BMtype == "constant") %>% 
-  group_by(BMtype, sampling) %>% 
-  arrange(relRMSE, .by_group = TRUE)
+  arrange(relRMSE)
 ```
+
+Optimal RMSE for each condition:
 
 ```{r}
 results %>% 
   filter(probSelect != "true") %>% 
-  #filter(BMtype == "constant") %>% 
-  #mutate(probSelect = ifelse(is.na(probSelect), "null", probSelect)) %>% 
-  #mutate(invMatrix = ifelse(is.na(invMatrix), "null", invMatrix)) %>% 
-  mutate(diff = estBias - trueBias) %>% 
-  group_by(BMtype, YtelLaw, deltaLaw, estimator, probSelect, invMatrix) %>% 
+  group_by(MBtype, sampling, YtelLaw, deltaLaw, phi, estimator, probSelect, invMatrix) %>% 
   summarise(reldiffMean = round(mean(diff / abs(expectedBias)) , 4L), 
             relRMSE = round(sqrt(mean(diff^2L / expectedBias^2L)), 4L)) %>% 
   ungroup() %>% 
-  group_by(BMtype, YtelLaw, deltaLaw) %>% 
-  # arrange(relRMSE) %>% 
-  slice_min(relRMSE)
+  group_by(MBtype, YtelLaw, deltaLaw, sampling, phi) %>% 
+  slice_min(relRMSE) # %>% 
+  # knitr::kable()
 ```
