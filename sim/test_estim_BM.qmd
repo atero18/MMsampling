@@ -1,5 +1,6 @@
 ```{r}
 library(dplyr)
+options(dplyr.summarise.inform = FALSE)
 library(tidyr)
 library(glue)
 library(tibble)
@@ -21,7 +22,7 @@ set.seed(145L)
 ```
 
 ```{r}
-N <- 1000L
+N <- 10000L
 phi <- rep(0.5, N)
 ```
 
@@ -132,6 +133,7 @@ Parameters:
 -   the sampling type (`sampling`)
 -   the law of $Y_{tel}$ (`YtelLaw`)
 -   the law of $\Delta y$ (`deltaLaw`)
+-   the state of $\phi$ (`phi`)
 
 ```{r}
 #| echo: false
@@ -141,6 +143,7 @@ simulation1 <- function(constBias = FALSE,
                         YtelLaw = "gaussian", 
                         deltaLaw = "gaussian",
                         phiType = "eq",
+                        addFalseEstimators = FALSE,
                         ...)
 {
   if (phiType == "eq")
@@ -183,20 +186,33 @@ simulation1 <- function(constBias = FALSE,
     pi[sex == "Man"] <- 2.0 / 3.0
   }
   
+  
+  
   # Mode selection simulation
   modes <- gen_choice_bimode(I, pInt, pTel)
   trueProbsSelect <- rep(NA_real_, N)
   trueProbsSelect[modes == "int"] <- pInt[modes == "int"]
   trueProbsSelect[modes == "tel"] <- ((1.0 - pInt) * pTel)[modes == "tel"]
-
+  
+  
+  trueWeights <- (pi * trueProbsSelect)^-1L
+  
   # Affecting values to Y_int and Y_tel
   if (YtelLaw == "gaussian")
+  {
     Ytel <- Z %*% betaTel + rnorm(n = N, sd = 25.0)
+    expectedTotalYtel <- sum(Z %*% betaTel)
+  }
   else if (YtelLaw == "exponential")
+  {
     Ytel <- rexp(n = N, rate = abs(Z %*% betaTel)^-1L)
+    expectedTotalYtel <- sum(abs(Z %*% betaTel))
+  }
+    
   
-  #Yint <- Z %*% betaInt + rnorm(n = N, sd = 25.0)
+  trueTotalYtel <- sum(Ytel)
   
+
   if (deltaLaw == "gaussian")
   {
     # Case when the measure bias is constant, up to a white noise
@@ -219,14 +235,15 @@ simulation1 <- function(constBias = FALSE,
     deltas <- seq_len(N)
   
   Yint <- Ytel + deltas
+  
 
   # Evaluating the measure bias total (random value)
-  totalBias <- sum(phi * deltas)
+  trueTotalBias <- sum(phi * deltas)
   
   if (constBias)
-    expectedBias <- sum(phi) * (betaInt[1L] - betaTel[1L])
+    expectedPhiBias <- sum(phi) * (betaInt[1L] - betaTel[1L])
   else
-    expectedBias <- t(phi) %*% Z %*% (betaInt - betaTel)
+    expectedPhiBias <- t(phi) %*% Z %*% (betaInt - betaTel)
   
   
   # Creating the observed outcome vector
@@ -237,42 +254,42 @@ simulation1 <- function(constBias = FALSE,
   sample <- MMSample$new(Z = Z, pi = pi, I = I, 
                          modes = modes, Yobs = Yobs, phi = phi)
   
-  results <- data.frame(trueBias = numeric(), 
-                        estimator = character(),
+  results <- data.frame(estimator = character(),
                         trueEstimator = logical(),
                         probSelect = character(),
                         invMatrix = character(),
-                        estBias = numeric())
+                        estTotPhiBias = numeric())
   
-  # Full HT estimation, with full population matrix (Z^tZ)^-1 and
-  # known probabilities
-  # tic()
-  # resEval <- 
-  #   estim_delta_MCO(sample$Z, sample$Yobs, sample$modes, 
-  #                          "int", "tel", "HT", "HT", pi, 
-  #                   trueProbsSelect, sampleMatrix = FALSE) %>% 
-  #   estim_MB_by_MCO(Z, phi = phi) %>% 
-  #   sum()
-  # toc() %>% print()
-  
-  # results <- results %>% 
-  #   add_row(trueBias = totalBias, estimator = "HT", trueEstimator = FALSE,
-  #           probSelect = "true", invMatrix = "true", estBias = resEval)
+  # Calculate false estimators with true mode selection probabilities
+  if (addFalseEstimators)
+  {
+    # Full HT estimation, with full population matrix (Z^tZ)^-1 and
+    # known probabilities
+    resEval <-
+      estim_delta_MCO(sample$Z, sample$Yobs, sample$modes,
+                             "int", "tel", "HT", "HT", pi,
+                      trueProbsSelect, sampleMatrix = FALSE) %>%
+      estim_MB_by_MCO(Z, phi = phi) %>%
+      sum()
 
-  # Full HT estimation, with sample matrix (Z_S^TZ_S)^-1 and
-  # known probabilities
-  # tic()
-  # resEval <- 
-  #   estim_delta_MCO(sample$Z, sample$Yobs, sample$modes, 
-  #                          "int", "tel", "HT", "HT", pi, 
-  #                   trueProbsSelect, sampleMatrix = TRUE) %>% 
-  #   estim_MB_by_MCO(Z, phi = phi) %>% 
-  #   sum()
-  # toc() %>% print()
+    results <- results %>%
+      add_row(estimator = "HT", trueEstimator = FALSE,
+              probSelect = "true", invMatrix = "true", estTotPhiBias = resEval)
+
+    # Full HT estimation, with sample matrix (Z_S^TZ_S)^-1 and
+    # known probabilities
+    resEval <-
+      estim_delta_MCO(sample$Z, sample$Yobs, sample$modes,
+                             "int", "tel", "HT", "HT", pi,
+                      trueProbsSelect, sampleMatrix = TRUE) %>%
+      estim_MB_by_MCO(Z, phi = phi) %>%
+      sum()
+
+    results <- results %>%
+      add_row(estimator = "HT", trueEstimator = FALSE,
+              probSelect = "true", invMatrix = "sample", estTotPhiBias = resEval)
+  }
   
-  # results <- results %>% 
-  #   add_row(trueBias = totalBias, estimator = "HT", trueEstimator = FALSE,
-  #           probSelect = "true", invMatrix = "sample", estBias = resEval)
   
   
   # G-COMP estimation, <=> double MCO estimation
@@ -286,9 +303,9 @@ simulation1 <- function(constBias = FALSE,
   
   
   results <- results %>% 
-    add_row(trueBias = totalBias, estimator = "G-COMP", trueEstimator = TRUE,
+    add_row(estimator = "G-COMP", trueEstimator = TRUE,
             probSelect = "null", 
-            invMatrix = "null", estBias = resEval)
+            invMatrix = "null", estTotPhiBias = resEval)
   
   
   # Estimation on a unique MCO for Y1 and Y2, with beta X and only a constant
@@ -297,15 +314,28 @@ simulation1 <- function(constBias = FALSE,
   resEval <- sum(phi) * deltaEval
   
   results <- results %>% 
-    add_row(trueBias = totalBias, estimator = "MCO_unique", trueEstimator = TRUE,
+    add_row(estimator = "MCO_unique", trueEstimator = TRUE,
             probSelect = "null", 
-            invMatrix = "null", estBias = resEval)
+            invMatrix = "null", estTotPhiBias = resEval)
+  
+  
+  # Value estimated only on telephone answers, with true selection probabilities
+  resEval <- sum(trueWeights[modes == "tel"] * Ytel[modes == "tel"])
+  
+  results <- results %>% 
+    add_row(estimator = "HT_Smr", trueEstimator = FALSE,
+            probSelect = "null", invMatrix = "null", estTotPhiBias = resEval)
+  
+  browser()
   
   # Estimation of mode selection probabilities
   tempProbsSelect <- 
     estim_response_prob_sequential(I, Z, modes, c("int", "tel"))$unconditional
   
 
+  
+  estimWeights <- (pi * tempProbsSelect)^-1L
+  
     # Full HT estimation, with full population matrix (Z^tZ)^-1 and
   # unknown probabilities
   # tic()
@@ -319,8 +349,8 @@ simulation1 <- function(constBias = FALSE,
  
   
   results <- results %>% 
-    add_row(trueBias = totalBias, estimator = "HT", trueEstimator = TRUE,
-            probSelect = "estimation", invMatrix = "true", estBias = resEval)
+    add_row(estimator = "HT", trueEstimator = TRUE,
+            probSelect = "estimation", invMatrix = "true", estTotPhiBias = resEval)
  
   # Full HT estimation, with sample matrix (Z_S^TZ_S)^-1 and
   # unknown probabilities
@@ -334,27 +364,90 @@ simulation1 <- function(constBias = FALSE,
   # toc() %>% print()
   
   results <- results %>% 
-    add_row(trueBias = totalBias, estimator = "HT", trueEstimator = TRUE,
-            probSelect = "estimation", invMatrix = "sample", estBias = resEval)
+    add_row(estimator = "HT", trueEstimator = TRUE,
+            probSelect = "estimation", invMatrix = "sample", estTotPhiBias = resEval)
+  
+  # Value estimated only on telephone answers, with estimated selection probabilities
+  resEval <- sum(estimWeights[modes == "tel"] * Ytel[modes == "tel"])
   
   results <- results %>% 
-    add_column(.before = 1L, expectedBias = expectedBias) %>% 
-    add_column(.before = 2L, sampling = sampling) %>% 
-    add_column(.before = 3L, YtelLaw = factor(YtelLaw)) %>% 
+    add_row(estimator = "HT_Smr", trueEstimator = FALSE,
+            probSelect = "null", invMatrix = "null", estTotPhiBias = resEval)
+  
+  estTotalPhiYintHTTrueMP <- 
+    phi[modes == "int"] * 
+    trueWeights[modes == "int"] * 
+    Yint[modes == "int"]
+  
+  estTotalPhiYintHTTrueMP <- sum(estTotalPhiYintHTTrueMP)
+  
+  estTotalPhiYtelHTTrueMP <- 
+    (1.0 - phi[modes == "tel"]) * 
+    trueWeights[modes == "tel"] * 
+    Ytel[modes == "tel"]
+  
+  estTotalPhiYtelHTTrueMP <- sum(estTotalPhiYtelHTTrueMP)
+  
+  
+  
+
+  estTotalPhiYintHTEstMP <-
+    phi[modes == "int"] *
+    estimWeights[modes == "int"] *
+    Yint[modes == "int"]
+
+  estTotalPhiYintHTEstMP <- sum(estTotalPhiYintHTEstMP)
+
+  estTotalPhiYtelHTEstmMP <-
+    (1.0 - phi[modes == "tel"]) *
+    estimWeights[modes == "tel"] *
+    Ytel[modes == "tel"]
+
+  estTotalPhiYtelHTEstmMP <- sum(estTotalPhiYtelHTEstmMP)
+  
+  
+  
+  results <- results %>% 
+    add_column(.before = 1L, trueTotalYtel = trueTotalYtel) %>% 
+    add_column(.after = "trueTotalYtel", expectedTotalYtel = expectedTotalYtel) %>% 
+    add_column(.before = "estTotPhiBias", truePhiBias = trueTotalBias) %>% 
+    add_column(.after = "truePhiBias", expectedPhiBias = expectedPhiBias) %>% 
+    add_column(.after = "expectedPhiBias", estTotalPhiYintTrueMP = estTotalPhiYintHTTrueMP) %>% 
+    add_column(.after = "estTotalPhiYintTrueMP", estTotalPhiYintEstMP = estTotalPhiYintHTEstMP) %>% 
+    add_column(.after = "estTotalPhiYintEstMP", estTotalPhiYtelTrueMP = estTotalPhiYtelHTTrueMP) %>% 
+    add_column(.after = "estTotalPhiYtelTrueMP", estTotalPhiYtelEstMP = estTotalPhiYtelHTEstmMP) %>% 
+    mutate(.after = "estTotalPhiYtelEstMP",
+           estTotalYtelTrueMP = estTotalPhiYintTrueMP + estTotalPhiYtelTrueMP - estTotPhiBias) %>% 
+    mutate(.after = "estTotalYtelTrueMP", 
+           estTotalYtelEstMP = estTotalPhiYintEstMP + 
+             estTotalPhiYtelEstMP -
+             estTotPhiBias) %>% 
+    add_column(.after = "estTotalYtelEstMP", sampling = sampling) %>% 
+    add_column(.after = "sampling", YtelLaw = factor(YtelLaw)) %>% 
     add_column(.after = "YtelLaw", deltaLaw = factor(deltaLaw)) %>% 
-    add_column(.after = "deltaLaw", MBtype = factor(ifelse(constBias, "constant", "variable"))) %>% 
+    add_column(.after = "deltaLaw",
+               MBtype = factor(ifelse(constBias, "constant", "variable"))) %>% 
     add_column(.after = "MBtype", phi = factor(phiType))
   
   results
 }
 ```
 
+-   `trueTotalYtel`: $t_{tel} =\sum_{k \in U} y_{2k}$ for this iteration
+-   `expectedTotalYtel` : $\mathbb{E}[t_{tel}]=\mathbb{E} [\sum_{k \in U} y_{2k}]$
+-   `estTotPhiBias` : $t_{\phi \hat{\Delta y}}$
+-   `truePhiBias` : $t_{\phi\Delta y}=\sum_{k\in U} \phi_k \Delta y_k$
+-   `expectedPhiBias` : $\mathbb{E}[t_{\phi\Delta y}]$
+-   `estTotalPhiYintTrueMP` : $\hat{t}_{p,\phi y_1} = \sum_{k \in S_r}\frac{\phi_k y_{1k}}{\pi_k p_{1k}}$
+-   `estTotalPhiYintEstMP` : $\hat{t}_{\hat{p},\phi y_1} = \sum_{k \in S_r}\frac{\phi_k y_{1k}}{\pi_k \hat{p}_{1k}}$
+-   `estTotalPhiYintEstMP` : $\hat{t}_{\hat{p},\phi y_1} + \hat{t}_{\hat{p},\phi y_2} - t_{\phi \hat{\Delta y}}$
+
 ## Measure bias evaluation
 
 Evaluation of $K$ experiments
 
 ```{r}
-K <- 1000L
+K <- 5L
 ```
 
 ```{r}
@@ -366,10 +459,10 @@ results <- NULL
 nbResults <- 0L
 
 parameters <- expand_grid(constBias = c(TRUE, FALSE), 
-                          sampling = c("SRS", "STSRS"),
-                          YtelLaw = c("gaussian", "exponential"),
-                          deltaLaw = c("gaussian", "exponential"),
-                          phi = c("eq", "var"))
+                          sampling = "SRS", #sampling = c("SRS", "STSRS"),
+                          YtelLaw = "gaussian", #c("gaussian", "exponential"),
+                          deltaLaw = "gaussian", #c("gaussian", "exponential"),
+                          phi = "eq")#c("eq", "var"))
 
 tic()
 for (i in seq_len(nrow(parameters)))
@@ -403,12 +496,19 @@ toc()
 results$estimator <- as.factor(results$estimator)
 results$probSelect <- as.factor(results$probSelect)
 results$invMatrix <- as.factor(results$invMatrix)
-results <- mutate(results, .after = "estBias", diff = estBias - trueBias)
+results <- results %>% 
+  mutate(.after = "estTotPhiBias", diffPhiBias = estTotPhiBias - truePhiBias) %>% 
+  mutate(.after = "estTotalPhiYtelEstMP", 
+         diffTotalYtelEstMP = estTotalYtelEstMP - trueTotalYtel) %>% 
+  mutate(.after = "estTotalPhiYtelTrueMP",
+         diffTotalYtelTrueMP = estTotalYtelTrueMP - trueTotalYtel)
 ```
 
 ## Ex : Gaussian constant measure bias
 
 Results of each estimator for the case of SRS with **constant** measure bias and Gaussian laws
+
+### Measure bias total
 
 $$\text{reldiffMean} = \frac{1}{K}\sum_{k=1}^K \frac{\hat{t}_{\phi\Delta y,k}-t_{\phi\Delta y,k}}{\mathbb{E}[t_{\phi\Delta y}]}$$
 
@@ -421,10 +521,27 @@ results %>%
          probSelect != "true") %>% 
   select(-sampling, -MBtype) %>% 
   group_by(phi, estimator, probSelect, invMatrix) %>% 
-  summarise(reldiffMean = round(mean(diff / abs(expectedBias)) , 4L), 
-            relRMSE = round(sqrt(mean(diff^2L / expectedBias^2L)), 4L)) %>% 
+  summarise(reldiffMean = round(mean(diffPhiBias / abs(expectedPhiBias)) , 4L), 
+            relRMSE = round(sqrt(mean(diffPhiBias^2L / expectedPhiBias^2L)), 4L)) %>% 
   ungroup() %>% 
   arrange(relRMSE)
+```
+
+### telephone total estimation
+
+```{r}
+results %>% 
+  filter(YtelLaw == "gaussian", deltaLaw == "gaussian", 
+         sampling == "SRS", MBtype == "constant",
+         probSelect != "true") %>% 
+  select(-sampling, -MBtype) %>% 
+  group_by(phi, estimator, probSelect, invMatrix) %>% 
+  summarise(reldiffTotalTrueMean = round(mean(diffTotalYtelTrueMP / abs(expectedTotalYtel)) , 4L), 
+            reldiffTotalEstMean = round(mean(diffTotalYtelEstMP / abs(expectedTotalYtel)) , 4L),
+            relRMSETrue = round(sqrt(mean(diffTotalYtelTrueMP^2L / expectedTotalYtel^2L)), 4L),
+            relRMSEEst = round(sqrt(mean(diffTotalYtelEstMP^2L / expectedTotalYtel^2L)), 4L)) %>% 
+  ungroup() %>% 
+  arrange(relRMSEEst)
 ```
 
 Differences between G-COMP and HT with sample inverse matrix results in that case (with constant phi):
@@ -449,9 +566,9 @@ results %>%
          sampling == "SRS", MBtype == "variable",
          phi == "eq", trueEstimator) %>% 
   select(-sampling, -MBtype, -phi) %>% 
-  group_by(phi, estimator, probSelect, invMatrix) %>% 
-  summarise(reldiffMean = round(mean(diff / abs(expectedBias)) , 4L), 
-            relRMSE = round(sqrt(mean(diff^2L / expectedBias^2L)), 4L)) %>% 
+  group_by(estimator, probSelect, invMatrix) %>% 
+  summarise(reldiffMean = round(mean(diff / abs(expectedPhiBias)) , 4L), 
+            relRMSE = round(sqrt(mean(diff^2L / expectedPhiBias^2L)), 4L)) %>% 
   ungroup() %>% 
   arrange(relRMSE)
 ```
@@ -462,8 +579,8 @@ Optimal RMSE for each condition:
 results %>% 
   filter(probSelect != "true") %>% 
   group_by(MBtype, sampling, YtelLaw, deltaLaw, phi, estimator, probSelect, invMatrix) %>% 
-  summarise(reldiffMean = round(mean(diff / abs(expectedBias)) , 4L), 
-            relRMSE = round(sqrt(mean(diff^2L / expectedBias^2L)), 4L)) %>% 
+  summarise(reldiffMean = round(mean(diff / abs(expectedPhiBias)) , 4L), 
+            relRMSE = round(sqrt(mean(diff^2L / expectedPhiBias^2L)), 4L)) %>% 
   ungroup() %>% 
   group_by(MBtype, YtelLaw, deltaLaw, sampling, phi) %>% 
   slice_min(relRMSE) # %>% 
