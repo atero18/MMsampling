@@ -113,7 +113,7 @@ estim_response_prob_sequential <- function(I, Z, modes, orderModes,
   unconditionalProbs <- conditionalProbs
   unconditionalVec <- rep(1.0, N)
 
-  subset <- rep(TRUE, N) # TRUE if the individual is used for the regression
+  subset <- I # TRUE if the individual is used for the regression
   # TRUE if the individual answered by the considered mode
   response <- rep(FALSE, N) # TRUE is the unit answered by the mode or already
   # answered

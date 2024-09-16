@@ -9,7 +9,14 @@ varMat <- genVarMatrix(p)
 library(MASS)
 X <- mvrnorm(N, rep(0.0, p), varMat)
 
-I <- rep(TRUE, N)
+n <- N / 4L
+
+selectedSample <- sample(seq_len(N), size = n, replace = FALSE)
+pi <- rep(n / N, N)
+I <- rep(FALSE, N)
+I[selectedSample] <- TRUE
+rm(selectedSample)
+
 beta1 <- rnorm(n = p, mean = 0, sd = .5)
 p1 <- 1.0 / (1 + exp(-X %*% beta1)) %>% as.vector()
 R1 <- runif(N) <= p1

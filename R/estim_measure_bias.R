@@ -184,30 +184,33 @@ estim_delta_MCO_unique_model_const <- function(Z, Yobs,
 {
   maskBiased <- modes == biasedMode
   nBiased <- sum(maskBiased)
-  oneBiased <- rep(1.0, nBiased)
 
   maskRef <- modes == refMode
 
   Zbiased <- Z[maskBiased, , drop = FALSE]
   Zref <- Z[maskRef, , drop = FALSE]
+  transZref <- t(Zref)
 
   ZtZBiased <- t(Zbiased) %*% Zbiased
   Ybiased <- Yobs[maskBiased]
+  sumYBiased <- sum(Ybiased)
   Yref <- Yobs[maskRef]
 
+  sumZBiased <- apply(Zbiased, 2L, sum)
+  transSumZBiased <- t(sumZBiased)
 
   A <- ZtZBiased -
-    t(Zbiased) %*% (oneBiased / nBiased) %*% t(oneBiased) %*% Zbiased +
-    t(Zref) %*% Zref
+    sumZBiased %*% transSumZBiased / nBiased +
+    transZref %*% Zref
 
   b <- t(Zbiased) %*% Ybiased -
-    t(Zbiased) %*% oneBiased * (sum(Ybiased) / nBiased) +
-    t(Zref) %*% Yref
+    sumZBiased * sumYBiased / nBiased +
+    transZref %*% Yref
 
   beta <- solve(A, b)
 
 
-  delta <- sum(Ybiased) - t(oneBiased) %*% Zbiased %*% beta
+  delta <- sumYBiased - transSumZBiased %*% beta
 
 
   delta <- delta / nBiased
