@@ -64,20 +64,32 @@ Z <- as.matrix(Z)
 Creating parameters for two modes : "int" and "tel". `delta` is defined such that the average measure bias is equal to 1. It depends on `Z`.
 
 ```{r}
-betaTel <- c(4.0, -10.0, 10.0)
+betaTel <- c(7.0, -0.1, 4.0)
 print(betaTel)
-delta <- c(1.0, -2.0 * mean(Z[, "age"])^-1L, 2 * N / sum(Z[, "sex"]))
+delta <- c(1.0, -2.0 * mean(Z[, "age"])^-1L, 2.0 * N / sum(Z[, "sex"]))
 betaInt <- betaTel + delta
   
 
 print(betaInt)
 ```
 
+$Y_{int}$ and $Y_{tel}$ expectations depending on `Z`:
+
 ```{r}
-totBias <- sum(Z %*% (betaInt - betaTel))
-print(totBias)
+data.frame(tel = Z %*% betaTel, int = Z %*% betaInt) %>% 
+  pivot_longer(cols = c("tel", "int"), names_to = "mode", values_to = "value") %>% 
+  ggplot() + geom_density(aes(x = value, colour = mode))
+
+glue("average value for telephone: {mean(Z %*% betaTel)}")
+glue("average value for internet: {mean(Z %*% betaInt)}")
+```
+
+
+```{r}
+totBias <- sum(Z %*% delta)
+glue("total bias on U: {totBias}")
 meanBias <- totBias / N
-print(meanBias)
+glue("average bias on U: {meanBias}")
 ```
 
 We simulate a mode selection MAR (Missing At Random) under a logistic model, with $Z$ as variable:
@@ -224,7 +236,7 @@ simulation1 <- function(constBias = FALSE,
   # Affecting values to Y_int and Y_tel
   if (YtelLaw == "gaussian")
   {
-    Ytel <- Z %*% betaTel + rnorm(n = N, sd = 25.0)
+    Ytel <- Z %*% betaTel + rnorm(n = N, sd = 1.0)
     expectedTotalYtel <- sum(Z %*% betaTel)
   }
   else if (YtelLaw == "exponential")
@@ -246,7 +258,7 @@ simulation1 <- function(constBias = FALSE,
     betaIntBis <- betaInt
 
   if (YintLaw == "gaussian")
-    Yint <- Z %*% betaIntBis + rnorm(N, 0.0, 25.0)
+    Yint <- Z %*% betaIntBis + rnorm(N, 0.0, 1.0)
     
   else if (YintLaw == "exponential")
     Yint <- rexp(n = N, rate = abs(Z %*% betaIntBis)^-1L)
@@ -472,7 +484,7 @@ simulation1 <- function(constBias = FALSE,
 Evaluation of $K$ experiments
 
 ```{r}
-K <- 1000L
+K <- 10L
 ```
 
 ```{r}
@@ -495,14 +507,17 @@ for (i in seq_len(nrow(parameters)))
   expParams <- parameters[i, ]
   #print(expParams)
 
+  tic()
   expResults <- lapply(seq_len(K), simulation1, 
                        sampling = expParams$sampling,
                        constBias = expParams$constBias,
                        YtelLaw = expParams$YtelLaw,
                        YintLaw = expParams$YintLaw,
-                       phi = expParams$phi)
+                       phi = expParams$phi,
+                       addFalseEstimators = FALSE)
   
   expResults <- do.call("rbind", expResults)
+  toc()
   
   
   
@@ -550,7 +565,7 @@ results %>%
          probSelect != "true") %>% 
   select(-sampling, -MBtype) %>% 
   group_by(phi, estimator, probSelect, invMatrix, calculTotal) %>% 
-  summarise(reldiffMean = round(mean(diffPhiBias / abs(expectedPhiBias)) , 4L), 
+  summarise(reldiffMean = round(mean(diffPhiBias / abs(expectedPhiBias)), 4L), 
             relRMSE = round(sqrt(mean(diffPhiBias^2L / expectedPhiBias^2L)), 4L)) %>% 
   ungroup() %>% 
   arrange(relRMSE)
@@ -564,7 +579,7 @@ results %>%
          sampling == "SRS", MBtype == "constant",
          probSelect != "true") %>% 
   select(-sampling, -MBtype) %>% 
-  group_by(phi, estimator, probSelect, invMatrix) %>% 
+  group_by(phi, estimator, probSelect, invMatrix, calculTotal) %>% 
   summarise(#reldiffTotalTrueMean = round(mean(diffTotalYtelTrueMP / abs(expectedTotalYtel)) , 4L), 
             reldiffTotalEstMean = round(mean(diffTotalYtelEstMP / abs(expectedTotalYtel)), 4L),
             relDiffBenchmarkMean = round(mean(diffBenchmark / abs(expectedTotalYtel)), 4L),
@@ -592,7 +607,7 @@ Differences between G-COMP and HT with sample inverse matrix results in that cas
 Results of each estimator for the case of SRS with **variable** measure bias and Gaussian laws
 
 ```{r}
-results %>% 
+temp <- results %>% 
   filter(YtelLaw == "gaussian", YintLaw == "gaussian", 
          sampling == "SRS", MBtype == "variable",
          probSelect != "true") %>% 
@@ -606,31 +621,39 @@ results %>%
             relRMSEBenchmark = round(sqrt(mean(diffBenchmark^2L / expectedTotalYtel^2L)), 4L)) %>% 
   ungroup() %>% 
   arrange(relRMSEEst)
+
+temp
 ```
 
+Here are the estimators that offer a better RMSE than the benchmark:
 ```{r}
-results %>% 
-  filter(YtelLaw == "gaussian", YintLaw == "gaussian", 
-         sampling == "SRS", MBtype == "variable",
-         phi == "eq", trueEstimator) %>% 
-  select(-sampling, -MBtype, -phi) %>% 
-  group_by(estimator, probSelect, invMatrix) %>% 
-  summarise(reldiffMean = round(mean(diff / abs(expectedPhiBias)) , 4L), 
-            relRMSE = round(sqrt(mean(diff^2L / expectedPhiBias^2L)), 4L)) %>% 
-  ungroup() %>% 
-  arrange(relRMSE)
+temp %>% 
+  filter(relRMSEEst <= relRMSEBenchmark)
 ```
+## More general cases
 
 Optimal RMSE for each condition:
 
 ```{r}
-results %>% 
-  filter(probSelect != "true") %>% 
-  group_by(MBtype, sampling, YtelLaw, YintLaw, phi, estimator, probSelect, invMatrix) %>% 
-  summarise(reldiffMean = round(mean(diff / abs(expectedPhiBias)) , 4L), 
-            relRMSE = round(sqrt(mean(diff^2L / expectedPhiBias^2L)), 4L)) %>% 
+temp <- results %>% 
+  filter(trueEstimator) %>% 
+  select(-sampling, -MBtype) %>% 
+  group_by(YintLaw, YtelLaw, phi, estimator, probSelect, invMatrix) %>% 
+  summarise(#reldiffTotalTrueMean = round(mean(diffTotalYtelTrueMP / abs(expectedTotalYtel)) , 4L), 
+            reldiffTotalEstMean = round(mean(diffTotalYtelEstMP / abs(expectedTotalYtel)) , 4L),
+            relDiffBenchmarkMean = round(mean(diffBenchmark / abs(expectedTotalYtel)), 4L),
+            #relRMSETrue = round(sqrt(mean(diffTotalYtelTrueMP^2L / expectedTotalYtel^2L)), 4L),
+            relRMSEEst = round(sqrt(mean(diffTotalYtelEstMP^2L / expectedTotalYtel^2L)), 4L),
+            relRMSEBenchmark = round(sqrt(mean(diffBenchmark^2L / expectedTotalYtel^2L)), 4L)) %>% 
   ungroup() %>% 
-  group_by(MBtype, YtelLaw, YintLaw, sampling, phi) %>% 
-  slice_min(relRMSE) # %>% 
-  # knitr::kable()
+  group_by(YintLaw, YtelLaw) %>% 
+  slice_min(relRMSEEst)
+
+temp
+```
+
+Here are the estimators that offer a better RMSE than the benchmark:
+```{r}
+temp %>% 
+  filter(relRMSEEst <= relRMSEBenchmark)
 ```
