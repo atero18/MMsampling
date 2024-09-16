@@ -23,9 +23,10 @@ estim_coefs_Ym_MCO <- function(Z, Yobs, m, modes)
 
 estim_MB_by_MCO <- function(delta, Z,
                             weights = rep(1.0, nrow(Z)),
-                            phi = rep(1/2, nrow(Z)))
+                            phi = rep(1/2, nrow(Z)),
+                            mask = rep(TRUE, nrow(Z)))
 {
-  diag(weights * phi) %*% Z %*% delta
+  diag(weights[mask] * phi[mask]) %*% Z[mask, , drop = FALSE] %*% delta
 }
 
 estim_delta_MCO_by_totals <- function(Z, totalBiased, totalRef)
