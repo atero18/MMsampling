@@ -167,7 +167,7 @@ simulation1 <- function(constBias = FALSE,
                         YtelLaw = "gaussian", 
                         YintLaw = "gaussian",
                         phiType = "eq",
-                        addFalseEstimators = FALSE,
+                        addFalseParameters = FALSE,
                         ...)
 {
   
@@ -283,15 +283,15 @@ simulation1 <- function(constBias = FALSE,
   sample <- MMSample$new(Z = Z, pi = pi, I = I, 
                          modes = modes, Yobs = Yobs, phi = phi)
   
-  results <- data.frame(estimator = character(),
-                        trueEstimator = logical(),
+  results <- data.frame(parameter = character(),
+                        trueParameter = logical(),
                         probSelect = character(),
                         invMatrix = character(),
                         calculTotal = character(),
                         estTotPhiBias = numeric())
   
-  # Calculate false estimators with true mode selection probabilities
-  if (addFalseEstimators)
+  # Calculate false parameters with true mode selection probabilities
+  if (addFalseParameters)
   {
     # Full HT estimation, with full population matrix (Z^tZ)^-1 and
     # known probabilities
@@ -303,7 +303,7 @@ simulation1 <- function(constBias = FALSE,
       sum()
 
     results <- results %>%
-      add_row(estimator = "HT", trueEstimator = FALSE,
+      add_row(parameter = "HT", trueParameter = FALSE,
               probSelect = "true", invMatrix = "true",
               calculTotal = "full", estTotPhiBias = resEval)
 
@@ -317,7 +317,7 @@ simulation1 <- function(constBias = FALSE,
       sum()
 
     results <- results %>%
-      add_row(estimator = "HT", trueEstimator = FALSE,
+      add_row(parameter = "HT", trueParameter = FALSE,
               probSelect = "true", invMatrix = "sample", 
               calculTotal = "full", estTotPhiBias = resEval)
   }
@@ -339,7 +339,7 @@ simulation1 <- function(constBias = FALSE,
   
   
   results <- results %>% 
-    add_row(estimator = "G-COMP", trueEstimator = TRUE,
+    add_row(parameter = "G-COMP", trueParameter = TRUE,
             probSelect = "null", 
             invMatrix = "null", calculTotal = c("full", "partial"),
             estTotPhiBias = c(resEvalFull, resEvalHT))
@@ -352,7 +352,7 @@ simulation1 <- function(constBias = FALSE,
   resEvalHT <- sum(phi[maskInt] * estimWeights[maskInt] * deltaEval)
   
   results <- results %>% 
-    add_row(estimator = "MCO_unique", trueEstimator = TRUE,
+    add_row(parameter = "MCO_unique", trueParameter = TRUE,
             probSelect = "null", calculTotal = c("full", "partial"),
             invMatrix = "null", estTotPhiBias = c(resEvalFull, resEvalHT))
   
@@ -379,7 +379,7 @@ simulation1 <- function(constBias = FALSE,
  
   
   results <- results %>% 
-    add_row(estimator = "HT", trueEstimator = TRUE,
+    add_row(parameter = "HT", trueParameter = TRUE,
             probSelect = "estimation", invMatrix = "true", 
             calculTotal = c("full", "partial"), 
             estTotPhiBias = c(resEvalFull, resEvalHT))
@@ -404,7 +404,7 @@ simulation1 <- function(constBias = FALSE,
   # toc() %>% print()
   
   results <- results %>% 
-    add_row(estimator = "HT", trueEstimator = TRUE,
+    add_row(parameter = "HT", trueParameter = TRUE,
             probSelect = "estimation", invMatrix = "sample", 
             calculTotal = c("full", "partial"), 
             estTotPhiBias = c(resEvalFull, resEvalHT))
@@ -484,7 +484,7 @@ simulation1 <- function(constBias = FALSE,
 Evaluation of $K$ experiments
 
 ```{r}
-K <- 10L
+K <- 5000L
 ```
 
 ```{r}
@@ -507,19 +507,16 @@ for (i in seq_len(nrow(parameters)))
   expParams <- parameters[i, ]
   #print(expParams)
 
-  tic()
   expResults <- lapply(seq_len(K), simulation1, 
                        sampling = expParams$sampling,
                        constBias = expParams$constBias,
                        YtelLaw = expParams$YtelLaw,
                        YintLaw = expParams$YintLaw,
                        phi = expParams$phi,
-                       addFalseEstimators = FALSE)
+                       addFalseParameters = FALSE)
   
   expResults <- do.call("rbind", expResults)
-  toc()
-  
-  
+
   
   if (i == 1L)
     expNbResults <- nrow(expResults)
@@ -534,7 +531,7 @@ for (i in seq_len(nrow(parameters)))
 }
 toc()
 
-results$estimator <- as.factor(results$estimator)
+results$parameter <- as.factor(results$parameter)
 results$probSelect <- as.factor(results$probSelect)
 results$invMatrix <- as.factor(results$invMatrix)
 results$calculTotal <- as.factor(results$calculTotal)
@@ -550,7 +547,7 @@ results <- results %>%
 
 ## Ex : Gaussian constant measure bias
 
-Results of each estimator for the case of SRS with **constant** measure bias and Gaussian laws
+Results of each parameter for the case of SRS with **constant** measure bias and Gaussian laws
 
 ### Measure bias total
 
@@ -564,7 +561,7 @@ results %>%
          sampling == "SRS", MBtype == "constant",
          probSelect != "true") %>% 
   select(-sampling, -MBtype) %>% 
-  group_by(phi, estimator, probSelect, invMatrix, calculTotal) %>% 
+  group_by(phi, parameter, probSelect, invMatrix, calculTotal) %>% 
   summarise(reldiffMean = round(mean(diffPhiBias / abs(expectedPhiBias)), 4L), 
             relRMSE = round(sqrt(mean(diffPhiBias^2L / expectedPhiBias^2L)), 4L)) %>% 
   ungroup() %>% 
@@ -579,7 +576,7 @@ results %>%
          sampling == "SRS", MBtype == "constant",
          probSelect != "true") %>% 
   select(-sampling, -MBtype) %>% 
-  group_by(phi, estimator, probSelect, invMatrix, calculTotal) %>% 
+  group_by(phi, parameter, probSelect, invMatrix, calculTotal) %>% 
   summarise(#reldiffTotalTrueMean = round(mean(diffTotalYtelTrueMP / abs(expectedTotalYtel)) , 4L), 
             reldiffTotalEstMean = round(mean(diffTotalYtelEstMP / abs(expectedTotalYtel)), 4L),
             relDiffBenchmarkMean = round(mean(diffBenchmark / abs(expectedTotalYtel)), 4L),
@@ -590,21 +587,9 @@ results %>%
   arrange(relRMSEEst)
 ```
 
-Differences between G-COMP and HT with sample inverse matrix results in that case (with constant phi):
-
-```{r}
-# results %>% 
-#   filter(YtelLaw == "gaussian", YintLaw == "gaussian", 
-#          sampling == "SRS", MBtype == "constant",
-#          phi == "eq",  trueEstimator, estimator == "G-COMP" | (estimator == "HT" & invMatrix == "sample")) %>% 
-#   select(experiment, estimator, invMatrix, diff) %>% 
-#   head(n = 8L) %>% 
-#   group_by(experiment)
-```
-
 ## Ex : Gaussian variable measure bias
 
-Results of each estimator for the case of SRS with **variable** measure bias and Gaussian laws
+Results of each parameter for the case of SRS with **variable** measure bias and Gaussian laws
 
 ```{r}
 temp <- results %>% 
@@ -612,7 +597,7 @@ temp <- results %>%
          sampling == "SRS", MBtype == "variable",
          probSelect != "true") %>% 
   select(-sampling, -MBtype) %>% 
-  group_by(phi, estimator, probSelect, invMatrix) %>% 
+  group_by(phi, parameter, probSelect, invMatrix) %>% 
   summarise(#reldiffTotalTrueMean = round(mean(diffTotalYtelTrueMP / abs(expectedTotalYtel)) , 4L), 
             reldiffTotalEstMean = round(mean(diffTotalYtelEstMP / abs(expectedTotalYtel)) , 4L),
             relDiffBenchmarkMean = round(mean(diffBenchmark / abs(expectedTotalYtel)), 4L),
@@ -625,7 +610,7 @@ temp <- results %>%
 temp
 ```
 
-Here are the estimators that offer a better RMSE than the benchmark:
+Here are the parameters that offer a better RMSE than the benchmark:
 ```{r}
 temp %>% 
   filter(relRMSEEst <= relRMSEBenchmark)
@@ -636,24 +621,25 @@ Optimal RMSE for each condition:
 
 ```{r}
 temp <- results %>% 
-  filter(trueEstimator) %>% 
+  filter(trueParameter) %>% 
   select(-sampling, -MBtype) %>% 
-  group_by(YintLaw, YtelLaw, phi, estimator, probSelect, invMatrix) %>% 
+  group_by(YintLaw, YtelLaw, phi, parameter, probSelect, invMatrix) %>% 
   summarise(#reldiffTotalTrueMean = round(mean(diffTotalYtelTrueMP / abs(expectedTotalYtel)) , 4L), 
             reldiffTotalEstMean = round(mean(diffTotalYtelEstMP / abs(expectedTotalYtel)) , 4L),
             relDiffBenchmarkMean = round(mean(diffBenchmark / abs(expectedTotalYtel)), 4L),
             #relRMSETrue = round(sqrt(mean(diffTotalYtelTrueMP^2L / expectedTotalYtel^2L)), 4L),
             relRMSEEst = round(sqrt(mean(diffTotalYtelEstMP^2L / expectedTotalYtel^2L)), 4L),
             relRMSEBenchmark = round(sqrt(mean(diffBenchmark^2L / expectedTotalYtel^2L)), 4L)) %>% 
-  ungroup() %>% 
+  ungroup() 
+
+temp %>% 
   group_by(YintLaw, YtelLaw) %>% 
   slice_min(relRMSEEst)
-
-temp
 ```
 
-Here are the estimators that offer a better RMSE than the benchmark:
+Here are the parameters that offer a better RMSE than the benchmark:
 ```{r}
 temp %>% 
-  filter(relRMSEEst <= relRMSEBenchmark)
+  filter(relRMSEEst <= relRMSEBenchmark) %>% 
+  group_by(YintLaw, YtelLaw)
 ```
