@@ -66,6 +66,7 @@ estim_response_prob_global <- function(I, modes, Z,
 #' conditionaly to the non-selection of the first one, etc.
 #' @importFrom stats glm binomial predict.glm predict
 #' @importFrom checkmate assertFlag assertVector
+#' @export
 estim_response_prob_sequential <- function(I, Z, modes, orderModes,
                                            RGH = NULL, constRGH = FALSE,
                                            link = "logit",

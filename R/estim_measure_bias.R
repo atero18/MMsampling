@@ -21,6 +21,7 @@ estim_coefs_Ym_MCO <- function(Z, Yobs, m, modes)
   lm(Ym ~ . -1L, data = data) %>% coef()
 }
 
+#' @export
 estim_MB_by_MCO <- function(delta, Z,
                             weights = rep(1.0, nrow(Z)),
                             phi = rep(1/2, nrow(Z)),
@@ -29,12 +30,13 @@ estim_MB_by_MCO <- function(delta, Z,
   diag(weights[mask] * phi[mask]) %*% Z[mask, , drop = FALSE] %*% delta
 }
 
+#' @export
 estim_delta_MCO_by_totals <- function(Z, totalBiased, totalRef)
 {
   solve(t(Z) %*% Z) %*% (totalBiased - totalRef)
 }
 
-
+#' @export
 estim_MB_by_delta_MCO_HT <- function(delta, Z, pi,
                                      m, modes,
                                      probsSelect,
@@ -54,6 +56,7 @@ estim_MB_by_delta_MCO_HT <- function(delta, Z, pi,
 
 #' @inheritParams regression_Ym
 #' @importFrom stats predict.lm
+#' @export
 estim_delta_G_comp_MCO <- function(Z, Yobs, modes, biasedMode, refMode)
 {
   coefsBiased <- estim_coefs_Ym_MCO(Z, Yobs, biasedMode, modes)
@@ -62,6 +65,7 @@ estim_delta_G_comp_MCO <- function(Z, Yobs, modes, biasedMode, refMode)
   coefsBiased - coefsRef
 }
 
+#' @export
 estim_delta_MCO <- function(Z, Yobs,
                             modes, biasedMode, refMode,
                             modeTotBiased = "HT", modeTotRef = "HT",
@@ -180,6 +184,7 @@ estim_delta_MCO <- function(Z, Yobs,
 #
 # }
 
+#' @export
 estim_delta_MCO_unique_model_const <- function(Z, Yobs,
                                                modes, biasedMode, refMode)
 {
@@ -223,6 +228,7 @@ estim_delta_MCO_unique_model_const <- function(Z, Yobs,
 ## À vérifier
 #' @importFrom stats qf
 #' @importFrom checkmate assertFlag
+#' @export
 check_nullity_bias_MCO <- function(sample, Ycf, alpha = 0.01,
                                    replaceByCF = FALSE)
 {
