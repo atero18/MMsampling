@@ -285,6 +285,70 @@ HT_Yref <- function(pi, Y, modesRef, phi, probaModes, chosenModes) NULL ## à fa
 #   crossprod(Y, 1.0 / invWeights)
 # }
 
+#' Calculate the true variance of the estimator of t_phi2 in the case
+#' of known selection probabilities. Using estimated values give an approximate
+#' variance in the case of known selection probabilities
+estim_var_HT_seq_2 <- function(expY2, covarY2,
+                               piMat,
+                               pq1Mat, pq2Mat,
+                               phi = rep(0.0, length(expY2)))
+{
+
+  N <- length(expY2)
+
+  pi <- diag(piMat)
+
+  p1 <- diag(pq1Mat)
+
+  pq1BarMat <- 1.0 -
+    matrix(p1, nrow = N, ncol = N, byrow = TRUE) -
+    matrix(p1, nrow = N, ncol = N, byrow = FALSE) +
+    pq1Mat
+
+  p1Bar <- 1.0 - p1
+
+  p2 <- diag(pq2Mat)
+
+  invp1BarMat <- (p1Bar %*% t(p1Bar))^-1L
+  invProbsMatSelecMat <- invp1BarMat * (p2 %*% t(p2))^-1L
+
+  varY2 <- piMat *
+    pq1BarMat *
+    pq2Mat *
+    covarY2 *
+    invProbsMatSelecMat
+
+
+  prodexpY2Mat <- expY2 %*% t(expY2)
+  covarq2 <- pi2_to_covarInc(pq2Mat)
+  varq2 <- prodexpY2Mat *
+    piMat *
+    pq1BarMat *
+    covarq2 *
+    invProbsMatSelecMat
+
+
+  covarq1 <- pi2_to_covarInc(pq1Mat)
+  varq1 <- prodexpY2Mat *
+    piMat *
+    covarq1 *
+    invp1BarMat
+
+  covarPi <- pi2_to_covarInc(piMat)
+  varS <- prodexpY2Mat * covarPi
+
+  vMat <- varY2 + varq2 + varq1 + varS
+
+  phiBar <- 1.0 - phi
+
+  weightedPhis <- phiBar / pi
+
+  sum(weightedPhis %*% t(weightedPhis) * vMat)
+
+
+}
+
+
 .estim_var_Inc_mm <- function(pi2, Ytilde, delta)
 {
   pi <- diag(pi2)
@@ -452,3 +516,7 @@ HT_mm_with_fitting <- function(sample,
         delta[maskResp], pHat[maskResp, , drop = FALSE],
         chosenModes = sample$mode[maskResp])
 }
+
+
+
+

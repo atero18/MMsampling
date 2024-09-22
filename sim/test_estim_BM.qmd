@@ -211,8 +211,8 @@ simulationUncounf <-
     
     if (fixZ)
     {
-      pInt <- expit(Z %*% alphaInt)
-      pTel <- expit(Z %*% alphaTel)
+      pInt <- expit(Z %*% alphaInt) %>% as.numeric()
+      pTel <- expit(Z %*% alphaTel) %>% as.numeric()
       clusterExport(cluster, 
                     varlist = c("pInt", "pTel"),
                     envir = environment())
@@ -310,7 +310,7 @@ simulationUncounf <-
       trueTotalYtel <- sum(Ytel)
       
       if (YintLaw == "gaussian")
-        Yint <- Z %*% betaInt + rnorm(N, 0.0, sdInt)
+        Yint <- Z %*% betaInt + rnorm(n = N, sd = sdInt)
         
       else if (YintLaw == "exponential")
         Yint <- rexp(n = N, rate = abs(Z %*% betaInt)^-1L)
@@ -489,6 +489,8 @@ simulationUncounf <-
       partialResults$trueParameter <- as.logical(partialResults$trueParameter)
       # Value estimated only on telephone answers, with estimated selection probabilities
       benchmark <- sum(estimWeights[maskTel] * Ytel[maskTel])
+      trueWeightsBenchmark <- sum(trueWeights[maskTel] * Ytel[maskTel])
+
       
       if (any((betaInt - betaTel)[-1L] != 0.0))
         MBtype <- "variable"
@@ -511,7 +513,8 @@ simulationUncounf <-
                  estTotalPhiYtelEstMP -
                  estTotPhiBias) %>% 
         add_column(.after = "estTotalYtelEstMP", benchmark = benchmark) %>% 
-        add_column(.after = "benchmark", sampling = sampling) %>% 
+        add_column(.after = "benchmark", trueWeightsBenchmark = trueWeightsBenchmark)
+        add_column(.after = "trueWeightsBenchmark", sampling = sampling) %>% 
         add_column(.after = "sampling", YtelLaw = factor(YtelLaw)) %>% 
         add_column(.after = "YtelLaw", YintLaw = factor(YintLaw)) %>% 
         add_column(.after = "YintLaw",
@@ -530,8 +533,35 @@ simulationUncounf <-
     
     stopCluster(cluster)
     
+    results <- do.call("rbind", results)
     
-    do.call("rbind", results)
+    # We calculate the real variance of the benchmark estimator
+    if (fixZ)
+    {
+      if (sampling == "SRS")
+      {
+        piMat <- matrix(n * (n - 1L) / (N * (N - 1L)), nrow = N, ncol = N)
+        diag(piMat) <- n / N
+      }
+      
+      pq1Mat <- pInt %*% t(pInt)
+      diag(pq1Mat) <- pInt
+      
+      pq2Mat <- pTel %*% t(pTel)
+      diag(pq2Mat) <- pTel
+      
+      sdBenchmark <- estim_var_HT_seq_2(expY2 = Z %*% betaTel, 
+                                        covarY2 = diag(sdTel^2L, N),
+                                        piMat = piMat,
+                                        pq1Mat = pq1Mat,
+                                        pq2Mat = pq2Mat) %>% sqrt()
+      
+      results <- results %>% 
+        mutate(sdBenchmark = sdBenchmark)
+    }
+    
+    
+    
   }
 ```
 
@@ -872,7 +902,7 @@ Parameters:
 Evaluation of $K$ experiments
 
 ```{r}
-K <- 10000L
+K <- 1000L
 ```
 
 ```{r}
@@ -993,7 +1023,9 @@ results %>%
             relDiffBenchmarkMean = round(mean(diffBenchmark / abs(expectedTotalYtel)), 4L),
             #relRMSETrue = round(sqrt(mean(diffTotalYtelTrueMP^2L / expectedTotalYtel^2L)), 4L),
             relRMSEEst = round(sqrt(mean(diffTotalYtelEstMP^2L / expectedTotalYtel^2L)), 4L),
-            relRMSEBenchmark = round(sqrt(mean(diffBenchmark^2L / expectedTotalYtel^2L)), 4L)) %>% 
+            relRMSEBenchmark = round(sqrt(mean(diffBenchmark^2L / expectedTotalYtel^2L)), 4L),
+            relSdBenchmark = mean(sdBenchmark),
+            test = sd(diffTotalYtelEstMP)) %>% 
   ungroup() %>% 
   arrange(relRMSEEst)
 ```
@@ -1014,7 +1046,8 @@ temp <- results %>%
             relDiffBenchmarkMean = round(mean(diffBenchmark / abs(expectedTotalYtel)), 4L),
             #relRMSETrue = round(sqrt(mean(diffTotalYtelTrueMP^2L / expectedTotalYtel^2L)), 4L),
             relRMSEEst = round(sqrt(mean(diffTotalYtelEstMP^2L / expectedTotalYtel^2L)), 4L),
-            relRMSEBenchmark = round(sqrt(mean(diffBenchmark^2L / expectedTotalYtel^2L)), 4L)) %>% 
+            relRMSEBenchmark = round(sqrt(mean(diffBenchmark^2L / expectedTotalYtel^2L)), 4L),
+            relSdBenchmark = mean(sdBenchmark / abs(expectedTotalYtel))) %>% 
   ungroup() %>% 
   arrange(relRMSEEst)
 
