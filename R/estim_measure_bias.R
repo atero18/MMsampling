@@ -1,7 +1,7 @@
 #' Parametric regression for modes
 #'
-#' Estimate Ym on the whole population based
-#' on the subpopulation that used this mode
+#' Estimate delta_m MCO parameters for Ym
+#' based on the subpopulation that used this mode
 #' to answer
 #' @importFrom stats lm predict.lm
 #' @keywords internal
@@ -21,14 +21,7 @@ estim_coefs_Ym_MCO <- function(Z, Yobs, m, modes)
   lm(Ym ~ . -1L, data = data) %>% coef()
 }
 
-#' @export
-estim_MB_by_MCO <- function(delta, Z,
-                            weights = rep(1.0, nrow(Z)),
-                            phi = rep(1/2, nrow(Z)),
-                            mask = rep(TRUE, nrow(Z)))
-{
-  diag(weights[mask] * phi[mask]) %*% Z[mask, , drop = FALSE] %*% delta
-}
+
 
 #' @export
 estim_delta_MCO_by_totals <- function(Z, totalBiased, totalRef)
@@ -51,6 +44,14 @@ estim_MB_by_delta_MCO_HT <- function(delta, Z, pi,
   weights <- (pi * probSelect)^-1L
 
   estim_MB_by_MCO(delta, Z, weights, phi)
+}
+
+estim_MB_by_MCO <- function(delta, Z,
+                            weights = rep(1.0, nrow(Z)),
+                            phi = rep(1/2, nrow(Z)),
+                            mask = rep(TRUE, nrow(Z)))
+{
+  diag(weights[mask] * phi[mask]) %*% Z[mask, , drop = FALSE] %*% delta
 }
 
 

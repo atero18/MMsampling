@@ -319,7 +319,7 @@ simulationUncounf <-
       
     
       # Evaluating the measure bias total (random value)
-      trueTotalBias <- sum(phi * deltas)
+      trueTotalBias <- crossprod(phi, deltas)
       expectedPhiBias <- t(phi) %*% Z %*% (betaInt - betaTel)
       
       # Creating the observed outcome vector
@@ -389,7 +389,7 @@ simulationUncounf <-
       # delta for the estimation of the measure bias
       deltaEval <- estim_delta_MCO_unique_model_const(Z, Yobs, modes, "int", "tel")
       resEvalFull <- sum(phi) * deltaEval
-      resEvalHT <- sum(phi[maskInt] * estimWeights[maskInt] * deltaEval)
+      resEvalHT <- crossprod(phi[maskInt] * estimWeights[maskInt], deltaEval)
       
       partialResults[c(row, row + 1L),] <- 
         data.frame(parameter = "MCO_unique",
@@ -488,8 +488,8 @@ simulationUncounf <-
       partialResults$estTotPhiBias <- as.numeric(partialResults$estTotPhiBias)
       partialResults$trueParameter <- as.logical(partialResults$trueParameter)
       # Value estimated only on telephone answers, with estimated selection probabilities
-      benchmark <- sum(estimWeights[maskTel] * Ytel[maskTel])
-      trueWeightsBenchmark <- sum(trueWeights[maskTel] * Ytel[maskTel])
+      benchmark <- crossprod(estimWeights[maskTel], Ytel[maskTel])
+      trueWeightsBenchmark <- crossprod(trueWeights[maskTel], Ytel[maskTel])
 
       
       if (any((betaInt - betaTel)[-1L] != 0.0))
@@ -513,7 +513,7 @@ simulationUncounf <-
                  estTotalPhiYtelEstMP -
                  estTotPhiBias) %>% 
         add_column(.after = "estTotalYtelEstMP", benchmark = benchmark) %>% 
-        add_column(.after = "benchmark", trueWeightsBenchmark = trueWeightsBenchmark)
+        add_column(.after = "benchmark", trueWeightsBenchmark = trueWeightsBenchmark) %>% 
         add_column(.after = "trueWeightsBenchmark", sampling = sampling) %>% 
         add_column(.after = "sampling", YtelLaw = factor(YtelLaw)) %>% 
         add_column(.after = "YtelLaw", YintLaw = factor(YintLaw)) %>% 
@@ -550,14 +550,14 @@ simulationUncounf <-
       pq2Mat <- pTel %*% t(pTel)
       diag(pq2Mat) <- pTel
       
-      sdBenchmark <- estim_var_HT_seq_2(expY2 = Z %*% betaTel, 
-                                        covarY2 = diag(sdTel^2L, N),
-                                        piMat = piMat,
-                                        pq1Mat = pq1Mat,
-                                        pq2Mat = pq2Mat) %>% sqrt()
+      sdTrueWeightsBenchmark <- var_HT_seq_phi2(expY2 = Z %*% betaTel, 
+                                     covarY2 = diag(sdTel^2L, N),
+                                     piMat = piMat,
+                                     pq1Mat = pq1Mat,
+                                     pq2Mat = pq2Mat) %>% sqrt()
       
       results <- results %>% 
-        mutate(sdBenchmark = sdBenchmark)
+        mutate(sdTrueWeightsBenchmark = sdTrueWeightsBenchmark)
     }
     
     
@@ -902,7 +902,7 @@ Parameters:
 Evaluation of $K$ experiments
 
 ```{r}
-K <- 1000L
+K <- 5000L
 ```
 
 ```{r}
@@ -1024,8 +1024,7 @@ results %>%
             #relRMSETrue = round(sqrt(mean(diffTotalYtelTrueMP^2L / expectedTotalYtel^2L)), 4L),
             relRMSEEst = round(sqrt(mean(diffTotalYtelEstMP^2L / expectedTotalYtel^2L)), 4L),
             relRMSEBenchmark = round(sqrt(mean(diffBenchmark^2L / expectedTotalYtel^2L)), 4L),
-            relSdBenchmark = mean(sdBenchmark),
-            test = sd(diffTotalYtelEstMP)) %>% 
+            relSdTrueWeightsBenchmark = mean(sdTrueWeightsBenchmark / abs(expectedTotalYtel))) %>% 
   ungroup() %>% 
   arrange(relRMSEEst)
 ```

@@ -1,128 +1,44 @@
-#' @importFrom checkmate assertFlag assertSubset
-#' @export
-HT_mm_weights <- function(pi, probaModes, chosenModes = NULL, inv = FALSE)
-{
-  assertFlag(inv)
-
-  assertProbabilityVec(pi, striclyPos = TRUE)
-
-  n <- length(pi)
-
-  inclusionWeights <- pi
-
-  modeAndNRWeights <-
-    data_proba_to_vec(probaModes, N = n, modes = chosenModes,
-                      probVec = TRUE)
-
-  weights <- inclusionWeights * modeAndNRWeights
-
-
-  if (!inv)
-    weights <- 1.0 / weights
-
-  as.double(weights)
-}
-
-
 #' @importFrom checkmate assertFlag
-HT_mm_weights_with_control <-
-  function(pi, probaMode, control = logical(n),
-           nu = NULL, nuBar = NULL, q = NULL, inv = TRUE)
-{
-
-  ## ajouter validations
-  assertFlag(inv)
-
-  n <- length(pi)
-
-  if (any(pi == 0.0))
-    stop("At least one pi probability is equal to zero")
-
-  inclusionWeights <- pi
-
-  existingControlSet <- any(control)
-  missingDataControl <- is.null(nu) || is.null(nuBar) || is.null(q)
-  if (existingControlSet && missingDataControl)
-    stop("controls are present but probabilities are missing")
-
-  else if (!existingControlSet)
-  {
-    nu <- q <- numeric(n)
-    nuBar <- rep(1.0, n)
-  }
-
-  modeAndNRWeights <- numeric(n)
-
-  if (existingControlSet)
-    modeAndNRWeights[control] <- nu * q
-  if (!existingControlSet || !all(control))
-    modeAndNRWeights[!control] <- nuBar * probaMode
-
-  weights <- inclusionWeights * modeAndNRWeights
-
-  if (!inv)
-    weigths <- 1.0 / weigths
-
-  as.double(weights)
-}
-
-#' @export
-HT_mm <- function(pi, Y, phi, delta = NULL,
-                  probaModes, chosenModes = NULL,
-                  initialWeights = NULL)
-{
-  n <- length(pi)
-  weights <- HT_mm_weights(pi, probaModes, chosenModes, inv = FALSE)
-
-  assertY(Y, N = n)
-
-  if (!is.null(initialWeights))
-  {
-    assertNumericVector(initialWeights, finite = TRUE,
-                        any.missing = FALSE, all.missing = FALSE,
-                        len = n)
-
-    if (any(initialWeights == 0.0))
-      return("some initial Weight is equal to zero")
-
-    weights <- initialWeights * weights
-  }
-
-
-  phi <- data_proba_to_vec(phi, N = n, modes = chosenModes,
-                           probVec = TRUE)
-
-
-  if (is.null(delta))
-    delta <- numeric(n)
-  else
-  {
-    delta <- get_value_by_mode(delta, chosenModes)
-    assertBiasesMes(delta, N = n)
-
-  }
-
-
-
-
-  crossprod(phi * (Y - delta), weights)
-}
-
-#' @importFrom checkmate assertChoice
-#' @export
-HT_Ym <- function(pi, Y, mode, phi,
-                  probaModes, chosenModes = NULL)
-
-{
-  assertChoice(mode, chosenModes)
-
-  Ym <- Y
-  Ym[chosenModes != mode] <- 0.0
-
-  HT_mm(pi, Ym, phi, delta = NULL, probaModes, chosenModes)
-}
-
-HT_Yref <- function(pi, Y, modesRef, phi, probaModes, chosenModes) NULL ## à faire
+# HT_mm_weights_with_control <-
+#   function(pi, probaMode, control = logical(n),
+#            nu = NULL, nuBar = NULL, q = NULL, inv = TRUE)
+# {
+#
+#   ## ajouter validations
+#   assertFlag(inv)
+#
+#   n <- length(pi)
+#
+#   if (any(pi == 0.0))
+#     stop("At least one pi probability is equal to zero")
+#
+#   inclusionWeights <- pi
+#
+#   existingControlSet <- any(control)
+#   missingDataControl <- is.null(nu) || is.null(nuBar) || is.null(q)
+#   if (existingControlSet && missingDataControl)
+#     stop("controls are present but probabilities are missing")
+#
+#   else if (!existingControlSet)
+#   {
+#     nu <- q <- numeric(n)
+#     nuBar <- rep(1.0, n)
+#   }
+#
+#   modeAndNRWeights <- numeric(n)
+#
+#   if (existingControlSet)
+#     modeAndNRWeights[control] <- nu * q
+#   if (!existingControlSet || !all(control))
+#     modeAndNRWeights[!control] <- nuBar * probaMode
+#
+#   weights <- inclusionWeights * modeAndNRWeights
+#
+#   if (!inv)
+#     weigths <- 1.0 / weigths
+#
+#   as.double(weights)
+# }
 
 #' @importFrom checkmate testSubset assertInt testInt
 # HT_mm_with_control <- function(sample, delta,
@@ -285,13 +201,47 @@ HT_Yref <- function(pi, Y, modesRef, phi, probaModes, chosenModes) NULL ## à fa
 #   crossprod(Y, 1.0 / invWeights)
 # }
 
-#' Calculate the true variance of the estimator of t_phi2 in the case
+#' Calculate the true variance of the HT estimator of t_phi1 in the case
 #' of known selection probabilities. Using estimated values give an approximate
 #' variance in the case of known selection probabilities
-estim_var_HT_seq_2 <- function(expY2, covarY2,
+var_HT_seq_phi1 <- function(expY1, covarY1,
                                piMat,
-                               pq1Mat, pq2Mat,
+                               pq1Mat,
                                phi = rep(0.0, length(expY2)))
+{
+  pi <- diag(piMat)
+
+  p1 <- diag(pq1Mat)
+  invP1Mat <- (p1 %*% t(p1))^-1L
+
+  # Y_1 variability
+  varY1 <- piMat * pq1Mat * covarY1 * invP1Mat
+
+  # mode 1 selection variability
+  prodexpY1Mat <- expY1 %*% t(expY1)
+  covarq1 <- pi2_to_covarInc(pq1Mat)
+  varq1 <- prodexpY1Mat * piMat * covarq1 * invP1Mat
+
+  # sampling variability
+  covarPi <- pi2_to_covarInc(piMat)
+  varS <- prodexpY1Mat * covarPi
+
+  vMat <- varY1 + varq1 + varS
+
+  weightedPhis <- phi / pi
+
+  sum(weightedPhis %*% t(weightedPhis) * vMat)
+}
+
+
+#' Calculate the true variance of the HT estimator of t_phi2
+#' (or t_2 as a special case) in the case of known selection probabilities.
+#' Using estimated values give an approximate variance in the case of
+#'  known selection probabilities.
+var_HT_seq_phi2 <- function(expY2, covarY2,
+                            piMat,
+                            pq1Mat, pq2Mat,
+                            phi = numeric(length(expY2)))
 {
 
   N <- length(expY2)
@@ -312,6 +262,7 @@ estim_var_HT_seq_2 <- function(expY2, covarY2,
   invp1BarMat <- (p1Bar %*% t(p1Bar))^-1L
   invProbsMatSelecMat <- invp1BarMat * (p2 %*% t(p2))^-1L
 
+  # Y_2 variability
   varY2 <- piMat *
     pq1BarMat *
     pq2Mat *
@@ -319,6 +270,7 @@ estim_var_HT_seq_2 <- function(expY2, covarY2,
     invProbsMatSelecMat
 
 
+  # mode 2 selection variability
   prodexpY2Mat <- expY2 %*% t(expY2)
   covarq2 <- pi2_to_covarInc(pq2Mat)
   varq2 <- prodexpY2Mat *
@@ -328,12 +280,14 @@ estim_var_HT_seq_2 <- function(expY2, covarY2,
     invProbsMatSelecMat
 
 
+  # mode 1 selection variability
   covarq1 <- pi2_to_covarInc(pq1Mat)
   varq1 <- prodexpY2Mat *
     piMat *
     covarq1 *
     invp1BarMat
 
+  # sampling variability
   covarPi <- pi2_to_covarInc(piMat)
   varS <- prodexpY2Mat * covarPi
 
@@ -344,178 +298,222 @@ estim_var_HT_seq_2 <- function(expY2, covarY2,
   weightedPhis <- phiBar / pi
 
   sum(weightedPhis %*% t(weightedPhis) * vMat)
-
-
 }
 
-
-.estim_var_Inc_mm <- function(pi2, Ytilde, delta)
+var_estim_tot_BM <- function(modeTotBiased = "HT", modeTotRef = "HT",
+                             calculTotal = "full",
+                             expY1, expY2,
+                             covarY1, covarY2,
+                             piMat,
+                             pq1Mat, pq2Mat,
+                             phi = numeric(length(expY2)))
 {
-  pi <- diag(pi2)
-  Ypi <- (Ytilde - delta) / pi
-  covarInc <- pi2_to_covarInc(pi2)
+  pi <- diag(piMat)
+  covarPi <- pi2_to_covarInc(piMat)
 
-  sum(Ypi %*% t(Ypi) * covarInc / pi2)
+  p1 <- diag(pq1Mat)
+  p1Bar <- 1.0 - p1
+  pq1BarMat <- 1.0 -
+    matrix(p1, nrow = N, ncol = N, byrow = TRUE) -
+    matrix(p1, nrow = N, ncol = N, byrow = FALSE) +
+    pq1Mat
+  covarq1 <- pi2_to_covarInc(pq1Mat)
+  p1Mat <- p1Bar %*% t(p1Bar)
+  invp1Mat <- p1Mat^-1L
+  invp1BarMat <- (p1Bar %*% t(p1Bar))^-1L
+
+  p2 <- diag(pq2Mat)
+  covarq2 <- pi2_to_covarInc(pq2Mat)
+
+
+  invProbsMatSelecMat <- invp1BarMat * (p2 %*% t(p2))^-1L
+
+  prodexpY1Mat <- expY1 %*% t(expY1)
+
+  prodexpY2Mat <- expY2 %*% t(expY2)
+
+  phiBar <- 1.0 - phi
+
+  # Variance of the total MB estimator
+  if (modeTotBiased == "HT" && modeTotRef == "HT" && calculTotal == "full")
+  {
+    varY2 <- piMat * pq1BarMat * pq2Mat * covarY2 * invProbsMatSelecMat
+
+    varY1 <- piMat * pq1BarMat * covarY1 * invp1Mat
+
+    varq2 <- prodexpY2Mat * piMat * pq1Mat * covarq2 * invProbsMatSelecMat
+
+    sumY1Y2 <- expY1 / p1 + expY2 / p1Bar
+
+    varq1 <- sumY1Y2 %*% t(sumY1Y2) * piMat * covarq1
+
+    deltas <- expY1 - expY2
+
+    varS <- deltas %*% t(deltas) * covarPi
+
+    vDelta <- varY2 + varY1 + varq2 + varq1 + varS
+
+    b <- t(phi) %*% Z %*% solve(t(Z) %*% Z) %*% Z / pi
+
+    varDelta <- sum(b %*% t(b) * vDelta)
+  }
+
+  # Covariance between ^t_phi1 and ^t_phiDelta
+  if (modeTotBiased == "HT" && modeTotRef == "HT" && calculTotal == "full")
+  {
+    covarY1 <- pq1BarMat * covarY1 * invp1Mat
+
+    weightedY1 <- expY1 / p1
+    covarq1 <- weightedY1 %*% t(weightedY1 - expY2 / p1Bar) * piMat * covarq1
+
+    deltas <- expY1 - expY2
+
+    covarS <- expY1 %*% t(expY1 - expY2) * covarPi
+
+    v1Delta <- covarY1 + covarq1 + covarS
+
+    b <- t(phi) %*% Z %*% solve(t(Z) %*% Z) %*% Z / pi
+
+    covar1Delta <- sum((phi / pi) %*% t(b) %*% v1Delta)
+  }
+
+
 }
 
-.estim_var_mode_mm <- function(mode, pi, p_tab, Ytilde, delta, phi)
-{
-  probaUsed <- get_value_by_mode(p, mode)
-  Ysqpip <- (Ytilde - delta)^2L / (pi^2L * probaUsed)
-  p <- p[, colnames(p) != "nr", drop = FALSE]
-  varPhi <- rowSums(phi^2L / p) - 1.0
 
-  sum(Ysqpip * varPhi)
-
-}
-
-#' @export
-estim_var_HT_mm <- function(mode, pi2, p_tab, phi, Ytilde, delta)
-{
-  masque <- mode[!is.na(mode) & mode != "nr"]
-  p_tab <- p_tab[masque, , drop = FALSE]
-  pi2 <- pi2[masque, masque, drop = FALSE]
-  pi <- diag(pi2)
-  Ytilde <- Ytilde[masque]
-  delta <- delta[masque]
-  phi <- phi[masque, , drop = FALSE]
-
-  .estim_var_Inc_mm(pi2, Ytilde, delta) +
-    .estim_var_mode_mm(mode, pi, p_tab, Ytilde, delta, phi)
-}
 
 #' @importFrom stats fitted
 #' @importFrom checkmate assertChoice
-HT_mm_with_fitting <- function(sample,
-                               imputationY = NULL,
-                               estimMesBias = NULL, estimPm = NULL,
-                               checkEquality = "no", checkNullityBias = "no")
-{
-
-
-  # Size of the population
-  N <- sample$N
-
-  # Mask of respondents
-  maskResp <- sample$R
-
-  maskRespRef <- sample$respondents_ref()
-
-  # If some values in the sample might be changed we
-  # make a copy of it
-  if (checkEquality != "no" || checkNullityBias != "no")
-    sample <- sample$copy(deep = TRUE)
-
-  # Get answers of each unit
-  # (NA when the unit haven't been selected and "nr" when the unit has been
-  # selected but didn't answer)
-  Ytilde <- sample$Ytilde()
-
-  if (checkEquality %in% c("MCO", "MCO_agreg"))
-  {
-    mergeEquivalents <- checkEquality == "MCO_agreg"
-    sample <-
-      check_modes_equality_MCO(sample,
-                               mergeEquivalents = mergeEquivalents)$plan
-  }
-
-
-  # Some measure biases estimators don't need
-  # calculation of countefactuals
-  if (is.null(estimMesBias) || estimMesBias %in% c("G-COMP", "MCO_tots"))
-    imputationY <- NULL
-  else
-  {
-    assertString(imputationY)
-
-    if (imputationY == "true_values")
-      Ycf <- sample$Yref()
-    else if (imputationY == "MCO")
-      Ycf <- MCO_Y(sample)
-    else # Use of MatchIt package
-      Ycf <- Y_matching(sample, imputationY)
-  }
-
-  # Estimation of measure biases
-  usedBiasedModes <- sample$used_biased_modes()
-
-  # Vector of measure biases
-  delta <- numeric(N)
-
-  if (is.null(estimMesBias) || estimMesBias == "true_values")
-    delta <- sample$Ytilde() - sample$Yref()
-  else if (estimMesBias == "CF")
-    delta <- sample$Ytilde() - Ycf
-  else if (estimMesBias == "G-COMP")
-    delta <- estim_delta_G_comp_MCO(sample)
-
-  # Estimation with totals
-  else if (estimMesBias %in% c("estimDeltaCF", "doubleHT", "totYcf"))
-  {
-    for (biasedMode in usedBiasedModes)
-    {
-      masqueMode <- sample$respondents_mode(biasedMode)
-      delta[masqueMode] <-
-        estim_MB_MCO_tot(sample, biasedMode,
-                         typeTot = estimMesBias, Ycf = Ycf)[masqueMode]
-    }
-  }
-
-  # Estimation with imputation
-  else
-  {
-    # Case when Y^m is replaced by its counterfactuel
-    if (estimMesBias == "CF")
-    {
-      delta <- Ytilde - Ycf
-      usedBiasedModes <- NULL
-    }
-    else if (estimMesBias == "MCO")
-    {
-      for (biasedMode in usedBiasedModes)
-      {
-        masqueMode <- sample$respondents_mode(biasedMode)
-        delta[masqueMode] <-
-          estim_MB_MCO_cf(sample, biasedMode, Ycf)[masqueMode]
-      }
-    }
-
-    # Case when we want to check if there is negligeable biases
-    else if (checkNullityBias != "no")
-    {
-      # MCO_Ym : Ym is maintaned if the bias is negligeable
-      # MCO_CF : Ym is replaced by its counterfactual if the bias is negligeable
-      if (checkNullityBias %in% c("MCO_Ym", "MCO_CF"))
-      {
-        replaceByCF <- checkNullityBias == "MCO_CF"
-        resCheck <-
-          check_nullity_bias_MCO(sample, Ycf, replaceByCF = replaceByCF)
-
-        delta <- resCheck$delta
-        usedBiasedModes <- resCheck$remainingBiasedModes
-
-      }
-    }
-
-  }
-
-  masqueRepRef <- sample$respondents_ref()
-  delta[masqueRepRef] <- 0.0
-
-
-  if (is.null(estimPm) || estimPm == "true_values")
-    pHat <- sample$probaModes
-
-  else if (estimPm == "multinomial")
-  {
-    pHat <- estim_response_prob_global(plan, problem, regroupModesRef = TRUE)
-  }
-
-  HT_mm(sample$pi[maskResp], Ytilde[maskResp],
-        sample$phi_tab[maskResp, , drop = FALSE],
-        delta[maskResp], pHat[maskResp, , drop = FALSE],
-        chosenModes = sample$mode[maskResp])
-}
+# HT_mm_with_fitting <- function(sample,
+#                                imputationY = NULL,
+#                                estimMesBias = NULL, estimPm = NULL,
+#                                checkEquality = "no", checkNullityBias = "no")
+# {
+#
+#
+#   # Size of the population
+#   N <- sample$N
+#
+#   # Mask of respondents
+#   maskResp <- sample$R
+#
+#   maskRespRef <- sample$respondents_ref()
+#
+#   # If some values in the sample might be changed we
+#   # make a copy of it
+#   if (checkEquality != "no" || checkNullityBias != "no")
+#     sample <- sample$copy(deep = TRUE)
+#
+#   # Get answers of each unit
+#   # (NA when the unit haven't been selected and "nr" when the unit has been
+#   # selected but didn't answer)
+#   Ytilde <- sample$Ytilde()
+#
+#   if (checkEquality %in% c("MCO", "MCO_agreg"))
+#   {
+#     mergeEquivalents <- checkEquality == "MCO_agreg"
+#     sample <-
+#       check_modes_equality_MCO(sample,
+#                                mergeEquivalents = mergeEquivalents)$plan
+#   }
+#
+#
+#   # Some measure biases estimators don't need
+#   # calculation of countefactuals
+#   if (is.null(estimMesBias) || estimMesBias %in% c("G-COMP", "MCO_tots"))
+#     imputationY <- NULL
+#   else
+#   {
+#     assertString(imputationY)
+#
+#     if (imputationY == "true_values")
+#       Ycf <- sample$Yref()
+#     else if (imputationY == "MCO")
+#       Ycf <- MCO_Y(sample)
+#     else # Use of MatchIt package
+#       Ycf <- Y_matching(sample, imputationY)
+#   }
+#
+#   # Estimation of measure biases
+#   usedBiasedModes <- sample$used_biased_modes()
+#
+#   # Vector of measure biases
+#   delta <- numeric(N)
+#
+#   if (is.null(estimMesBias) || estimMesBias == "true_values")
+#     delta <- sample$Ytilde() - sample$Yref()
+#   else if (estimMesBias == "CF")
+#     delta <- sample$Ytilde() - Ycf
+#   else if (estimMesBias == "G-COMP")
+#     delta <- estim_delta_G_comp_MCO(sample)
+#
+#   # Estimation with totals
+#   else if (estimMesBias %in% c("estimDeltaCF", "doubleHT", "totYcf"))
+#   {
+#     for (biasedMode in usedBiasedModes)
+#     {
+#       masqueMode <- sample$respondents_mode(biasedMode)
+#       delta[masqueMode] <-
+#         estim_MB_MCO_tot(sample, biasedMode,
+#                          typeTot = estimMesBias, Ycf = Ycf)[masqueMode]
+#     }
+#   }
+#
+#   # Estimation with imputation
+#   else
+#   {
+#     # Case when Y^m is replaced by its counterfactuel
+#     if (estimMesBias == "CF")
+#     {
+#       delta <- Ytilde - Ycf
+#       usedBiasedModes <- NULL
+#     }
+#     else if (estimMesBias == "MCO")
+#     {
+#       for (biasedMode in usedBiasedModes)
+#       {
+#         masqueMode <- sample$respondents_mode(biasedMode)
+#         delta[masqueMode] <-
+#           estim_MB_MCO_cf(sample, biasedMode, Ycf)[masqueMode]
+#       }
+#     }
+#
+#     # Case when we want to check if there is negligeable biases
+#     else if (checkNullityBias != "no")
+#     {
+#       # MCO_Ym : Ym is maintaned if the bias is negligeable
+#       # MCO_CF : Ym is replaced by its counterfactual if the bias is negligeable
+#       if (checkNullityBias %in% c("MCO_Ym", "MCO_CF"))
+#       {
+#         replaceByCF <- checkNullityBias == "MCO_CF"
+#         resCheck <-
+#           check_nullity_bias_MCO(sample, Ycf, replaceByCF = replaceByCF)
+#
+#         delta <- resCheck$delta
+#         usedBiasedModes <- resCheck$remainingBiasedModes
+#
+#       }
+#     }
+#
+#   }
+#
+#   masqueRepRef <- sample$respondents_ref()
+#   delta[masqueRepRef] <- 0.0
+#
+#
+#   if (is.null(estimPm) || estimPm == "true_values")
+#     pHat <- sample$probaModes
+#
+#   else if (estimPm == "multinomial")
+#   {
+#     pHat <- estim_response_prob_global(plan, problem, regroupModesRef = TRUE)
+#   }
+#
+#   HT_mm(sample$pi[maskResp], Ytilde[maskResp],
+#         sample$phi_tab[maskResp, , drop = FALSE],
+#         delta[maskResp], pHat[maskResp, , drop = FALSE],
+#         chosenModes = sample$mode[maskResp])
+# }
 
 
 
