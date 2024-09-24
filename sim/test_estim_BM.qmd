@@ -322,8 +322,8 @@ simulationUncounf <-
       else if (YtelLaw == "exponential")
       {
         expYtel <- abs(Z %*% betaTel)
-        Ytel <- rexp(n = N, rate = expYtel^-1L)
         covarY2 <- diag(expYtel^2L)
+        Ytel <- rexp(n = N, rate = expYtel^-1L)
       }
       
       expectedTotalYtel <- sum(expYtel)
@@ -338,8 +338,8 @@ simulationUncounf <-
       else if (YintLaw == "exponential")
       {
         expYint <- abs(Z %*% betaInt)
-        Yint <- rexp(n = N, rate = abs(Z %*% betaInt)^-1L)
         covarY1 <- diag(expYint^2L)
+        Yint <- rexp(n = N, rate = expYint^-1L)
       }
         
       deltas <- Yint - Ytel
@@ -573,8 +573,9 @@ simulationUncounf <-
                   envir = environment())
     
     ##browser()
-    #results <- lapply(X = seq_len(K), FUN = monoSim)
-    results <- parLapply(cluster, X = seq_len(K), fun = monoSim)
+    
+    results <- lapply(X = seq_len(K), FUN = monoSim)
+    #results <- parLapply(cluster, X = seq_len(K), fun = monoSim)
     
     stopCluster(cluster)
     
@@ -638,7 +639,7 @@ Parameters:
 Evaluation of $K$ experiments
 
 ```{r}
-K <- 5L
+K <- 1L
 ```
 
 ```{r}
@@ -712,6 +713,13 @@ results <- results %>%
   mutate(.after = diffTotalYtelTrueMP, diffBenchmark = benchmark - trueTotalYtel)
 ```
 
+```{r}
+results %>% 
+  filter(parameter == "HT", probSelect == "true", invMatrix == "true", calculTotal == "full") %>% 
+  group_by(sampling, YintLaw, YtelLaw, phi) %>% 
+  summarise(expSD = mean(expSD), estSD = sd(estTotalYtelEstMP))
+```
+
 ## Ex : Gaussian constant measure bias
 
 Results of each parameter for the case of SRS with **constant** measure bias and Gaussian laws
@@ -749,6 +757,7 @@ results %>%
             relDiffBenchmarkMean = round(mean(diffBenchmark / abs(expectedTotalYtel)), 4L),
             #relRMSETrue = round(sqrt(mean(diffTotalYtelTrueMP^2L / expectedTotalYtel^2L)), 4L),
             relRMSEEst = round(sqrt(mean(diffTotalYtelEstMP^2L / expectedTotalYtel^2L)), 4L),
+            relExpSD = round(relExpSD = mean(expSD / expectedTotalYtel), 4L),
             relRMSEBenchmark = round(sqrt(mean(diffBenchmark^2L / expectedTotalYtel^2L)), 4L),
             relSdTrueWeightsBenchmark = mean(sdTrueWeightsBenchmark / abs(expectedTotalYtel))) %>% 
   ungroup() %>% 
