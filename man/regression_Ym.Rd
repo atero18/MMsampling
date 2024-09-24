@@ -8,8 +8,8 @@
 estim_coefs_Ym_MCO(Z, Yobs, m, modes)
 }
 \description{
-Estimate Ym on the whole population based
-on the subpopulation that used this mode
+Estimate delta_m MCO parameters for Ym
+based on the subpopulation that used this mode
 to answer
 }
 \keyword{internal}

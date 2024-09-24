@@ -46,6 +46,7 @@ estim_MB_by_delta_MCO_HT <- function(delta, Z, pi,
   estim_MB_by_MCO(delta, Z, weights, phi)
 }
 
+#' @export
 estim_MB_by_MCO <- function(delta, Z,
                             weights = rep(1.0, nrow(Z)),
                             phi = rep(1/2, nrow(Z)),

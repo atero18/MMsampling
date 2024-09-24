@@ -1,4 +1,4 @@
-#' @importFrom checkmate assertFlag
+# @importFrom checkmate assertFlag
 # HT_mm_weights_with_control <-
 #   function(pi, probaMode, control = logical(n),
 #            nu = NULL, nuBar = NULL, q = NULL, inv = TRUE)
@@ -40,7 +40,7 @@
 #   as.double(weights)
 # }
 
-#' @importFrom checkmate testSubset assertInt testInt
+# @importFrom checkmate testSubset assertInt testInt
 # HT_mm_with_control <- function(sample, delta,
 #                                modesRef = NULL,
 #                                p, K = nrow(p), phi = NULL, nu = NULL, q = NULL)
@@ -204,11 +204,16 @@
 #' Calculate the true variance of the HT estimator of t_phi1 in the case
 #' of known selection probabilities. Using estimated values give an approximate
 #' variance in the case of known selection probabilities
+#' @export
 var_HT_seq_phi1 <- function(expY1, covarY1,
-                               piMat,
-                               pq1Mat,
-                               phi = rep(0.0, length(expY2)))
+                            piMat,
+                            pq1Mat,
+                            phi = rep(1.0, length(expY2)))
 {
+
+  if (all(phi == 0.0))
+    return(0.0)
+
   pi <- diag(piMat)
 
   p1 <- diag(pq1Mat)
@@ -238,6 +243,7 @@ var_HT_seq_phi1 <- function(expY1, covarY1,
 #' (or t_2 as a special case) in the case of known selection probabilities.
 #' Using estimated values give an approximate variance in the case of
 #'  known selection probabilities.
+#' @export
 var_HT_seq_phi2 <- function(expY2, covarY2,
                             piMat,
                             pq1Mat, pq2Mat,
@@ -300,6 +306,36 @@ var_HT_seq_phi2 <- function(expY2, covarY2,
   sum(weightedPhis %*% t(weightedPhis) * vMat)
 }
 
+#' @export
+covar_HT_seq_phi1_phi2 <- function(expY1, expY2,
+                                   piMat,
+                                   pq1Mat, pq2Mat,
+                                   phi = numeric(length(expY2)))
+{
+
+  if (all(phi == 1.0))
+    return(0.0)
+
+  pi <- diag(piMat)
+  p1 <- diag(pq1Mat)
+
+  prodexpYMat <- expY1 %*% t(expY2)
+
+  # mode 1 selection variability
+  covarq1 <- pi2_to_covarInc(pq1Mat)
+  varq1 <- -prodexpYMat * piMat * covarq1 / (p1 %*% t(1.0 - p1))
+
+  # sampling variability
+  covarPi <- pi2_to_covarInc(piMat)
+  varS <- prodexpYMat * covarPi
+
+  vMat <- varq1 + varS
+
+  sum((phi / pi) %*% t((1.0 - phi) / pi) * vMat)
+}
+
+
+#' @export
 var_estim_tot_BM <- function(modeTotBiased = "HT", modeTotRef = "HT",
                              calculTotal = "full",
                              expY1, expY2,
@@ -308,6 +344,8 @@ var_estim_tot_BM <- function(modeTotBiased = "HT", modeTotRef = "HT",
                              pq1Mat, pq2Mat,
                              phi = numeric(length(expY2)))
 {
+  N <- length(expY2)
+
   pi <- diag(piMat)
   covarPi <- pi2_to_covarInc(piMat)
 
@@ -332,7 +370,13 @@ var_estim_tot_BM <- function(modeTotBiased = "HT", modeTotRef = "HT",
 
   prodexpY2Mat <- expY2 %*% t(expY2)
 
+  deltas <- expY1 - expY2
+
   phiBar <- 1.0 - phi
+
+  varPhi1 <- var_HT_seq_phi1(expY1, covarY1, piMat, pq1Mat, phi)
+  varPhi2 <- var_HT_seq_phi2(expY2, covarY2, piMat, pq1Mat, pq2Mat, phi)
+  covarPhi12 <- covar_HT_seq_phi1_phi2(expY1, expY2, piMat, pq1Mat, pq2Mat, phi)
 
   # Variance of the total MB estimator
   if (modeTotBiased == "HT" && modeTotRef == "HT" && calculTotal == "full")
@@ -347,36 +391,57 @@ var_estim_tot_BM <- function(modeTotBiased = "HT", modeTotRef = "HT",
 
     varq1 <- sumY1Y2 %*% t(sumY1Y2) * piMat * covarq1
 
-    deltas <- expY1 - expY2
-
     varS <- deltas %*% t(deltas) * covarPi
 
     vDelta <- varY2 + varY1 + varq2 + varq1 + varS
 
-    b <- t(phi) %*% Z %*% solve(t(Z) %*% Z) %*% Z / pi
+    b <- t(phi) %*% Z %*% solve(t(Z) %*% Z) %*% t(Z) / pi
 
-    varDelta <- sum(b %*% t(b) * vDelta)
+    varDelta <- sum(t(b) %*% b * vDelta)
   }
 
   # Covariance between ^t_phi1 and ^t_phiDelta
   if (modeTotBiased == "HT" && modeTotRef == "HT" && calculTotal == "full")
   {
-    covarY1 <- pq1BarMat * covarY1 * invp1Mat
+    varY1 <- pq1BarMat * covarY1 * invp1Mat
 
     weightedY1 <- expY1 / p1
-    covarq1 <- weightedY1 %*% t(weightedY1 - expY2 / p1Bar) * piMat * covarq1
+    varq1 <- weightedY1 %*% t(weightedY1 - expY2 / p1Bar) * piMat * covarq1
 
-    deltas <- expY1 - expY2
+    varS <- expY1 %*% t(deltas) * covarPi
 
-    covarS <- expY1 %*% t(expY1 - expY2) * covarPi
+    v1Delta <- varY1 + varq1 + varS
 
-    v1Delta <- covarY1 + covarq1 + covarS
+    #b <- t(phi) %*% Z %*% solve(t(Z) %*% Z) %*% t(Z) / pi
 
-    b <- t(phi) %*% Z %*% solve(t(Z) %*% Z) %*% Z / pi
-
-    covar1Delta <- sum((phi / pi) %*% t(b) %*% v1Delta)
+    covarPhi1Delta <- sum((phi / pi) %*% b * v1Delta)
   }
 
+  # Covariance between ^t_phi2 and ^t_phiDelta
+  if (modeTotBiased == "HT" && modeTotRef == "HT" && calculTotal == "full")
+  {
+    varY2 <- piMat * pq1BarMat * pq2Mat * covarY2 * invp1Mat
+
+    varq2 <- expY2 %*% t(expY2) * piMat * pq1BarMat * covarq2
+
+    weightedY2 <- expY2 / p1Bar
+    varq1 <- weightedY2 %*% t(expY1 / p1 + weightedY2) * piMat * covarq1
+
+    varS <- weightedY2 %*% t(deltas) * covarPi
+
+    v1Delta <- covarY1 + covarq1 + varS
+
+    #b <- t(phi) %*% Z %*% solve(t(Z) %*% Z) %*% t(Z) / pi
+
+    covarPhi2Delta <- sum((phi / pi) %*% b * v1Delta)
+  }
+
+  varPhi1 +
+    varPhi2 +
+    varDelta +
+    2.0 * covarPhi12 -
+    2.0 * covarPhi1Delta -
+    2.0 * covarPhi2Delta
 
 }
 
