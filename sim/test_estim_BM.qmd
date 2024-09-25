@@ -232,6 +232,35 @@ simulationUncounf <-
                     envir = environment())
     }
     
+    if (fixZ)
+    {
+      if (YtelLaw == "gaussian")
+      {
+        expYtel <- Z %*% betaTel
+        covarYTel <- diag(sdTel^2L, N)
+      }
+      else if (YtelLaw == "exponential")
+      {
+        expYtel <- abs(Z %*% betaTel)
+        covarYTel <- diag(expYtel^2L)
+      }
+      
+      if (YintLaw == "gaussian")
+      {
+        expYint <- Z %*% betaTel
+        covarYint <- diag(sdTel^2L, N)
+      }
+      else if (YintLaw == "exponential")
+      {
+        expYint <- abs(Z %*% betaTel)
+        covarYint <- diag(expYtel^2L)
+      }
+      
+      clusterExport(cluster,
+                    varlist = c("expYtel", "covarYTel", 
+                                "expYint", "covarYint"))
+    }
+    
     clusterExport(cluster, "gen_choice_bimode")
       
     
@@ -247,9 +276,7 @@ simulationUncounf <-
       phi <- seq_len(N) / N
     
     else if (phi == "bestProb")
-    {
       phi <- ifelse(pInt >= 0.5, 1.0, 0.0)
-    }
     
     clusterExport(cluster, 
                   varlist = "phi", 
@@ -288,6 +315,7 @@ simulationUncounf <-
         selectedSample <- sample(seq_len(N), size = n, replace = FALSE)
         pi <- rep(n / N, N)
         piMat <- matrix(n * (n - 1L) / (N * (N - 1L)), nrow = N, ncol = N)
+        diag(piMat) <- n / N
         I <- rep(FALSE, N)
         I[selectedSample] <- TRUE
         rm(selectedSample)
@@ -315,14 +343,21 @@ simulationUncounf <-
        # Affecting values to Y_int and Y_tel
       if (YtelLaw == "gaussian")
       {
-        expYtel <- Z %*% betaTel
+        if (!fixZ)
+        {
+          expYtel <- Z %*% betaTel
+          covarYTel <- diag(sdTel^2L, N)
+        }
         Ytel <- expYtel + rnorm(n = N, sd = sdTel)
-        covarY2 <- diag(sdTel^2L, N)
+        
       }
       else if (YtelLaw == "exponential")
       {
-        expYtel <- abs(Z %*% betaTel)
-        covarY2 <- diag(expYtel^2L)
+        if (!fixZ)
+        {
+          expYtel <- abs(Z %*% betaTel)
+          covarYTel <- diag(expYtel^2L)
+        }
         Ytel <- rexp(n = N, rate = expYtel^-1L)
       }
       
@@ -333,12 +368,12 @@ simulationUncounf <-
       {
         expYint <- Z %*% betaInt
         Yint <- expYint + rnorm(n = N, sd = sdInt)
-        covarY1 <- diag(sdInt^2L, N)
+        covarYint <- diag(sdInt^2L, N)
       }
       else if (YintLaw == "exponential")
       {
         expYint <- abs(Z %*% betaInt)
-        covarY1 <- diag(expYint^2L)
+        covarYint <- diag(expYint^2L)
         Yint <- rexp(n = N, rate = expYint^-1L)
       }
         
@@ -366,15 +401,21 @@ simulationUncounf <-
         estim_MB_by_MCO(Z, phi = phi) %>%
         sum()
       
-      #browser()
+      ##browser()
+      
+      ##if (YintLaw == "gaussian" && YtelLaw == "exponential")
+      ##  browser()
+      
       expSD <- var_estim_tot_BM(modeTotBiased = "HT", modeTotRef = "HT",
                                 calculTotal = "full",
                                 expY1 = expYint, expY2 = expYtel,
-                                covarY1 = covarY1, 
-                                covarY2 = covarY2,
+                                covarY1 = covarYint, 
+                                covarY2 = covarYTel,
                                 piMat = piMat,
                                 pq1Mat = pq1Mat, pq2Mat = pq2Mat,
-                                phi = phi) %>% sqrt()
+                                phi = phi)
+      
+      expSD <- sqrt(expSD)
   
       partialResults[row,] <- 
         c(parameter = "HT", trueParameter = FALSE,
@@ -574,12 +615,16 @@ simulationUncounf <-
     
     ##browser()
     
-    results <- lapply(X = seq_len(K), FUN = monoSim)
-    #results <- parLapply(cluster, X = seq_len(K), fun = monoSim)
+    #results <- lapply(X = seq_len(K), FUN = monoSim)
+    results <- parLapply(cluster, X = seq_len(K), fun = monoSim)
     
     stopCluster(cluster)
     
+    ##parameters <- results[[1L]] %>% 
+    ##  select(parameter, probSelect, invMatrix, calculTotal)
+    
     results <- do.call("rbind", results)
+    
     
     # We calculate the real variance of the benchmark estimator
     if (fixZ)
@@ -597,17 +642,14 @@ simulationUncounf <-
       diag(pq2Mat) <- pTel
       
       sdTrueWeightsBenchmark <- var_HT_seq_phi2(expY2 = Z %*% betaTel, 
-                                     covarY2 = diag(sdTel^2L, N),
-                                     piMat = piMat,
-                                     pq1Mat = pq1Mat,
-                                     pq2Mat = pq2Mat) %>% sqrt()
+                                                covarY2 = diag(sdTel^2L, N),
+                                                piMat = piMat,
+                                                pq1Mat = pq1Mat,
+                                                pq2Mat = pq2Mat) %>% sqrt()
       
       results <- results %>% 
         mutate(sdTrueWeightsBenchmark = sdTrueWeightsBenchmark)
     }
-    
-    
-    
   }
 ```
 
@@ -639,7 +681,7 @@ Parameters:
 Evaluation of $K$ experiments
 
 ```{r}
-K <- 1L
+K <- 200L
 ```
 
 ```{r}
@@ -654,7 +696,9 @@ parameters <- expand_grid(constBias = c(TRUE, FALSE),
                           sampling = "SRS",#c("SRS", "STSRS"),
                           YtelLaw = c("gaussian", "exponential"),
                           YintLaw = c("gaussian", "exponential"),
-                          phi = c("eq", "var")) #c("eq", "var", "bestProb"))
+                          phi = c("eq", "var")) %>%  #c("eq", "var", "bestProb"))
+  filter(YintLaw == "gaussian", YtelLaw == "gaussian")
+
 
 
 for (i in seq_len(nrow(parameters)))
@@ -716,8 +760,8 @@ results <- results %>%
 ```{r}
 results %>% 
   filter(parameter == "HT", probSelect == "true", invMatrix == "true", calculTotal == "full") %>% 
-  group_by(sampling, YintLaw, YtelLaw, phi) %>% 
-  summarise(expSD = mean(expSD), estSD = sd(estTotalYtelEstMP))
+  group_by(sampling, YintLaw, YtelLaw, MBtype, phi) %>% 
+  summarise(expSD = mean(expSD), estSD = sd(estTotalYtelTrueMP))
 ```
 
 ## Ex : Gaussian constant measure bias

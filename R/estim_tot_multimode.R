@@ -326,7 +326,7 @@ covar_HT_seq_phi1_phi2 <- function(expY1, expY2,
 
   # mode 1 selection variability
   covarq1 <- pi2_to_covarInc(pq1Mat)
-  varq1 <- - prodexpYMat * piMat * covarq1 / (p1 %*% t(1.0 - p1))
+  varq1 <- -prodexpYMat * piMat * covarq1 / (p1 %*% t(1.0 - p1))
 
   # sampling variability
   covarPi <- pi2_to_covarInc(piMat)
@@ -377,7 +377,6 @@ var_estim_tot_BM <- function(modeTotBiased = "HT", modeTotRef = "HT",
 
   phiBar <- 1.0 - phi
 
-  ##browser()
   varPhi1 <- var_HT_seq_phi1(expY1, covarY1, piMat, pq1Mat, phi)
   varPhi2 <- var_HT_seq_phi2(expY2, covarY2, piMat, pq1Mat, pq2Mat, phi)
   covarPhi12 <- covar_HT_seq_phi1_phi2(expY1, expY2, piMat, pq1Mat, pq2Mat, phi)
