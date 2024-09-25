@@ -430,7 +430,7 @@ var_estim_tot_BM <- function(modeTotBiased = "HT", modeTotRef = "HT",
     weightedY2 <- expY2 / p1Bar
     varq1 <- weightedY2 %*% t(expY1 / p1 + weightedY2) * piMat * covarq1
 
-    varS <- expY2 %*% t(expDeltas) * covarPi
+    varS <- -expY2 %*% t(expDeltas) * covarPi
 
     v2Delta <- covarY1 + covarq1 + varS
 

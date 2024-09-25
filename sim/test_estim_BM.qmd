@@ -234,31 +234,46 @@ simulationUncounf <-
     
     if (fixZ)
     {
+      if (sampling == "SRS")
+      {
+        pi <- rep(n / N, N)
+        piMat <- matrix(n * (n - 1L) / (N * (N - 1L)), nrow = N, ncol = N)
+        diag(piMat) <- n / N
+        
+        clusterExport(cluster, 
+                      varlist = c("pi", "piMat"),
+                      envir = environment())
+      }
+    }
+    
+    if (fixZ)
+    {
       if (YtelLaw == "gaussian")
       {
-        expYtel <- Z %*% betaTel
+        expYtel <- as.vector(Z %*% betaTel)
         covarYTel <- diag(sdTel^2L, N)
       }
       else if (YtelLaw == "exponential")
       {
-        expYtel <- abs(Z %*% betaTel)
+        expYtel <- as.vector(abs(Z %*% betaTel))
         covarYTel <- diag(expYtel^2L)
       }
       
       if (YintLaw == "gaussian")
       {
-        expYint <- Z %*% betaTel
+        expYint <- as.vector(Z %*% betaTel)
         covarYint <- diag(sdTel^2L, N)
       }
       else if (YintLaw == "exponential")
       {
-        expYint <- abs(Z %*% betaTel)
+        expYint <- as.vector(abs(Z %*% betaTel))
         covarYint <- diag(expYtel^2L)
       }
       
       clusterExport(cluster,
                     varlist = c("expYtel", "covarYTel", 
-                                "expYint", "covarYint"))
+                                "expYint", "covarYint"),
+                    envir = environment())
     }
     
     clusterExport(cluster, "gen_choice_bimode")
@@ -291,8 +306,7 @@ simulationUncounf <-
                                    probSelect = character(nbExperiments),
                                    invMatrix = character(nbExperiments),
                                    calculTotal = character(nbExperiments),
-                                   estTotPhiBias = numeric(nbExperiments),
-                                   expSD = rep(NA_real_, nbExperiments))
+                                   estTotPhiBias = numeric(nbExperiments))
       
       row <- 1L
       
@@ -312,10 +326,16 @@ simulationUncounf <-
       
       if (sampling == "SRS")
       {
+        if (!fixZ)
+        {
+          pi <- rep(n / N, N)
+          piMat <- matrix(n * (n - 1L) / (N * (N - 1L)), nrow = N, ncol = N)
+          diag(piMat) <- n / N
+        }
+        
+        
         selectedSample <- sample(seq_len(N), size = n, replace = FALSE)
-        pi <- rep(n / N, N)
-        piMat <- matrix(n * (n - 1L) / (N * (N - 1L)), nrow = N, ncol = N)
-        diag(piMat) <- n / N
+        
         I <- rep(FALSE, N)
         I[selectedSample] <- TRUE
         rm(selectedSample)
@@ -345,7 +365,7 @@ simulationUncounf <-
       {
         if (!fixZ)
         {
-          expYtel <- Z %*% betaTel
+          expYtel <- as.vector(Z %*% betaTel)
           covarYTel <- diag(sdTel^2L, N)
         }
         Ytel <- expYtel + rnorm(n = N, sd = sdTel)
@@ -355,24 +375,24 @@ simulationUncounf <-
       {
         if (!fixZ)
         {
-          expYtel <- abs(Z %*% betaTel)
+          expYtel <- as.vector(abs(Z %*% betaTel))
           covarYTel <- diag(expYtel^2L)
         }
         Ytel <- rexp(n = N, rate = expYtel^-1L)
       }
       
-      expectedTotalYtel <- sum(expYtel)
+      expTotalYtel <- sum(expYtel)
       trueTotalYtel <- sum(Ytel)
       
       if (YintLaw == "gaussian")
       {
-        expYint <- Z %*% betaInt
+        expYint <- as.vector(Z %*% betaInt)
         Yint <- expYint + rnorm(n = N, sd = sdInt)
         covarYint <- diag(sdInt^2L, N)
       }
       else if (YintLaw == "exponential")
       {
-        expYint <- abs(Z %*% betaInt)
+        expYint <- as.vector(abs(Z %*% betaInt))
         covarYint <- diag(expYint^2L)
         Yint <- rexp(n = N, rate = expYint^-1L)
       }
@@ -382,7 +402,7 @@ simulationUncounf <-
     
       # Evaluating the measure bias total (random value)
       trueTotalBias <- crossprod(phi, deltas)
-      expectedPhiBias <- t(phi) %*% Z %*% (betaInt - betaTel)
+      expPhiBias <- t(phi) %*% Z %*% (betaInt - betaTel)
       
       # Creating the observed outcome vector
       Yobs <- rep(NA_real_, N)
@@ -406,21 +426,21 @@ simulationUncounf <-
       ##if (YintLaw == "gaussian" && YtelLaw == "exponential")
       ##  browser()
       
-      expSD <- var_estim_tot_BM(modeTotBiased = "HT", modeTotRef = "HT",
-                                calculTotal = "full",
-                                expY1 = expYint, expY2 = expYtel,
-                                covarY1 = covarYint, 
-                                covarY2 = covarYTel,
-                                piMat = piMat,
-                                pq1Mat = pq1Mat, pq2Mat = pq2Mat,
-                                phi = phi)
-      
-      expSD <- sqrt(expSD)
+      # expSD <- var_estim_tot_BM(modeTotBiased = "HT", modeTotRef = "HT",
+      #                           calculTotal = "full",
+      #                           expY1 = expYint, expY2 = expYtel,
+      #                           covarY1 = covarYint, 
+      #                           covarY2 = covarYTel,
+      #                           piMat = piMat,
+      #                           pq1Mat = pq1Mat, pq2Mat = pq2Mat,
+      #                           phi = phi)
+      # 
+      # expSD <- sqrt(expSD)
   
       partialResults[row,] <- 
         c(parameter = "HT", trueParameter = FALSE,
           probSelect = "true", invMatrix = "true",
-          calculTotal = "full", estTotPhiBias = resEval, expSD = expSD)
+          calculTotal = "full", estTotPhiBias = resEval)
       
       row <- row + 1L
   
@@ -435,8 +455,7 @@ simulationUncounf <-
   
       partialResults[row,] <- c(parameter = "HT", trueParameter = FALSE,
                 probSelect = "true", invMatrix = "sample", 
-                calculTotal = "full", estTotPhiBias = resEval,
-                expSD = NA_real_)
+                calculTotal = "full", estTotPhiBias = resEval)
       
       row <- row + 1L
       
@@ -460,8 +479,7 @@ simulationUncounf <-
         data.frame(parameter = "G-COMP", trueParameter = TRUE,
           probSelect = "null", 
           invMatrix = "null", calculTotal = c("full", "partial"),
-          estTotPhiBias = c(resEvalFull, resEvalHT),
-          expSD = NA_real_)
+          estTotPhiBias = c(resEvalFull, resEvalHT))
       
       row <- row + 2L
       
@@ -476,8 +494,7 @@ simulationUncounf <-
                    trueParameter = TRUE,
                    probSelect = "null", calculTotal = c("full", "partial"),
                    invMatrix = "null", 
-                   estTotPhiBias = c(resEvalFull, resEvalHT),
-                   expSD = NA_real_)
+                   estTotPhiBias = c(resEvalFull, resEvalHT))
       
       
       row <- row + 2L
@@ -505,8 +522,7 @@ simulationUncounf <-
         data.frame(parameter = "HT", trueParameter = TRUE,
                    probSelect = "estimation", invMatrix = "true", 
                    calculTotal = c("full", "partial"), 
-                   estTotPhiBias = c(resEvalFull, resEvalHT),
-                   expSD = NA_real_)
+                   estTotPhiBias = c(resEvalFull, resEvalHT))
       
       row <- row + 2L
       
@@ -533,8 +549,7 @@ simulationUncounf <-
         data.frame(parameter = "HT", trueParameter = TRUE,
                    probSelect = "estimation", invMatrix = "sample", 
                    calculTotal = c("full", "partial"), 
-                   estTotPhiBias = c(resEvalFull, resEvalHT),
-                   expSD = NA_real_)
+                   estTotPhiBias = c(resEvalFull, resEvalHT))
       
       row <- row + 2L
       
@@ -570,7 +585,6 @@ simulationUncounf <-
       ##  automatically converted as character
       partialResults$estTotPhiBias <- as.numeric(partialResults$estTotPhiBias)
       partialResults$trueParameter <- as.logical(partialResults$trueParameter)
-      partialResults$expSD <- as.numeric(partialResults$expSD)
       # Value estimated only on telephone answers, with estimated selection probabilities
       benchmark <- crossprod(estimWeights[maskTel], Ytel[maskTel])
       trueWeightsBenchmark <- crossprod(trueWeights[maskTel], Ytel[maskTel])
@@ -583,10 +597,10 @@ simulationUncounf <-
       
       partialResults <- partialResults %>% 
         add_column(.before = 1L, trueTotalYtel = trueTotalYtel) %>% 
-        add_column(.after = "trueTotalYtel", expectedTotalYtel = expectedTotalYtel) %>% 
+        add_column(.after = "trueTotalYtel", expTotalYtel = expTotalYtel) %>% 
         add_column(.before = "estTotPhiBias", truePhiBias = trueTotalBias) %>% 
-        add_column(.after = "truePhiBias", expectedPhiBias = expectedPhiBias) %>% 
-        add_column(.after = "expectedPhiBias", estTotalPhiYintTrueMP = estTotalPhiYintHTTrueMP) %>% 
+        add_column(.after = "truePhiBias", expPhiBias = expPhiBias) %>% 
+        add_column(.after = "expPhiBias", estTotalPhiYintTrueMP = estTotalPhiYintHTTrueMP) %>% 
         add_column(.after = "estTotalPhiYintTrueMP", estTotalPhiYintEstMP = estTotalPhiYintHTEstMP) %>% 
         add_column(.after = "estTotalPhiYintEstMP", estTotalPhiYtelTrueMP = estTotalPhiYtelHTTrueMP) %>% 
         add_column(.after = "estTotalPhiYtelTrueMP", estTotalPhiYtelEstMP = estTotalPhiYtelHTEstmMP) %>% 
@@ -615,32 +629,53 @@ simulationUncounf <-
     
     ##browser()
     
-    #results <- lapply(X = seq_len(K), FUN = monoSim)
-    results <- parLapply(cluster, X = seq_len(K), fun = monoSim)
+    results <- lapply(X = seq_len(K), FUN = monoSim)
+    #results <- parLapply(cluster, X = seq_len(K), fun = monoSim)
     
     stopCluster(cluster)
     
-    ##parameters <- results[[1L]] %>% 
-    ##  select(parameter, probSelect, invMatrix, calculTotal)
+    if (fixZ)
+    {
+      parameters <- results[[1L]] %>% 
+      select(parameter, probSelect, invMatrix, calculTotal) %>% 
+      add_column(expSD = NA_real_)
+    
+      for (l in seq_len(nrow(parameters)))
+      {
+        parameter <- parameters[l, ]
+        
+        if (parameter$parameter == "HT" && parameter$invMatrix == "true" && parameter$calculTotal == "full")
+        {
+          ##browser()
+          expSD <- var_estim_tot_BM(modeTotBiased = "HT", modeTotRef = "HT",
+                                    calculTotal = "full",
+                                    expY1 = expYint, expY2 = expYtel,
+                                    covarY1 = covarYint, 
+                                    covarY2 = covarYTel,
+                                    piMat = piMat,
+                                    pq1Mat = pq1Mat, pq2Mat = pq2Mat,
+                                    phi = phi)
+      
+          expSD <- sqrt(expSD)
+          
+          parameters[l, "expSD"] <- expSD
+        }
+      }
+    }
+    
     
     results <- do.call("rbind", results)
+    
+    if (fixZ)
+    {
+      suppressMessages(results <- results %>% inner_join(parameters, by = NULL))
+    }
+      
     
     
     # We calculate the real variance of the benchmark estimator
     if (fixZ)
     {
-      if (sampling == "SRS")
-      {
-        piMat <- matrix(n * (n - 1L) / (N * (N - 1L)), nrow = N, ncol = N)
-        diag(piMat) <- n / N
-      }
-      
-      pq1Mat <- pInt %*% t(pInt)
-      diag(pq1Mat) <- pInt
-      
-      pq2Mat <- pTel %*% t(pTel)
-      diag(pq2Mat) <- pTel
-      
       sdTrueWeightsBenchmark <- var_HT_seq_phi2(expY2 = Z %*% betaTel, 
                                                 covarY2 = diag(sdTel^2L, N),
                                                 piMat = piMat,
@@ -650,6 +685,8 @@ simulationUncounf <-
       results <- results %>% 
         mutate(sdTrueWeightsBenchmark = sdTrueWeightsBenchmark)
     }
+    
+    results
   }
 ```
 
@@ -665,10 +702,10 @@ Parameters:
 
 
 -   `trueTotalYtel`: $t_{tel} =\sum_{k \in U} y_{2k}$ for this iteration
--   `expectedTotalYtel` : $\mathbb{E}[t_{tel}]=\mathbb{E} [\sum_{k \in U} y_{2k}]$
+-   `expTotalYtel` : $\mathbb{E}[t_{tel}]=\mathbb{E} [\sum_{k \in U} y_{2k}]$
 -   `estTotPhiBias` : $t_{\phi \hat{\Delta y}}$
 -   `truePhiBias` : $t_{\phi\Delta y}=\sum_{k\in U} \phi_k \Delta y_k$
--   `expectedPhiBias` : $\mathbb{E}[t_{\phi\Delta y}]$
+-   `expPhiBias` : $\mathbb{E}[t_{\phi\Delta y}]$
 -   `estTotalPhiYintTrueMP` : $\hat{t}_{p,\phi y_1} = \sum_{k \in S_r}\frac{\phi_k y_{1k}}{\pi_k p_{1k}}$
 -   `estTotalPhiYintEstMP` : $\hat{t}_{\hat{p},\phi y_1} = \sum_{k \in S_r}\frac{\phi_k y_{1k}}{\pi_k \hat{p}_{1k}}$
 -   `estTotalPhiYintEstMP` : $\hat{t}_{\hat{p},\phi y_1} + \hat{t}_{\hat{p},\phi y_2} - t_{\phi \hat{\Delta y}}$
@@ -681,7 +718,7 @@ Parameters:
 Evaluation of $K$ experiments
 
 ```{r}
-K <- 200L
+K <- 10000L
 ```
 
 ```{r}
@@ -696,9 +733,7 @@ parameters <- expand_grid(constBias = c(TRUE, FALSE),
                           sampling = "SRS",#c("SRS", "STSRS"),
                           YtelLaw = c("gaussian", "exponential"),
                           YintLaw = c("gaussian", "exponential"),
-                          phi = c("eq", "var")) %>%  #c("eq", "var", "bestProb"))
-  filter(YintLaw == "gaussian", YtelLaw == "gaussian")
-
+                          phi = c("eq", "var"))  #c("eq", "var", "bestProb"))
 
 
 for (i in seq_len(nrow(parameters)))
@@ -781,8 +816,8 @@ results %>%
          probSelect != "true") %>% 
   select(-sampling, -MBtype) %>% 
   group_by(phi, parameter, probSelect, invMatrix, calculTotal) %>% 
-  summarise(reldiffMean = round(mean(diffPhiBias / abs(expectedPhiBias)), 4L), 
-            relRMSE = round(sqrt(mean(diffPhiBias^2L / expectedPhiBias^2L)), 4L)) %>% 
+  summarise(reldiffMean = round(mean(diffPhiBias / abs(expPhiBias)), 4L), 
+            relRMSE = round(sqrt(mean(diffPhiBias^2L / expPhiBias^2L)), 4L)) %>% 
   ungroup() %>% 
   arrange(relRMSE)
 ```
@@ -796,14 +831,14 @@ results %>%
          probSelect != "true") %>% 
   select(-sampling, -MBtype) %>% 
   group_by(phi, parameter, probSelect, invMatrix, calculTotal) %>% 
-  summarise(#reldiffTotalTrueMean = round(mean(diffTotalYtelTrueMP / abs(expectedTotalYtel)) , 4L), 
-            reldiffTotalEstMean = round(mean(diffTotalYtelEstMP / abs(expectedTotalYtel)), 4L),
-            relDiffBenchmarkMean = round(mean(diffBenchmark / abs(expectedTotalYtel)), 4L),
-            #relRMSETrue = round(sqrt(mean(diffTotalYtelTrueMP^2L / expectedTotalYtel^2L)), 4L),
-            relRMSEEst = round(sqrt(mean(diffTotalYtelEstMP^2L / expectedTotalYtel^2L)), 4L),
-            relExpSD = round(relExpSD = mean(expSD / expectedTotalYtel), 4L),
-            relRMSEBenchmark = round(sqrt(mean(diffBenchmark^2L / expectedTotalYtel^2L)), 4L),
-            relSdTrueWeightsBenchmark = mean(sdTrueWeightsBenchmark / abs(expectedTotalYtel))) %>% 
+  summarise(#reldiffTotalTrueMean = round(mean(diffTotalYtelTrueMP / abs(expTotalYtel)) , 4L), 
+            reldiffTotalEstMean = round(mean(diffTotalYtelEstMP / abs(expTotalYtel)), 4L),
+            relDiffBenchmarkMean = round(mean(diffBenchmark / abs(expTotalYtel)), 4L),
+            #relRMSETrue = round(sqrt(mean(diffTotalYtelTrueMP^2L / expTotalYtel^2L)), 4L),
+            relRMSEEst = round(sqrt(mean(diffTotalYtelEstMP^2L / expTotalYtel^2L)), 4L),
+            relExpSD = round(relExpSD = mean(expSD / expTotalYtel), 4L),
+            relRMSEBenchmark = round(sqrt(mean(diffBenchmark^2L / expTotalYtel^2L)), 4L),
+            relSdTrueWeightsBenchmark = mean(sdTrueWeightsBenchmark / abs(expTotalYtel))) %>% 
   ungroup() %>% 
   arrange(relRMSEEst)
 ```
@@ -819,13 +854,13 @@ temp <- results %>%
          probSelect != "true") %>% 
   select(-sampling, -MBtype) %>% 
   group_by(phi, parameter, probSelect, invMatrix, calculTotal) %>% 
-  summarise(#reldiffTotalTrueMean = round(mean(diffTotalYtelTrueMP / abs(expectedTotalYtel)) , 4L), 
-            reldiffTotalEstMean = round(mean(diffTotalYtelEstMP / abs(expectedTotalYtel)) , 4L),
-            relDiffBenchmarkMean = round(mean(diffBenchmark / abs(expectedTotalYtel)), 4L),
-            #relRMSETrue = round(sqrt(mean(diffTotalYtelTrueMP^2L / expectedTotalYtel^2L)), 4L),
-            relRMSEEst = round(sqrt(mean(diffTotalYtelEstMP^2L / expectedTotalYtel^2L)), 4L),
-            relRMSEBenchmark = round(sqrt(mean(diffBenchmark^2L / expectedTotalYtel^2L)), 4L),
-            relSdBenchmark = mean(sdBenchmark / abs(expectedTotalYtel))) %>% 
+  summarise(#reldiffTotalTrueMean = round(mean(diffTotalYtelTrueMP / abs(expTotalYtel)) , 4L), 
+            reldiffTotalEstMean = round(mean(diffTotalYtelEstMP / abs(expTotalYtel)) , 4L),
+            relDiffBenchmarkMean = round(mean(diffBenchmark / abs(expTotalYtel)), 4L),
+            #relRMSETrue = round(sqrt(mean(diffTotalYtelTrueMP^2L / expTotalYtel^2L)), 4L),
+            relRMSEEst = round(sqrt(mean(diffTotalYtelEstMP^2L / expTotalYtel^2L)), 4L),
+            relRMSEBenchmark = round(sqrt(mean(diffBenchmark^2L / expTotalYtel^2L)), 4L),
+            relSdBenchmark = mean(sdBenchmark / abs(expTotalYtel))) %>% 
   ungroup() %>% 
   arrange(relRMSEEst)
 
@@ -864,12 +899,12 @@ Optimal RMSE for each condition:
 temp <- results %>% 
   filter(trueParameter, MBtype == "variable") %>% 
   group_by(YintLaw, YtelLaw, phi, sampling, parameter, probSelect, invMatrix, calculTotal) %>% 
-  summarise(#reldiffTotalTrueMean = round(mean(diffTotalYtelTrueMP / abs(expectedTotalYtel)) , 4L), 
-            reldiffTotalEstMean = round(mean(diffTotalYtelEstMP / abs(expectedTotalYtel)) , 4L),
-            relDiffBenchmarkMean = round(mean(diffBenchmark / abs(expectedTotalYtel)), 4L),
-            #relRMSETrue = round(sqrt(mean(diffTotalYtelTrueMP^2L / expectedTotalYtel^2L)), 4L),
-            relRMSEEst = round(sqrt(mean(diffTotalYtelEstMP^2L / expectedTotalYtel^2L)), 4L),
-            relRMSEBenchmark = round(sqrt(mean(diffBenchmark^2L / expectedTotalYtel^2L)), 4L)) %>% 
+  summarise(#reldiffTotalTrueMean = round(mean(diffTotalYtelTrueMP / abs(expTotalYtel)) , 4L), 
+            reldiffTotalEstMean = round(mean(diffTotalYtelEstMP / abs(expTotalYtel)) , 4L),
+            relDiffBenchmarkMean = round(mean(diffBenchmark / abs(expTotalYtel)), 4L),
+            #relRMSETrue = round(sqrt(mean(diffTotalYtelTrueMP^2L / expTotalYtel^2L)), 4L),
+            relRMSEEst = round(sqrt(mean(diffTotalYtelEstMP^2L / expTotalYtel^2L)), 4L),
+            relRMSEBenchmark = round(sqrt(mean(diffBenchmark^2L / expTotalYtel^2L)), 4L)) %>% 
   ungroup() 
 
 temp %>% 
