@@ -134,10 +134,18 @@ estim_delta_MCO <- function(Z, Yobs,
 
     if (sampleMatrix)
     {
-      coefsRef <- solve(t(Zref) %*%
-                          diag(weights[maskRef])
-                        %*% Zref) %*%
-      totRef
+
+      ##
+      tryCatch(
+        {
+          coefsRef <- solve(t(Zref) %*%
+                              diag(weights[maskRef])
+                            %*% Zref) %*%
+            totRef
+        },
+        error = function(e) browser()
+      )
+
     }
     else
     {

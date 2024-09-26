@@ -7,6 +7,7 @@ library(tibble)
 library(parallel)
 library(tictoc)
 library(ggplot2)
+library(Matrix)
 ```
 
 ```{r}
@@ -22,7 +23,7 @@ set.seed(145L)
 ```
 
 ```{r}
-N <- 1000L
+N <- 200L
 phi <- rep(0.5, N)
 ```
 
@@ -164,20 +165,18 @@ simulationUncounf <-
            sdInt = 1.0, sdTel = 1.0, 
            phi = rep(0.5, N), K = 1000L,
            Z = NULL,
-           n = ceiling(N / 4L))
+           n = ceiling(N / 4L),
+           seed = 123L)
   {
     
     nbCores <- detectCores() - 1L
     cluster <- makeCluster(nbCores)
     
     # Making clusters random-independants
-    RNGkind("L'Ecuyer-CMRG")
-    
-    seed <- .Random.seed
-    
     clusterSetRNGStream(cl = cluster, iseed = seed)
     
     clusterEvalQ(cluster, library(dplyr))
+    clusterEvalQ(cluster, library(Matrix))
     clusterEvalQ(cluster, library(tibble))
     clusterEvalQ(cluster, library(MMsampling))
     
@@ -196,6 +195,7 @@ simulationUncounf <-
       clusterExport(cluster, 
                     varlist = "Z",
                     envir = environment())
+      
     }
     else if (fixZ)
     {
@@ -314,6 +314,7 @@ simulationUncounf <-
       {
         Z <- mvtnorm::rmvnorm(N, mean = meanZ, sigma = covarZ, checkSymmetry = TRUE)
         
+        
         pInt <- expit(Z %*% alphaInt)
         pq1Mat <- pInt %*% pInt
         diag(covq1Mat) <- pInt
@@ -322,6 +323,8 @@ simulationUncounf <-
         pq2Mat <- pTel %*% pTel
         diag(covq2Mat) <- pTel
       }
+      
+      p <- ncol(Z)
         
       
       if (sampling == "SRS")
@@ -342,12 +345,26 @@ simulationUncounf <-
       }
       
       # Mode selection simulation
-      modes <- gen_choice_bimode(I, pInt, pTel)
-      trueProbsSelect <- rep(NA_real_, N)
-      maskInt <- modes == "int"
-      maskTel <- modes == "tel"
-      trueProbsSelect[maskInt] <- pInt[maskInt]
-      trueProbsSelect[maskTel] <- ((1.0 - pInt) * pTel)[maskTel]
+      modeChoiceOK <- FALSE
+      
+      while (!modeChoiceOK)
+      {
+        # modeChoiceOK <- TRUE
+        
+        modes <- gen_choice_bimode(I, pInt, pTel)
+        trueProbsSelect <- rep(NA_real_, N)
+        maskInt <- modes == "int"
+        maskTel <- modes == "tel"
+        trueProbsSelect[maskInt] <- pInt[maskInt]
+        trueProbsSelect[maskTel] <- ((1.0 - pInt) * pTel)[maskTel]
+        
+        if (rankMatrix(Z[maskInt, , drop = FALSE]) == p && rankMatrix(Z[maskTel, , drop = FALSE]) == p)
+          modeChoiceOK <- TRUE
+        else
+          warning("Singular Zint / Ztel")
+        
+      }
+      
       
       trueWeights <- (pi * trueProbsSelect)^-1L
     
@@ -629,11 +646,11 @@ simulationUncounf <-
     
     ##browser()
     
-    results <- lapply(X = seq_len(K), FUN = monoSim)
-    #results <- parLapply(cluster, X = seq_len(K), fun = monoSim)
+    #results <- lapply(X = seq_len(K), FUN = monoSim)
+    results <- parLapply(cluster, X = seq_len(K), fun = monoSim)
     
     stopCluster(cluster)
-    
+
     if (fixZ)
     {
       parameters <- results[[1L]] %>% 
@@ -644,7 +661,9 @@ simulationUncounf <-
       {
         parameter <- parameters[l, ]
         
-        if (parameter$parameter == "HT" && parameter$invMatrix == "true" && parameter$calculTotal == "full")
+        if (parameter$parameter == "HT" && 
+            parameter$invMatrix == "true" && 
+            parameter$calculTotal == "full")
         {
           ##browser()
           expSD <- var_estim_tot_BM(modeTotBiased = "HT", modeTotRef = "HT",
@@ -724,8 +743,6 @@ K <- 10000L
 ```{r}
 #| echo: false
 
-set.seed(200L)
-
 results <- NULL
 nbResults <- 0L
 
@@ -733,8 +750,8 @@ parameters <- expand_grid(constBias = c(TRUE, FALSE),
                           sampling = "SRS",#c("SRS", "STSRS"),
                           YtelLaw = c("gaussian", "exponential"),
                           YintLaw = c("gaussian", "exponential"),
-                          phi = c("eq", "var"))  #c("eq", "var", "bestProb"))
-
+                          phi = c("eq", "var")) %>%  #c("eq", "var", "bestProb"))
+  filter(YintLaw == "exponential")
 
 for (i in seq_len(nrow(parameters)))
 {
@@ -759,7 +776,8 @@ for (i in seq_len(nrow(parameters)))
                                   betaTel = betaTel,
                                   YtelLaw = expParams$YtelLaw,
                                   YintLaw = expParams$YintLaw,
-                                  phi = expParams$phi)
+                                  phi = expParams$phi,
+                                  seed = 200L)
 
   if (i == 1L)
     expNbResults <- nrow(expResults)
@@ -795,7 +813,7 @@ results <- results %>%
 ```{r}
 results %>% 
   filter(parameter == "HT", probSelect == "true", invMatrix == "true", calculTotal == "full") %>% 
-  group_by(sampling, YintLaw, YtelLaw, MBtype, phi) %>% 
+  group_by(sampling, YintLaw, YtelLaw, phi, MBtype) %>% 
   summarise(expSD = mean(expSD), estSD = sd(estTotalYtelTrueMP))
 ```
 
