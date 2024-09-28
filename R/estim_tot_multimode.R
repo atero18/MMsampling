@@ -343,7 +343,8 @@ var_estim_tot_BM <- function(modeTotBiased = "HT", modeTotRef = "HT",
                              covarY1, covarY2,
                              piMat,
                              pq1Mat, pq2Mat,
-                             phi = numeric(length(expY2)))
+                             phi = numeric(length(expY2)),
+                             subResults = FALSE)
 {
   N <- length(expY2)
 
@@ -397,7 +398,7 @@ var_estim_tot_BM <- function(modeTotBiased = "HT", modeTotRef = "HT",
 
     b <- t(t(phi) %*% Z %*% solve(t(Z) %*% Z) %*% t(Z) / pi)
 
-    varDelta <- sum(b %*% t(b) * vDelta)
+    varPhiDelta <- sum(b %*% t(b) * vDelta)
   }
 
   # Covariance between ^t_phi1 and ^t_phiDelta
@@ -436,12 +437,28 @@ var_estim_tot_BM <- function(modeTotBiased = "HT", modeTotRef = "HT",
     covarPhi2Delta <- -sum((phiBar / pi) %*% t(b) * v2Delta)
   }
 
-  varPhi1 +
+  varEstim <- varPhi1 +
     varPhi2 +
-    varDelta +
+    varPhiDelta +
     2.0 * covarPhi12 -
     2.0 * covarPhi1Delta -
     2.0 * covarPhi2Delta
+
+  if (!subResults)
+  {
+    return(varEstim)
+  }
+  else
+  {
+    c(expVarEstim = varEstim,
+      expVarPhi1 = varPhi1,
+      expVarPhi2 = varPhi2,
+      expCovarPhi12 = covarPhi12,
+      expVarPhiDelta = varPhiDelta,
+      expCovarPhi1Delta = covarPhi1Delta,
+      expCovarPhi2Delta = covarPhi2Delta)
+  }
+
 }
 
 

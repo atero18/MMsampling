@@ -23,7 +23,7 @@ set.seed(145L)
 ```
 
 ```{r}
-N <- 200L
+N <- 1000L
 phi <- rep(0.5, N)
 ```
 
@@ -261,13 +261,13 @@ simulationUncounf <-
       
       if (YintLaw == "gaussian")
       {
-        expYint <- as.vector(Z %*% betaTel)
-        covarYint <- diag(sdTel^2L, N)
+        expYint <- as.vector(Z %*% betaInt)
+        covarYint <- diag(sdInt^2L, N)
       }
       else if (YintLaw == "exponential")
       {
-        expYint <- as.vector(abs(Z %*% betaTel))
-        covarYint <- diag(expYtel^2L)
+        expYint <- as.vector(abs(Z %*% betaInt))
+        covarYint <- diag(expYint^2L)
       }
       
       clusterExport(cluster,
@@ -317,11 +317,11 @@ simulationUncounf <-
         
         pInt <- expit(Z %*% alphaInt)
         pq1Mat <- pInt %*% pInt
-        diag(covq1Mat) <- pInt
+        diag(pq1Mat) <- pInt
         
         pTel <- expit(Z %*% alphaTel)
         pq2Mat <- pTel %*% pTel
-        diag(covq2Mat) <- pTel
+        diag(pq1Mat) <- pTel
       }
       
       p <- ncol(Z)
@@ -339,7 +339,7 @@ simulationUncounf <-
         
         selectedSample <- sample(seq_len(N), size = n, replace = FALSE)
         
-        I <- rep(FALSE, N)
+        I <- logical(N)
         I[selectedSample] <- TRUE
         rm(selectedSample)
       }
@@ -403,14 +403,21 @@ simulationUncounf <-
       
       if (YintLaw == "gaussian")
       {
-        expYint <- as.vector(Z %*% betaInt)
+        if (!fixZ)
+        {
+          expYint <- as.vector(Z %*% betaInt)
+          covarYint <- diag(sdInt^2L, N)
+        }
         Yint <- expYint + rnorm(n = N, sd = sdInt)
-        covarYint <- diag(sdInt^2L, N)
+        
       }
       else if (YintLaw == "exponential")
       {
-        expYint <- as.vector(abs(Z %*% betaInt))
-        covarYint <- diag(expYint^2L)
+        if (!fixZ)
+        {
+          expYint <- as.vector(abs(Z %*% betaInt))
+          covarYint <- diag(expYint^2L)
+        }
         Yint <- rexp(n = N, rate = expYint^-1L)
       }
         
@@ -419,7 +426,7 @@ simulationUncounf <-
     
       # Evaluating the measure bias total (random value)
       trueTotalBias <- crossprod(phi, deltas)
-      expPhiBias <- t(phi) %*% Z %*% (betaInt - betaTel)
+      expPhiBias <- crossprod(phi, expYint - expYtel)
       
       # Creating the observed outcome vector
       Yobs <- rep(NA_real_, N)
@@ -570,33 +577,36 @@ simulationUncounf <-
       
       row <- row + 2L
       
-      estTotalPhiYintHTTrueMP <- 
+      # Estimations of t_phi1 and t_phi2
+      # - With true weights
+      estTotPhiYintHTTrueMP <- 
         phi[maskInt] * 
         trueWeights[maskInt] * 
         Yint[maskInt]
       
-      estTotalPhiYintHTTrueMP <- sum(estTotalPhiYintHTTrueMP)
+      estTotPhiYintHTTrueMP <- sum(estTotPhiYintHTTrueMP)
       
-      estTotalPhiYtelHTTrueMP <- 
+      estTotPhiYtelHTTrueMP <- 
         (1.0 - phi[maskTel]) * 
         trueWeights[maskTel] * 
         Ytel[maskTel]
       
-      estTotalPhiYtelHTTrueMP <- sum(estTotalPhiYtelHTTrueMP)
+      # - With estimated weights
+      estTotPhiYtelHTTrueMP <- sum(estTotPhiYtelHTTrueMP)
     
-      estTotalPhiYintHTEstMP <-
+      estTotPhiYintHTEstMP <-
         phi[maskInt] *
         estimWeights[maskInt] *
         Yint[maskInt]
     
-      estTotalPhiYintHTEstMP <- sum(estTotalPhiYintHTEstMP)
+      estTotPhiYintHTEstMP <- sum(estTotPhiYintHTEstMP)
     
-      estTotalPhiYtelHTEstmMP <-
+      estTotPhiYtelHTEstmMP <-
         (1.0 - phi[maskTel]) *
         estimWeights[maskTel] *
         Ytel[maskTel]
     
-      estTotalPhiYtelHTEstmMP <- sum(estTotalPhiYtelHTEstmMP)
+      estTotPhiYtelHTEstmMP <- sum(estTotPhiYtelHTEstmMP)
       
       ## Don't know why but some columns are
       ##  automatically converted as character
@@ -607,36 +617,26 @@ simulationUncounf <-
       trueWeightsBenchmark <- crossprod(trueWeights[maskTel], Ytel[maskTel])
 
       
-      if (any((betaInt - betaTel)[-1L] != 0.0))
-        MBtype <- "variable"
-      else
-        MBtype <- "constant"
-      
       partialResults <- partialResults %>% 
-        add_column(.before = 1L, trueTotalYtel = trueTotalYtel) %>% 
+        add_column(.before = 1L, expn = sum(pi)) %>% 
+        add_column(.after = "expn", n = sum(I)) %>% 
+        add_column(.after = "n", trueTotalYtel = trueTotalYtel) %>% 
         add_column(.after = "trueTotalYtel", expTotalYtel = expTotalYtel) %>% 
         add_column(.before = "estTotPhiBias", truePhiBias = trueTotalBias) %>% 
         add_column(.after = "truePhiBias", expPhiBias = expPhiBias) %>% 
-        add_column(.after = "expPhiBias", estTotalPhiYintTrueMP = estTotalPhiYintHTTrueMP) %>% 
-        add_column(.after = "estTotalPhiYintTrueMP", estTotalPhiYintEstMP = estTotalPhiYintHTEstMP) %>% 
-        add_column(.after = "estTotalPhiYintEstMP", estTotalPhiYtelTrueMP = estTotalPhiYtelHTTrueMP) %>% 
-        add_column(.after = "estTotalPhiYtelTrueMP", estTotalPhiYtelEstMP = estTotalPhiYtelHTEstmMP) %>% 
-        mutate(.after = "estTotalPhiYtelEstMP",
-               estTotalYtelTrueMP = estTotalPhiYintTrueMP + estTotalPhiYtelTrueMP - estTotPhiBias) %>% 
-        mutate(.after = "estTotalYtelTrueMP", 
-               estTotalYtelEstMP = estTotalPhiYintEstMP + 
-                 estTotalPhiYtelEstMP -
+        add_column(.after = "expPhiBias", estTotPhiYintTrueMP = estTotPhiYintHTTrueMP) %>% 
+        add_column(.after = "estTotPhiYintTrueMP", estTotPhiYintEstMP = estTotPhiYintHTEstMP) %>% 
+        add_column(.after = "estTotPhiYintEstMP", estTotPhiYtelTrueMP = estTotPhiYtelHTTrueMP) %>% 
+        add_column(.after = "estTotPhiYtelTrueMP", estTotPhiYtelEstMP = estTotPhiYtelHTEstmMP) %>% 
+        mutate(.after = "estTotPhiYtelEstMP",
+               estTotYtelTrueMP = estTotPhiYintTrueMP + estTotPhiYtelTrueMP - estTotPhiBias) %>% 
+        mutate(.after = "estTotYtelTrueMP", 
+               estTotYtelEstMP = estTotPhiYintEstMP + 
+                 estTotPhiYtelEstMP -
                  estTotPhiBias) %>% 
-        add_column(.after = "estTotalYtelEstMP", benchmark = benchmark) %>% 
-        add_column(.after = "benchmark", trueWeightsBenchmark = trueWeightsBenchmark) %>% 
-        add_column(.after = "trueWeightsBenchmark", sampling = sampling) %>% 
-        add_column(.after = "sampling", YtelLaw = factor(YtelLaw)) %>% 
-        add_column(.after = "YtelLaw", YintLaw = factor(YintLaw)) %>% 
-        add_column(.after = "YintLaw",
-                   MBtype = factor(MBtype)) %>% 
-        add_column(.after = "MBtype", phi = factor(phiType))
-      
-      partialResults
+        add_column(.after = "estTotYtelEstMP", benchmark = benchmark) %>% 
+        add_column(.after = "benchmark", TWBenchmark = trueWeightsBenchmark)
+        
       #results <- rbind(results, partialResults)
     }
     
@@ -650,12 +650,17 @@ simulationUncounf <-
     results <- parLapply(cluster, X = seq_len(K), fun = monoSim)
     
     stopCluster(cluster)
+      
 
     if (fixZ)
     {
       parameters <- results[[1L]] %>% 
       select(parameter, probSelect, invMatrix, calculTotal) %>% 
       add_column(expSD = NA_real_)
+      
+      parameters[, c("expVarPhi1", "expVarPhi2", 
+                     "expCovarPhi12", "expVarPhiDelta", 
+                     "expCovarPhi1Delta", "covarPhi2Delta")] <- NA_real_
     
       for (l in seq_len(nrow(parameters)))
       {
@@ -665,25 +670,39 @@ simulationUncounf <-
             parameter$invMatrix == "true" && 
             parameter$calculTotal == "full")
         {
-          ##browser()
-          expSD <- var_estim_tot_BM(modeTotBiased = "HT", modeTotRef = "HT",
-                                    calculTotal = "full",
-                                    expY1 = expYint, expY2 = expYtel,
-                                    covarY1 = covarYint, 
-                                    covarY2 = covarYTel,
-                                    piMat = piMat,
-                                    pq1Mat = pq1Mat, pq2Mat = pq2Mat,
-                                    phi = phi)
-      
-          expSD <- sqrt(expSD)
+          expVars <- var_estim_tot_BM(modeTotBiased = "HT", modeTotRef = "HT",
+                                      calculTotal = "full",
+                                      expY1 = expYint, expY2 = expYtel,
+                                      covarY1 = covarYint, 
+                                      covarY2 = covarYTel,
+                                      piMat = piMat,
+                                      pq1Mat = pq1Mat, pq2Mat = pq2Mat,
+                                      phi = phi,
+                                      subResults = TRUE)
           
-          parameters[l, "expSD"] <- expSD
+          parameters[l, names(expVars)] <- expVars
         }
       }
     }
     
     
     results <- do.call("rbind", results)
+    
+    if (any((betaInt - betaTel)[-1L] != 0.0))
+        MBtype <- "variable"
+      else
+        MBtype <- "constant"
+    
+    results <- results %>% 
+      add_column(.before = "expn", N = N) %>% 
+      add_column(.after = "TWBenchmark", sampling = sampling) %>% 
+      add_column(.after = "sampling", YtelLaw = factor(YtelLaw)) %>% 
+      add_column(.after = "YtelLaw", sdTel = sdTel) %>% 
+      add_column(.after = "YtelLaw", YintLaw = factor(YintLaw)) %>% 
+      add_column(.after = "YintLaw", sdInt = sdInt) %>% 
+      add_column(.after = "YintLaw",
+                 MBtype = factor(MBtype)) %>% 
+      add_column(.after = "MBtype", phi = factor(phiType))
     
     if (fixZ)
     {
@@ -695,14 +714,14 @@ simulationUncounf <-
     # We calculate the real variance of the benchmark estimator
     if (fixZ)
     {
-      sdTrueWeightsBenchmark <- var_HT_seq_phi2(expY2 = Z %*% betaTel, 
-                                                covarY2 = diag(sdTel^2L, N),
-                                                piMat = piMat,
-                                                pq1Mat = pq1Mat,
-                                                pq2Mat = pq2Mat) %>% sqrt()
+      sdTWBenchmark <- var_HT_seq_phi2(expY2 = Z %*% betaTel, 
+                                       covarY2 = diag(sdTel^2L, N),
+                                       piMat = piMat,
+                                       pq1Mat = pq1Mat,
+                                       pq2Mat = pq2Mat) %>% sqrt()
       
       results <- results %>% 
-        mutate(sdTrueWeightsBenchmark = sdTrueWeightsBenchmark)
+        mutate(sdTWBenchmark = sdTWBenchmark)
     }
     
     results
@@ -725,9 +744,9 @@ Parameters:
 -   `estTotPhiBias` : $t_{\phi \hat{\Delta y}}$
 -   `truePhiBias` : $t_{\phi\Delta y}=\sum_{k\in U} \phi_k \Delta y_k$
 -   `expPhiBias` : $\mathbb{E}[t_{\phi\Delta y}]$
--   `estTotalPhiYintTrueMP` : $\hat{t}_{p,\phi y_1} = \sum_{k \in S_r}\frac{\phi_k y_{1k}}{\pi_k p_{1k}}$
--   `estTotalPhiYintEstMP` : $\hat{t}_{\hat{p},\phi y_1} = \sum_{k \in S_r}\frac{\phi_k y_{1k}}{\pi_k \hat{p}_{1k}}$
--   `estTotalPhiYintEstMP` : $\hat{t}_{\hat{p},\phi y_1} + \hat{t}_{\hat{p},\phi y_2} - t_{\phi \hat{\Delta y}}$
+-   `estTotPhiYintTrueMP` : $\hat{t}_{p,\phi y_1} = \sum_{k \in S_r}\frac{\phi_k y_{1k}}{\pi_k p_{1k}}$
+-   `estTotPhiYintEstMP` : $\hat{t}_{\hat{p},\phi y_1} = \sum_{k \in S_r}\frac{\phi_k y_{1k}}{\pi_k \hat{p}_{1k}}$
+-   `estTotPhiYintEstMP` : $\hat{t}_{\hat{p},\phi y_1} + \hat{t}_{\hat{p},\phi y_2} - t_{\phi \hat{\Delta y}}$
 -   `benchmark` : $\sum_{k \in S_{mr}} \frac{y_{2k}}{\pi_k(1-p_{1k})p_{2k}}$
 -   `calculTotal` : `full` if we calculate $\hat{t}_{\phi \hat{\Delta y}}$ (imputation on the entire population), `partial` if it is $t_{\phi \hat{\Delta y}}$ (on $S_{r\bullet}$)
 
@@ -737,7 +756,7 @@ Parameters:
 Evaluation of $K$ experiments
 
 ```{r}
-K <- 10000L
+K <- 1000L
 ```
 
 ```{r}
@@ -750,22 +769,46 @@ parameters <- expand_grid(constBias = c(TRUE, FALSE),
                           sampling = "SRS",#c("SRS", "STSRS"),
                           YtelLaw = c("gaussian", "exponential"),
                           YintLaw = c("gaussian", "exponential"),
-                          phi = c("eq", "var")) %>%  #c("eq", "var", "bestProb"))
-  filter(YintLaw == "exponential")
+                          signAge = c("plus", "minus"),
+                          phi = c("eq", "var"),
+                          sdY = c(1.0, 2.0, 5.0)) %>% 
+  mutate(sdY = ifelse(YtelLaw == "gaussian" | YintLaw == "gaussian", sdY, NA_real_)) %>% 
+  mutate(signAge = ifelse(constBias, "none", signAge)) %>% # If the bias is constant the sign of Z
+  distinct()# is of no interest
 
+
+betaTelMinus <- betaTel
+betaIntMinus <- betaInt
+
+betaTelPlus <- betaTel
+betaTelPlus[-1L] <- -betaTel[-1L]
+betaIntPlus <- betaInt
+betaIntPlus[-1L] <- -betaInt[-1L]
+
+
+## 
+parameters <- parameters[1:5L,]
 for (i in seq_len(nrow(parameters)))
 {
   tic()
   expParams <- parameters[i, ]
   #print(expParams)
 
-  if (expParams$constBias)
+  if (expParams$signAge == "none")
   {
-    betaIntTemp <- betaTel
+    betaTelTemp <- betaIntTemp <- betaTel
     betaIntTemp[1L] <- betaInt[1L]
   }
-  else
-    betaIntTemp <- betaInt
+  else if (expParams$signAge == "plus")
+  {
+    betaIntTemp <- betaIntPlus
+    betaTelTemp <- betaTelPlus
+  }
+  else if (expParams$signAge == "minus")
+  {
+    betaIntTemp <- betaIntMinus
+    betaTelTemp <- betaTelMinus
+  }
   
   expResults <- simulationUncounf(N, K = K,
                                   Z = Z, fixZ = TRUE,
@@ -773,16 +816,23 @@ for (i in seq_len(nrow(parameters)))
                                   alphaInt = alphaInt,
                                   alphaTel = alphaTel,
                                   betaInt = betaIntTemp,
-                                  betaTel = betaTel,
+                                  betaTel = betaTelTemp,
                                   YtelLaw = expParams$YtelLaw,
                                   YintLaw = expParams$YintLaw,
                                   phi = expParams$phi,
+                                  sdInt = expParams$sdY,
+                                  sdTel = expParams$sdY,
                                   seed = 200L)
+  
+  expResults <- expResults %>% 
+    rename(sd = sdInt) %>% 
+    select(-sdTel) %>% 
+    mutate(signAge = expParams$signAge)
 
   if (i == 1L)
     expNbResults <- nrow(expResults)
   
-  nbresults <- nbResults + expNbResults
+  nbResults <- nbResults + expNbResults
   expResults <- expResults %>% 
     add_column(.before = 1L, 
                experiment = factor(rep(nbResults + seq_len(K), 
@@ -792,8 +842,14 @@ for (i in seq_len(nrow(parameters)))
   
   t <- toc(quiet = TRUE)
   
-  glue("{unname(t$toc - t$tic)} ({i} / {nrow(parameters)})") %>% print()
+  glue("{round(unname(t$toc - t$tic))}s ({i} / {nrow(parameters)})") %>% print()
 }
+
+rm(i, 
+   betaIntMinus, betaTelMinus, 
+   betaIntPlus, betaTelPlus, 
+   betaIntTemp, betaTelTemp, 
+   nbResults, t)
 
 
 results$parameter <- as.factor(results$parameter)
@@ -803,27 +859,54 @@ results$calculTotal <- as.factor(results$calculTotal)
 
 results <- results %>% 
   mutate(.after = "estTotPhiBias", diffPhiBias = estTotPhiBias - truePhiBias) %>% 
-  mutate(.after = "estTotalPhiYtelEstMP", 
-         diffTotalYtelEstMP = estTotalYtelEstMP - trueTotalYtel) %>% 
-  mutate(.after = "estTotalPhiYtelTrueMP",
-         diffTotalYtelTrueMP = estTotalYtelTrueMP - trueTotalYtel) %>% 
+  mutate(.after = "estTotPhiYtelEstMP", 
+         diffTotalYtelEstMP = estTotYtelEstMP - trueTotalYtel) %>% 
+  mutate(.after = "estTotPhiYtelTrueMP",
+         diffTotalYtelTrueMP = estTotYtelTrueMP - trueTotalYtel) %>% 
   mutate(.after = diffTotalYtelTrueMP, diffBenchmark = benchmark - trueTotalYtel)
 ```
 
 ```{r}
 results %>% 
   filter(parameter == "HT", probSelect == "true", invMatrix == "true", calculTotal == "full") %>% 
-  group_by(sampling, YintLaw, YtelLaw, phi, MBtype) %>% 
-  summarise(expSD = mean(expSD), estSD = sd(estTotalYtelTrueMP))
+  group_by(sampling, YintLaw, YtelLaw, sd, signAge, MBtype, phi) %>% 
+  summarise(K = n(),
+            estVarEstim = var(estTotYtelTrueMP),
+            expVarEstim = mean(expVarEstim),
+            estVarPhi1 = var(estTotPhiYintTrueMP),
+            expVarPhi1 = mean(expVarPhi1),
+            estVarPhi2 = var(estTotPhiYtelTrueMP),
+            expVarPhi2 = mean(expVarPhi2),
+            estCovarphi12 = cov(estTotPhiYintTrueMP, estTotYtelTrueMP),
+            expCovarPhi12 = mean(expCovarPhi12),
+            estCovarphi1Delta = cov(estTotPhiYintTrueMP, estTotPhiBias),
+            expCovarPhi1Delta = mean(expCovarPhi1Delta),
+            estVarPhiDelta = var(estTotPhiBias),
+            expVarPhiDelta = mean(expVarPhiDelta),
+            estCovarphi2Delta = cov(estTotPhiYtelTrueMP, estTotPhiBias),
+            expCovarPhi2Delta = mean(expCovarPhi2Delta))
 ```
+
+```{r}
+temp <- results %>% 
+  filter(parameter == "HT", probSelect == "true", invMatrix == "true", calculTotal == "full")
+
+varsPhi1 <- numeric(nrow(temp))
+
+for (i in 2:nrow(temp))
+  varsPhi1[i] <- var(temp[1:i, "estTotPhiYintTrueMP"])
+
+plot(varsPhi1[-1])
+```
+
 
 ## Ex : Gaussian constant measure bias
 
-Results of each parameter for the case of SRS with **constant** measure bias and Gaussian laws
+Results of each parameter for the case of SRS with **constant** measure bias and Gaussian laws (with $\sigma =1$)
 
 ### Measure bias total
 
-$$\text{reldiffMean} = \frac{1}{K}\sum_{k=1}^K \frac{\hat{t}_{\phi\Delta y,k}-t_{\phi\Delta y,k}}{\mathbb{E}[t_{\phi\Delta y}]}$$
+$$\text{relError} = \frac{1}{K}\sum_{k=1}^K \frac{\hat{t}_{\phi\Delta y,k}-t_{\phi\Delta y,k}}{\mathbb{E}[t_{\phi\Delta y}]}$$
 
 $$\text{relRMSE} = \frac{\sqrt{\frac{1}{K}\sum_{k=1}^K (\hat{t}_{\phi\Delta y,k}-t_{\phi\Delta y,k})^2}}{|\mathbb{E}[t_{\phi\Delta y}]|}$$
 
@@ -831,10 +914,11 @@ $$\text{relRMSE} = \frac{\sqrt{\frac{1}{K}\sum_{k=1}^K (\hat{t}_{\phi\Delta y,k}
 results %>% 
   filter(YtelLaw == "gaussian", YintLaw == "gaussian", 
          sampling == "SRS", MBtype == "constant",
-         probSelect != "true") %>% 
+         probSelect != "true", sd == 1.0) %>% 
   select(-sampling, -MBtype) %>% 
-  group_by(phi, parameter, probSelect, invMatrix, calculTotal) %>% 
-  summarise(reldiffMean = round(mean(diffPhiBias / abs(expPhiBias)), 4L), 
+  group_by(K = n(),
+           phi, parameter, probSelect, invMatrix, calculTotal) %>% 
+  summarise(relError = round(mean(diffPhiBias / abs(expPhiBias)), 4L), 
             relRMSE = round(sqrt(mean(diffPhiBias^2L / expPhiBias^2L)), 4L)) %>% 
   ungroup() %>% 
   arrange(relRMSE)
@@ -846,50 +930,64 @@ results %>%
 results %>% 
   filter(YtelLaw == "gaussian", YintLaw == "gaussian", 
          sampling == "SRS", MBtype == "constant",
-         probSelect != "true") %>% 
+         probSelect != "true", sd == 1.0) %>% 
   select(-sampling, -MBtype) %>% 
   group_by(phi, parameter, probSelect, invMatrix, calculTotal) %>% 
-  summarise(#reldiffTotalTrueMean = round(mean(diffTotalYtelTrueMP / abs(expTotalYtel)) , 4L), 
-            reldiffTotalEstMean = round(mean(diffTotalYtelEstMP / abs(expTotalYtel)), 4L),
+  summarise(K = n(),
+            #reldiffTotalTrueMean = round(mean(diffTotalYtelTrueMP / abs(expTotalYtel)) , 4L), 
+            relTotalError = round(mean(diffTotalYtelEstMP / abs(expTotalYtel)), 4L),
             relDiffBenchmarkMean = round(mean(diffBenchmark / abs(expTotalYtel)), 4L),
             #relRMSETrue = round(sqrt(mean(diffTotalYtelTrueMP^2L / expTotalYtel^2L)), 4L),
-            relRMSEEst = round(sqrt(mean(diffTotalYtelEstMP^2L / expTotalYtel^2L)), 4L),
-            relExpSD = round(relExpSD = mean(expSD / expTotalYtel), 4L),
+            relRMSEParam = round(sqrt(mean(diffTotalYtelEstMP^2L / expTotalYtel^2L)), 4L),
+            relExpSD = round(mean(expSD / expTotalYtel), 4L),
             relRMSEBenchmark = round(sqrt(mean(diffBenchmark^2L / expTotalYtel^2L)), 4L),
-            relSdTrueWeightsBenchmark = mean(sdTrueWeightsBenchmark / abs(expTotalYtel))) %>% 
+            relSDTWBenchmark = mean(SDTWBenchmark / abs(expTotalYtel))) %>% 
   ungroup() %>% 
-  arrange(relRMSEEst)
+  arrange(relRMSEParam)
 ```
 
 ## Ex : Gaussian variable measure bias
 
-Results of each parameter for the case of SRS with **variable** measure bias and Gaussian laws
+Results of each parameter for the case of SRS with **variable** measure bias and Gaussian laws. First we focus on the bias:
+
+
 
 ```{r}
 temp <- results %>% 
   filter(YtelLaw == "gaussian", YintLaw == "gaussian", 
-         sampling == "SRS", MBtype == "variable",
-         probSelect != "true") %>% 
+         sampling == "SRS", MBtype == "variable", trueParameter) %>% 
   select(-sampling, -MBtype) %>% 
-  group_by(phi, parameter, probSelect, invMatrix, calculTotal) %>% 
+  group_by(sd, phi, parameter, probSelect, invMatrix, calculTotal) %>% 
   summarise(#reldiffTotalTrueMean = round(mean(diffTotalYtelTrueMP / abs(expTotalYtel)) , 4L), 
-            reldiffTotalEstMean = round(mean(diffTotalYtelEstMP / abs(expTotalYtel)) , 4L),
+            relTotalError = round(mean(diffTotalYtelEstMP / abs(expTotalYtel)) , 4L),
             relDiffBenchmarkMean = round(mean(diffBenchmark / abs(expTotalYtel)), 4L),
             #relRMSETrue = round(sqrt(mean(diffTotalYtelTrueMP^2L / expTotalYtel^2L)), 4L),
-            relRMSEEst = round(sqrt(mean(diffTotalYtelEstMP^2L / expTotalYtel^2L)), 4L),
+            relRMSEParam = round(sqrt(mean(diffTotalYtelEstMP^2L / expTotalYtel^2L)), 4L),
             relRMSEBenchmark = round(sqrt(mean(diffBenchmark^2L / expTotalYtel^2L)), 4L),
-            relSdBenchmark = mean(sdBenchmark / abs(expTotalYtel))) %>% 
+            relSdTWBenchmark = mean(expSD / abs(expTotalYtel))) %>% 
   ungroup() %>% 
-  arrange(relRMSEEst)
+  group_by(sd) %>% 
+  arrange(abs(relTotalError), .by_group = TRUE)
 
-temp
+temp %>% 
+  select(-relRMSEParam, -relRMSEBenchmark, -relSdTWBenchmark)
 ```
+
+
+And now the RMSE:
+
+```{r}
+temp %>% 
+  select(-relTotalError, -relTotalError, -relDiffBenchmarkMean) %>% 
+  arrange(relRMSEParam, .by_group = TRUE)
+```
+
 
 It is better to have $\phi_k \equiv \phi$ compared to $\phi_k = \frac{k}{N}$. Summing the bias on exclusively $S_{r\bullet}$ seems to be effective
 
 ```{r}
 temp %>%
-  mutate(ratioRMSE = relRMSEEst / relRMSEBenchmark) %>% 
+  mutate(ratioRMSE = relRMSEParam / relRMSEBenchmark) %>% 
   ggplot() + geom_histogram(aes(x = ratioRMSE)) +
   ggtitle("Ratio RMSE parameter compared to RMSE benchmark")
 ```
@@ -897,15 +995,26 @@ temp %>%
 Here are the parameters that offer a better RMSE than the benchmark:
 ```{r}
 temp %>% 
-  filter(relRMSEEst <= relRMSEBenchmark) %>% 
-  arrange(relRMSEEst)
+  select(-relTotalError, -relDiffBenchmarkMean) %>% 
+  filter(relRMSEParam <= relRMSEBenchmark) %>% 
+  arrange(relRMSEParam)
+```
+
+Estimators that are the most present:
+```{r}
+temp %>% 
+  select(-relTotalError, -relDiffBenchmarkMean) %>% 
+  filter(relRMSEParam <= relRMSEBenchmark) %>% 
+  group_by(phi, parameter, probSelect, invMatrix, calculTotal) %>% 
+  summarize(n = n()) %>% 
+  arrange(-n)
 ```
 
 And the parameters that offer the worse RMSE compared to the benchmark:
 
 ```{r}
 temp %>% 
-  slice_max(relRMSEEst, n = 5L)
+  slice_max(relRMSEParam, n = 5L)
 ```
 
 
@@ -918,21 +1027,21 @@ temp <- results %>%
   filter(trueParameter, MBtype == "variable") %>% 
   group_by(YintLaw, YtelLaw, phi, sampling, parameter, probSelect, invMatrix, calculTotal) %>% 
   summarise(#reldiffTotalTrueMean = round(mean(diffTotalYtelTrueMP / abs(expTotalYtel)) , 4L), 
-            reldiffTotalEstMean = round(mean(diffTotalYtelEstMP / abs(expTotalYtel)) , 4L),
+            relTotalError = round(mean(diffTotalYtelEstMP / abs(expTotalYtel)) , 4L),
             relDiffBenchmarkMean = round(mean(diffBenchmark / abs(expTotalYtel)), 4L),
             #relRMSETrue = round(sqrt(mean(diffTotalYtelTrueMP^2L / expTotalYtel^2L)), 4L),
-            relRMSEEst = round(sqrt(mean(diffTotalYtelEstMP^2L / expTotalYtel^2L)), 4L),
+            relRMSEParam = round(sqrt(mean(diffTotalYtelEstMP^2L / expTotalYtel^2L)), 4L),
             relRMSEBenchmark = round(sqrt(mean(diffBenchmark^2L / expTotalYtel^2L)), 4L)) %>% 
   ungroup() 
 
 temp %>% 
   group_by(YintLaw, YtelLaw, sampling) %>% 
-  slice_min(relRMSEEst)
+  slice_min(relRMSEParam)
 ```
 
 Here are the parameters that offer a better RMSE than the benchmark:
 ```{r}
 temp %>% 
-  filter(relRMSEEst <= relRMSEBenchmark) %>% 
+  filter(relRMSEParam <= relRMSEBenchmark) %>% 
   group_by(YintLaw, YtelLaw)
 ```
