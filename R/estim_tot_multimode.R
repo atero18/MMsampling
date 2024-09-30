@@ -250,7 +250,7 @@ var_HT_seq_phi2 <- function(expY2, covarY2,
                             phi = numeric(length(expY2)))
 {
 
-  if (all(phi == 0.0))
+  if (all(phi == 1.0))
     return(0.0)
 
   N <- length(expY2)
@@ -450,7 +450,7 @@ var_estim_tot_BM <- function(modeTotBiased = "HT", modeTotRef = "HT",
   }
   else
   {
-    c(expVarEstim = varEstim,
+    c(expVar2 = varEstim,
       expVarPhi1 = varPhi1,
       expVarPhi2 = varPhi2,
       expCovarPhi12 = covarPhi12,
