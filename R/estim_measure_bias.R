@@ -49,7 +49,7 @@ estim_MB_by_delta_MCO_HT <- function(delta, Z, pi,
 #' @export
 estim_MB_by_MCO <- function(delta, Z,
                             weights = rep(1.0, nrow(Z)),
-                            phi = rep(1/2, nrow(Z)),
+                            phi = rep(1.0, nrow(Z)),
                             mask = rep(TRUE, nrow(Z)))
 {
   diag(weights[mask] * phi[mask]) %*% Z[mask, , drop = FALSE] %*% delta
@@ -71,8 +71,12 @@ estim_delta_G_comp_MCO <- function(Z, Yobs, modes, biasedMode, refMode)
 estim_delta_MCO <- function(Z, Yobs,
                             modes, biasedMode, refMode,
                             modeTotBiased = "HT", modeTotRef = "HT",
-                            pi, probsSelect, sampleMatrix = FALSE)
+                            pi, probsSelect, sampleMatrix = FALSE,
+                            order = 0L,
+                            returnMB = FALSE)
 {
+
+  requireNamespace("marginaleffects", quietly = TRUE)
 
   Z <- as.matrix(Z)
 
@@ -88,11 +92,42 @@ estim_delta_MCO <- function(Z, Yobs,
       modeTotBiased <- modeTotRef <- "MCO"
   }
 
-  if ((modeTotBiased == "MCO" && modeTotRef == "MCO") ||
-      modeTotBiased == "G-COMP" ||
-      modeTotRef == "G-COMP")
+  if ((modeTotBiased == "G-COMP" || modeTotRef == "G-COMP"))
   {
-    return(estim_delta_G_comp_MCO(Z, Yobs, modes, biasedMode, refMode))
+    W <- numeric(N)
+    W[modes == biasedMode] <- 1L
+    W[modes == refMode] <- 0L
+
+    Z <- cbind(Z, W)
+    data <- cbind(Yobs, Z) %>% as.data.frame()
+
+    if (!"const" %in% colnames(Z))
+      Z$const <- 1.0
+
+    if (order == 0L)
+      formula <- (Yobs ~ . - 1L)
+    else if (order == 1L)
+      formula <- (Yobs ~ . -1L + (. - const) * W)
+    else if (order == 2L)
+    {
+      formula <-
+        (Yobs ~ . -1L +
+           (. - const) * W +
+           (. - const)^2L +
+           (. - const)^2L * W)
+    }
+
+    model <- lm(formula,
+                data = data,
+                subset = modes %in% c(biasedMode, refMode))
+
+    return(marginaleffects::comparisons(model,
+                                        newdata = data,
+                                        variables = "W",
+                                        comparison = "difference")$estimate)
+
+
+    ##return(estim_delta_G_comp_MCO(Z, Yobs, modes, biasedMode, refMode))
   }
 
 
@@ -165,7 +200,12 @@ estim_delta_MCO <- function(Z, Yobs,
 
   delta <- coefsBiased - coefsRef
 
-  delta
+  if (returnMB)
+  {
+    return(estim_MB_by_MCO(delta, Z))
+  }
+  else
+    return(delta)
 }
 
 # Équivalent G-COMP
