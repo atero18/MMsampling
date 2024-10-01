@@ -338,7 +338,7 @@ covar_HT_seq_phi1_phi2 <- function(expY1, expY2,
 
 #' @export
 var_estim_tot_BM <- function(modeTotBiased = "HT", modeTotRef = "HT",
-                             calculTotal = "full",
+                             calculTotal = "population",
                              expY1, expY2,
                              covarY1, covarY2,
                              piMat,
@@ -381,7 +381,7 @@ var_estim_tot_BM <- function(modeTotBiased = "HT", modeTotRef = "HT",
   covarPhi12 <- covar_HT_seq_phi1_phi2(expY1, expY2, piMat, pq1Mat, pq2Mat, phi)
 
   # Variance of the total MB estimator
-  if (modeTotBiased == "HT" && modeTotRef == "HT" && calculTotal == "full")
+  if (modeTotBiased == "HT" && modeTotRef == "HT" && calculTotal == "population")
   {
     varY2 <- piMat * pq1BarMat * pq2Mat * covarY2 * invProbsMatSelecMat
 
@@ -402,7 +402,7 @@ var_estim_tot_BM <- function(modeTotBiased = "HT", modeTotRef = "HT",
   }
 
   # Covariance between ^t_phi1 and ^t_phiDelta
-  if (modeTotBiased == "HT" && modeTotRef == "HT" && calculTotal == "full")
+  if (modeTotBiased == "HT" && modeTotRef == "HT" && calculTotal == "population")
   {
     varY1 <- piMat * pq1Mat * covarY1 * invp1Mat
 
@@ -419,7 +419,7 @@ var_estim_tot_BM <- function(modeTotBiased = "HT", modeTotRef = "HT",
   }
 
   # Covariance between ^t_phi2 and ^t_phiDelta
-  if (modeTotBiased == "HT" && modeTotRef == "HT" && calculTotal == "full")
+  if (modeTotBiased == "HT" && modeTotRef == "HT" && calculTotal == "population")
   {
     varY2 <- piMat * pq1BarMat * pq2Mat * covarY2 * invProbsMatSelecMat
 

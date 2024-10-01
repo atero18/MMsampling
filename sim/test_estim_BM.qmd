@@ -87,7 +87,6 @@ glue("average value for telephone: {mean(Z %*% betaTel)}")
 glue("average value for internet: {mean(Z %*% betaInt)}")
 ```
 
-
 ```{r}
 totBias <- sum(Z %*% delta)
 glue("total bias on U: {totBias}")
@@ -322,7 +321,7 @@ simulationUncounf <-
                                    probSelect = character(nbExperiments),
                                    invMatrix = character(nbExperiments),
                                    calculTotal = character(nbExperiments),
-                                   estTotPhiBias = numeric(nbExperiments))
+                                   estPhiBias = numeric(nbExperiments))
       
       row <- 1L
       
@@ -415,8 +414,8 @@ simulationUncounf <-
         Ytel <- rexp(n = N, rate = expYtel^-1L)
       }
       
-      expTotYtel <- sum(expYtel)
-      trueTotalYtel <- sum(Ytel)
+      expYtel <- sum(expYtel)
+      trueYtel <- sum(Ytel)
       
       if (YintLaw == "gaussian")
       {
@@ -465,8 +464,8 @@ simulationUncounf <-
   
       partialResults[row,] <- 
         c(parameter = "HT", trueEstimator = FALSE,
-          probSelect = "true", invMatrix = "true",
-          calculTotal = "full", estTotPhiBias = resEval)
+          probSelect = "true", invMatrix = "population",
+          calculTotal = "population", estPhiBias = resEval)
       
       row <- row + 1L
   
@@ -481,7 +480,7 @@ simulationUncounf <-
   
       partialResults[row,] <- c(parameter = "HT", trueEstimator = FALSE,
                                 probSelect = "true", invMatrix = "sample", 
-                                calculTotal = "full", estTotPhiBias = resEval)
+                                calculTotal = "population", estPhiBias = resEval)
       
       row <- row + 1L
       
@@ -504,8 +503,8 @@ simulationUncounf <-
                    trueEstimator = TRUE,
                    probSelect = "null",
                    invMatrix = "null",
-                   calculTotal = c("full", "partial"),
-                   estTotPhiBias = c(resEvalFull, resEvalHT))
+                   calculTotal = c("population", "sample"),
+                   estPhiBias = c(resEvalFull, resEvalHT))
       
       
       row <- row + 2L
@@ -530,8 +529,8 @@ simulationUncounf <-
       partialResults[c(row, row + 1L),] <- 
         data.frame(parameter = "G-COMP_1_deg", trueEstimator = TRUE,
                    probSelect = "null", 
-                   invMatrix = "null", calculTotal = c("full", "partial"),
-                   estTotPhiBias = c(resEvalFull, resEvalHT))
+                   invMatrix = "null", calculTotal = c("population", "sample"),
+                   estPhiBias = c(resEvalFull, resEvalHT))
       
       row <- row + 2L
       
@@ -552,8 +551,8 @@ simulationUncounf <-
       partialResults[c(row, row + 1L),] <- 
         data.frame(parameter = "G-COMP_2_deg", trueEstimator = TRUE,
                    probSelect = "null", 
-                   invMatrix = "null", calculTotal = c("full", "partial"),
-                   estTotPhiBias = c(resEvalFull, resEvalHT))
+                   invMatrix = "null", calculTotal = c("population", "sample"),
+                   estPhiBias = c(resEvalFull, resEvalHT))
       
       row <- row + 2L
       
@@ -583,9 +582,9 @@ simulationUncounf <-
       
       partialResults[c(row, row + 1L),] <- 
         data.frame(parameter = "HT", trueEstimator = TRUE,
-                   probSelect = "estimation", invMatrix = "true", 
-                   calculTotal = c("full", "partial"), 
-                   estTotPhiBias = c(resEvalFull, resEvalHT))
+                   probSelect = "estimation", invMatrix = "population", 
+                   calculTotal = c("population", "sample"), 
+                   estPhiBias = c(resEvalFull, resEvalHT))
       
       row <- row + 2L
       
@@ -614,8 +613,8 @@ simulationUncounf <-
       partialResults[c(row, row + 1L),] <- 
         data.frame(parameter = "HT", trueEstimator = TRUE,
                    probSelect = "estimation", invMatrix = "sample", 
-                   calculTotal = c("full", "partial"), 
-                   estTotPhiBias = c(resEvalFull, resEvalHT))
+                   calculTotal = c("population", "sample"), 
+                   estPhiBias = c(resEvalFull, resEvalHT))
       
       row <- row + 2L
       
@@ -652,7 +651,7 @@ simulationUncounf <-
       
       ## Don't know why but some columns are
       ##  automatically converted as character
-      partialResults$estTotPhiBias <- as.numeric(partialResults$estTotPhiBias)
+      partialResults$estPhiBias <- as.numeric(partialResults$estPhiBias)
       partialResults$trueEstimator <- as.logical(partialResults$trueEstimator)
       # Value estimated only on telephone answers, with estimated selection probabilities
       benchmark <- crossprod(estimWeights[maskTel], Ytel[maskTel]) %>% 
@@ -664,27 +663,27 @@ simulationUncounf <-
       partialResults <- partialResults %>% 
         add_column(.before = 1L, expn = sum(pi)) %>% 
         add_column(.after = "expn", n = sum(I)) %>% 
-        add_column(.after = "n", trueTotalYtel = trueTotalYtel) %>% 
-        add_column(.after = "trueTotalYtel", expTotYtel = expTotYtel) %>% 
-        add_column(.before = "estTotPhiBias", truePhiBias = trueTotalBias) %>% 
+        add_column(.after = "n", trueYtel = trueYtel) %>% 
+        add_column(.after = "trueYtel", expYtel = expYtel) %>% 
+        add_column(.before = "estPhiBias", truePhiBias = trueTotalBias) %>% 
         add_column(.after = "truePhiBias", expPhiBias = expPhiBias) %>% 
         add_column(.after = "expPhiBias", 
-                   estTotPhiYintTrueMP = estTotPhiYintHTTrueMP) %>% 
-        add_column(.after = "estTotPhiYintTrueMP", 
-                   estTotPhiYintEstMP = estTotPhiYintHTEstMP) %>% 
-        add_column(.after = "estTotPhiYintEstMP", 
+                   estPhiYintTrueMP = estTotPhiYintHTTrueMP) %>% 
+        add_column(.after = "estPhiYintTrueMP", 
+                   estPhiYintEstMP = estTotPhiYintHTEstMP) %>% 
+        add_column(.after = "estPhiYintEstMP", 
                    estTotPhiYtelTrueMP = estTotPhiYtelHTTrueMP) %>% 
         add_column(.after = "estTotPhiYtelTrueMP", 
                    estTotPhiYtelEstMP = estTotPhiYtelHTEstmMP) %>% 
         mutate(.after = "estTotPhiYtelEstMP",
-               estTotYtelTrueMP = estTotPhiYintTrueMP + 
+               estYtelTrueMP = estPhiYintTrueMP + 
                  estTotPhiYtelTrueMP -
-                 estTotPhiBias) %>% 
-        mutate(.after = "estTotYtelTrueMP", 
-               estTotYtelEstMP = estTotPhiYintEstMP + 
+                 estPhiBias) %>% 
+        mutate(.after = "estYtelTrueMP", 
+               estYtelEstMP = estPhiYintEstMP + 
                  estTotPhiYtelEstMP -
-                 estTotPhiBias) %>% 
-        add_column(.after = "estTotYtelEstMP", benchmark = benchmark) %>% 
+                 estPhiBias) %>% 
+        add_column(.after = "estYtelEstMP", benchmark = benchmark) %>% 
         add_column(.after = "benchmark", TWBenchmark = trueWeightsBenchmark)
         
       #results <- rbind(results, partialResults)
@@ -716,11 +715,12 @@ simulationUncounf <-
         parameter <- parameters[l, ]
         
         if (parameter$parameter == "HT" && 
-            parameter$invMatrix == "true" && 
-            parameter$calculTotal == "full")
+            parameter$probSelect == "true" &&
+            parameter$invMatrix == "population" && 
+            parameter$calculTotal == "population")
         {
           expVars <- var_estim_tot_BM(modeTotBiased = "HT", modeTotRef = "HT",
-                                      calculTotal = "full",
+                                      calculTotal = "population",
                                       expY1 = expYint, expY2 = expYtel,
                                       covarY1 = covarYint, covarY2 = covarYtel,
                                       piMat = piMat,
@@ -757,8 +757,6 @@ simulationUncounf <-
       suppressMessages(results <- results %>% inner_join(parameters, by = NULL))
     }
       
-    
-    
     # We calculate the real variance of the benchmark estimator
     if (fixZ)
     {
@@ -777,22 +775,24 @@ simulationUncounf <-
   }
 ```
 
-
--   `trueTotalYtel`: $t_{tel} =\sum_{k \in U} y_{2k}$ for this iteration
--   `expTotYtel` : $\mathbb{E}[t_{tel}]=\mathbb{E} [\sum_{k \in U} y_{2k}]$
--   `estTotPhiBias` : $t_{\phi \hat{\Delta y}}$
+-   `trueYtel`: $t_{tel} =\sum_{k \in U} y_{2k}$ for this iteration
+-   `expYtel` : $\mathbb{E}[t_{tel}]=\mathbb{E} [\sum_{k \in U} y_{2k}]$
+-   `estPhiBias` : $t_{\phi \hat{\Delta y}}$
 -   `truePhiBias` : $t_{\phi\Delta y}=\sum_{k\in U} \phi_k \Delta y_k$
 -   `expPhiBias` : $\mathbb{E}[t_{\phi\Delta y}]$
--   `estTotPhiYintTrueMP` : $\hat{t}_{p,\phi y_1} = \sum_{k \in S_r}\frac{\phi_k y_{1k}}{\pi_k p_{1k}}$
--   `estTotPhiYintEstMP` : $\hat{t}_{\hat{p},\phi y_1} = \sum_{k \in S_r}\frac{\phi_k y_{1k}}{\pi_k \hat{p}_{1k}}$
--   `estTotPhiYintEstMP` : $\hat{t}_{\hat{p},\phi y_1} + \hat{t}_{\hat{p},\phi y_2} - t_{\phi \hat{\Delta y}}$
--   `benchmark` : $\sum_{k \in S_{mr}} \frac{y_{2k}}{\pi_k(1-p_{1k})p_{2k}}$
--   `calculTotal` : `full` if we calculate $\hat{t}_{\phi \hat{\Delta y}}$ (imputation on the entire population), `partial` if it is $t_{\phi \hat{\Delta y}}$ (on $S_{r\bullet}$)
-
+-   `estPhiYintTrueMP` : $\hat{t}_{p,\phi y_1} = \sum_{k \in S_r}\frac{\phi_k y_{1k}}{\pi_k p_{1k}}$
+-   `estPhiYintEstMP` : $\hat{t}_{\hat{p},\phi y_1} = \sum_{k \in S_r}\frac{\phi_k y_{1k}}{\pi_k \hat{p}_{1k}}$
+-   `estYtelTrueMP` : $\hat{t}_{py_2}:= \hat{t}_{p,\phi y_1} + \hat{t}_{p,\phi y_2} - t_{\phi \hat{\Delta y}}$
+-   `estYtelEstMP` : $\hat{t}_{\hat{p}y_2}:= \hat{t}_{\hat{p},\phi y_1} + \hat{t}_{\hat{p},\phi y_2} - t_{\phi \hat{\Delta y}}$
+-   `expVar2` : $\mathbb{V}[\hat{t}_{\hat{p}y_2}]$ PAS ENCORE VRAI, À CONSIDÉRER
+-   `TWBenchmark` : $\sum_{k \in S_{mr}} \frac{y_{2k}}{\pi_k(1-p_{1k})p_{2k}}$
+-   `benchmark` : $\sum_{k \in S_{mr}} \frac{y_{2k}}{\pi_k(1-\hat{p}_{1k})\hat{p}_{2k}}$
+-   `sdTWBenchmark` : standard deviation of the benchmark
+-   `calculTotal` : `population` if we calculate $\hat{t}_{\phi \hat{\Delta y}}$ (imputation on the entire population), `sample` if it is $t_{\phi \hat{\Delta y}}$ (on $S_{r\bullet}$)
 
 ## Measure bias evaluation
 
-Evaluation of $K$ experiments
+Evaluation of $K$ experiments:
 
 ```{r}
 K <- 2000L
@@ -805,7 +805,7 @@ results <- NULL
 nbResults <- 0L
 
 # Grid of all evaluated parameters
-parameters <- expand_grid(constBias = c(TRUE, FALSE), 
+parameters <- expand_grid(constBias = c(TRUE, FALSE),
                           sampling = "SRS",#c("SRS", "STSRS"),
                           YtelLaw = c("gaussian", "exponential"),
                           YintLaw = c("gaussian", "exponential"),
@@ -891,7 +891,7 @@ rm(i,
    betaIntMinus, betaTelMinus, 
    betaIntPlus, betaTelPlus, 
    betaIntTemp, betaTelTemp, 
-   nbResults, t, expResults)
+   nbResults, expResults)
 
 results$signAge <- as.factor(results$signAge)
 results$parameter <- as.factor(results$parameter)
@@ -900,12 +900,12 @@ results$invMatrix <- as.factor(results$invMatrix)
 results$calculTotal <- as.factor(results$calculTotal)
 
 results <- results %>% 
-  mutate(.after = "estTotPhiBias", diffPhiBias = estTotPhiBias - truePhiBias) %>% 
+  mutate(.after = "estPhiBias", diffPhiBias = estPhiBias - truePhiBias) %>% 
   mutate(.after = "estTotPhiYtelEstMP", 
-         diffTotYtelEstMP = estTotYtelEstMP - trueTotalYtel) %>% 
+         diffTotYtelEstMP = estYtelEstMP - trueYtel) %>% 
   mutate(.after = "estTotPhiYtelTrueMP",
-         diffTotYtelTrueMP = estTotYtelTrueMP - trueTotalYtel) %>% 
-  mutate(.after = diffTotYtelTrueMP, diffBenchmark = benchmark - trueTotalYtel)
+         diffTotYtelTrueMP = estYtelTrueMP - trueYtel) %>% 
+  mutate(.after = diffTotYtelTrueMP, diffBenchmark = benchmark - trueYtel)
 ```
 
 ## Impact of $K$
@@ -913,17 +913,19 @@ results <- results %>%
 We would like to consider the impact of $K$ on the different results, especially knowing if it is needed to have an important $K$ to infer.
 
 We focus on a simple particular case:
+
 ```{r}
 temp <- results %>% 
   filter(sampling == "SRS",
          YintLaw == "gaussian", YtelLaw == "gaussian",
          parameter == "HT", probSelect == "true",
-         invMatrix == "true", calculTotal == "full",
+         invMatrix == "population", calculTotal == "population",
          phi == "eq", sd == 1.0, MBtype == "variable",
          signAge == "plus")
 ```
 
 Evolution of the bias:
+
 ```{r}
 sumBiases <- cumsum(temp[, c("diffPhiBias", "diffTotYtelEstMP")])
 
@@ -946,6 +948,7 @@ rm(biases)
 ```
 
 And the RMSE:
+
 ```{r}
 sumSqErrors <- cumsum(temp[, c("diffPhiBias", "diffTotYtelEstMP")]^2L)
 
@@ -965,6 +968,7 @@ RMSEs %>%
 rm(temp, RMSEs)
 ```
 
+We do not observe a clear stabilization of the variances.
 
 ## Ex : Gaussian constant measure bias
 
@@ -980,8 +984,8 @@ $$\text{relRMSE} = \frac{\sqrt{\frac{1}{K}\sum_{k=1}^K (\hat{t}_{\phi\Delta y,k}
 temp <- results %>% 
   filter(YtelLaw == "gaussian", YintLaw == "gaussian", 
          sampling == "SRS", 
-         MBtype == "constant", signAge == "plus",
-         probSelect != "true", sd == 1.0) %>% 
+         MBtype == "constant", signAge == "plus", 
+         trueEstimator, sd == 1.0) %>% 
   select(-sampling, -MBtype) %>% 
   group_by(phi, parameter, probSelect, invMatrix, calculTotal)
 
@@ -993,63 +997,95 @@ temp %>%
   arrange(relRMSE)
 ```
 
+The relative error `relError` is close to zero for each estimator. RMSEs are about the same, being in \[0.13, 0.18\]. For the best RMSE we have the model that consider the constant bias : the G-COMP model with a simple constant $\delta$ for the MB consideration.
+
 ### telephone total estimation
+
+Our different estimators are all approximately unbiased, so we focus on the RMSE appearing when we estimate the total $t_2$ with each estimator:
 
 ```{r}
 temp %>% 
   summarise(K = n(),
-            #reldiffTotalTrueMean = round(mean(diffTotYtelTrueMP / abs(expTotYtel)) , 4L), 
-            relTotError = round(mean(diffTotYtelEstMP / abs(expTotYtel)), 4L),
-            relDiffBenchmarkMean = round(mean(diffBenchmark / abs(expTotYtel)), 4L),
-            #relRMSETrue = round(sqrt(mean(diffTotYtelTrueMP^2L / expTotYtel^2L)), 4L),
-            relRMSEParam = round(sqrt(mean(diffTotYtelEstMP^2L / expTotYtel^2L)), 4L),
-            relExpSD = round(mean(expVar2 / expTotYtel), 4L),
-            relRMSEBenchmark = round(sqrt(mean(diffBenchmark^2L / expTotYtel^2L)), 4L),
-            relExpSDTWBenchmark = mean(expSDTWBenchmark / abs(expTotYtel))) %>% 
+            #reldiffTotalTrueMean = round(mean(diffTotYtelTrueMP / abs(expYtel)) , 4L), 
+            relError = round(mean(diffTotYtelEstMP / abs(expYtel)), 4L),
+            relBenchmarkError = round(mean(diffBenchmark / abs(expYtel)), 4L),
+            #relRMSETrue = round(sqrt(mean(diffTotYtelTrueMP^2L / expYtel^2L)), 4L),
+            relEstRMSE = round(sqrt(mean(diffTotYtelEstMP^2L / expYtel^2L)), 4L),
+            #relExpTWSD = mean(sqrt(expVar2) / expYtel),
+            relRMSEBenchmark = round(sqrt(mean(diffBenchmark^2L / expYtel^2L)), 4L),
+            relExpSDTWBenchmark = mean(expSDTWBenchmark / abs(expYtel))) %>% 
   ungroup() %>% 
-  arrange(relRMSEParam)
+  arrange(relEstRMSE)
 
 rm(temp)
 ```
+
+The `relRMSEBenchmark` variable is the RMSE of the benchmark estimator. We can observe that among the different estimators, we have a few of them that offer a lower RMSE than the benchmark. We have, with $\phi \equiv \frac{1}{2}$ :
+
+-   G-COMPUTATION with 0, 1 or 2 degrees and a estimation of the total $\phi\Delta$ via the sample or the population
+
+-   The HT Thompson estimator with a sample inverse matrix and a total on the sample or the population
+
+Summing the bias on exclusively $S_{r\bullet}$ seems to be effective (with `calculTotal = sample`), which is great because in that case we don't need to know the $z_k$ for units that didn't respond by internet.
+
+The case $\phi = \frac{1}{N}, \frac{2}{N}, \cdots$ gives a RMSE higher than the benchmark RMSE.
+
+With $\phi$ fixed, the other estimators give a RMSE nearly equal the benckmark.
+
+The `relRMSEBenchmark` variable is the RMSE of the benchmark estimator
+
+The `relExpSDTWBenchmark` variable is the expected standard deviation of the benchmark calculated with the true selection probabilities. Biases are nearly zero so RMSE and standard deviations can be compared. We can observe that for every estimator the (estimated) RMSE is clearly lower than the standard deviation of the benchmark with true probabilities.
+
+
 
 ## Ex : Gaussian variable measure bias
 
 Results of each parameter for the case of SRS with **variable** measure bias and Gaussian laws. First we focus on the bias:
 
-
 ```{r}
 temp <- results %>% 
   filter(YtelLaw == "gaussian", YintLaw == "gaussian", 
          sampling == "SRS", MBtype == "variable", trueEstimator) %>% 
-  select(-sampling, -MBtype) %>% 
+  select(-sampling, -MBtype, -probSelect) %>% 
   group_by(sd, phi, parameter, probSelect, invMatrix, calculTotal) %>% 
-  summarise(#reldiffTotalTrueMean = round(mean(diffTotYtelTrueMP / abs(expTotYtel)) , 4L), 
-            relTotError = round(mean(diffTotYtelEstMP / abs(expTotYtel)) , 4L),
-            relDiffBenchmarkMean = round(mean(diffBenchmark / abs(expTotYtel)), 4L),
-            #relRMSETrue = round(sqrt(mean(diffTotYtelTrueMP^2L / expTotYtel^2L)), 4L),
-            relRMSEParam = round(sqrt(mean(diffTotYtelEstMP^2L / expTotYtel^2L)), 4L),
-            relRMSEBenchmark = round(sqrt(mean(diffBenchmark^2L / expTotYtel^2L)), 4L),
-            relSdTWBenchmark = mean(expSDTWBenchmark / abs(expTotYtel))) %>% 
+  summarise(#reldiffTotalTrueMean = round(mean(diffTotYtelTrueMP / abs(expYtel)) , 4L), 
+            relError = round(mean(diffTotYtelEstMP / abs(expYtel)) , 4L),
+            relErrorBenchmark = round(mean(diffBenchmark / abs(expYtel)), 4L),
+            #relRMSETrue = round(sqrt(mean(diffTotYtelTrueMP^2L / expYtel^2L)), 4L),
+            relRMSEParam = round(sqrt(mean(diffTotYtelEstMP^2L / expYtel^2L)), 4L),
+            relRMSEBenchmark = round(sqrt(mean(diffBenchmark^2L / expYtel^2L)), 4L),
+            relExpSDTWBenchmark = round(mean(expSDTWBenchmark / abs(expYtel)), 4L)) %>% 
   ungroup() %>% 
   group_by(sd) %>% 
-  arrange(abs(relTotError), .by_group = TRUE) %>% 
+  arrange(abs(relError), .by_group = TRUE) %>% 
   ungroup()
 
 temp %>% 
-  select(-relRMSEParam, -relRMSEBenchmark, -relSdTWBenchmark)
+  select(-relRMSEParam, -relRMSEBenchmark, -relExpSDTWBenchmark)
 ```
 
+We can observe that the estimated bias is close to zero. It slightly increases with the conditional variance of $Y_{tel}$ and $Y_{int}$ (`sd`).
+
+Even with a variable measure bias, the G-COMPT model with only a constant for the bias is approximately unbiased. It is due to the fact that we chose here a centered measure bias, respectively to the couple (age, sex).
 
 And now the RMSE:
 
 ```{r}
 temp %>% 
-  select(-relTotError, -relTotError, -relDiffBenchmarkMean) %>% 
+  select(-relError, -relErrorBenchmark, -probSelect) %>% 
+  group_by(sd) %>% 
   arrange(relRMSEParam, .by_group = TRUE)
 ```
 
+It is better to have $\phi_k \equiv \phi$ compared to $\phi_k = \frac{k}{N}$ for any conditional variance of $Y_{tel}$ and $Y_{int}$.
 
-It is better to have $\phi_k \equiv \phi$ compared to $\phi_k = \frac{k}{N}$. Summing the bias on exclusively $S_{r\bullet}$ seems to be effective (with `calculTotal = partial`).
+The estimator HT with complete inverse matrix and summing the bias on the sample only is the greatest (in term of RMSE) for any value and the standard deviation. Its RMSE is better than the RMSE of the benchmark, which is itself better than the benchmark with true probabilities.
+
+
+Summing on $S_{r\bullet}$ exclusively seems also working like with the constant case. More importantly the calculation on the sample only gives the greatest results for each value of $\sigma$.
+
+Only a few of the estimators give an interesting RMSE. Some of the others can gives a RMSE about more than twice the RMSE of the benchmark. It is important to chose carefully the used estimator. On the other hand we can observe that the positive gain **is not really high** :
+
 
 ```{r}
 temp %>%
@@ -1058,18 +1094,28 @@ temp %>%
   ggtitle("Ratio RMSE parameter compared to RMSE benchmark")
 ```
 
-Here are the parameters that offer a better RMSE than the benchmark:
 ```{r}
 temp %>% 
-  select(-relTotError, -relDiffBenchmarkMean) %>% 
+  select(-relError, -relErrorBenchmark) %>% 
+  group_by(sd) %>% 
+  summarize(minRatioRMSE = min(relRMSEParam / relRMSEBenchmark),
+            maxRatioRMSE = max(relRMSEParam / relRMSEBenchmark))
+```
+
+Here are the parameters that offer a better RMSE than the benchmark:
+
+```{r}
+temp %>% 
+  select(-relError, -relErrorBenchmark, -probSelect) %>% 
   filter(relRMSEParam <= relRMSEBenchmark) %>% 
   arrange(relRMSEParam)
 ```
 
 Estimators that are the most present:
+
 ```{r}
 temp %>% 
-  select(-relTotError, -relDiffBenchmarkMean) %>% 
+  select(-relError, -relDiffBenchmarkMean, -probSelect) %>% 
   filter(relRMSEParam <= relRMSEBenchmark) %>% 
   group_by(phi, parameter, probSelect, invMatrix, calculTotal) %>% 
   summarize(n = n()) %>% 
@@ -1087,7 +1133,6 @@ temp %>%
 rm(temp)
 ```
 
-
 ## More general cases
 
 ### Telephone total estimation
@@ -1101,21 +1146,20 @@ temp <- results %>%
            sampling, parameter, probSelect, invMatrix, calculTotal)
 
 temp %>% 
-  summarise(relTotError = 
-              round(mean(diffTotYtelEstMP / abs(expTotYtel)), 4L))
+  summarise(relError = 
+              round(mean(diffTotYtelEstMP / abs(expYtel)), 4L))
 ```
-
 
 Optimal RMSE for each condition:
 
 ```{r}
 temp <- temp %>% 
-  summarise(#reldiffTotalTrueMean = round(mean(diffTotYtelTrueMP / abs(expTotYtel)) , 4L), 
-            relTotError = round(mean(diffTotYtelEstMP / abs(expTotYtel)) , 4L),
-            relDiffBenchmarkMean = round(mean(diffBenchmark / abs(expTotYtel)), 4L),
-            #relRMSETrue = round(sqrt(mean(diffTotYtelTrueMP^2L / expTotYtel^2L)), 4L),
-            relRMSEParam = round(sqrt(mean(diffTotYtelEstMP^2L / expTotYtel^2L)), 4L),
-            relRMSEBenchmark = round(sqrt(mean(diffBenchmark^2L / expTotYtel^2L)), 4L)) %>% 
+  summarise(#reldiffTotalTrueMean = round(mean(diffTotYtelTrueMP / abs(expYtel)) , 4L), 
+            relError = round(mean(diffTotYtelEstMP / abs(expYtel)) , 4L),
+            relDiffBenchmarkMean = round(mean(diffBenchmark / abs(expYtel)), 4L),
+            #relRMSETrue = round(sqrt(mean(diffTotYtelTrueMP^2L / expYtel^2L)), 4L),
+            relRMSEParam = round(sqrt(mean(diffTotYtelEstMP^2L / expYtel^2L)), 4L),
+            relRMSEBenchmark = round(sqrt(mean(diffBenchmark^2L / expYtel^2L)), 4L)) %>% 
   ungroup() 
 
 temp %>% 
@@ -1124,11 +1168,13 @@ temp %>%
 ```
 
 Here are the parameters that offer a better RMSE than the benchmark:
+
 ```{r}
 temp %>% 
   filter(relRMSEParam <= relRMSEBenchmark) %>% 
   group_by(YintLaw, YtelLaw)
 ```
+
 List of situations that offer a better RMSE with some parameter different than the benchmark:
 
 ```{r}
@@ -1147,63 +1193,75 @@ rm(tempBis)
 ```
 
 Estimators that are the most present (which have a lower value of RMSE compared to the benchmark, not necessarily the lowest):
+
 ```{r}
 temp %>% 
-  select(-relTotError, -relDiffBenchmarkMean, -probSelect) %>% 
+  select(-relError, -relDiffBenchmarkMean, -probSelect) %>% 
   filter(relRMSEParam <= relRMSEBenchmark) %>% 
   group_by(phi, parameter, invMatrix, calculTotal) %>% 
   summarize(n = n(), ratio = n / nbExperiments) %>% 
   arrange(-n)
 ```
 
-Case when HT-sample-partial is the best:
+Case when HT-sample-sample is the best:
 
 ```{r}
 temp %>% 
   group_by(YtelLaw, sd, YintLaw, sampling, signAge, MBtype) %>% 
   filter(relRMSEParam <= relRMSEBenchmark) %>% 
   slice_min(relRMSEParam) %>% 
-  filter(parameter == "HT", invMatrix == "sample", calculTotal == "partial") %>% 
-  distinct(YtelLaw, sd, YintLaw, sampling, signAge, MBtype)
-```
-RAJOUTER UN COMMENTAIRE
-Case when HT-true-full is the best:
-
-```{r}
-temp %>% 
-  group_by(YtelLaw, sd, YintLaw, sampling, signAge, MBtype) %>% 
-  filter(relRMSEParam <= relRMSEBenchmark) %>% 
-  slice_min(relRMSEParam) %>% 
-  filter(parameter == "HT", invMatrix == "true", calculTotal == "full") %>% 
+  filter(parameter == "HT", 
+         invMatrix == "sample",
+         calculTotal == "sample") %>% 
   distinct(YtelLaw, sd, YintLaw, sampling, signAge, MBtype)
 ```
 
-RAJOUTER UN COMMENTAIRE
-
-Cases when the triples HT-sample-partial and HT-true-full are not optimal (or not the only one with the lowest RMSE):
+RAJOUTER UN COMMENTAIRE Case when HT-population-population is the best:
 
 ```{r}
 temp %>% 
   group_by(YtelLaw, sd, YintLaw, sampling, signAge, MBtype) %>% 
   filter(relRMSEParam <= relRMSEBenchmark) %>% 
   slice_min(relRMSEParam) %>% 
-  filter(parameter != "HT" | invMatrix != "sample" | calculTotal != "partial", 
-         parameter != "HT" | invMatrix != "true" | calculTotal != "full") %>% 
+  filter(parameter == "HT", 
+         invMatrix == "population",
+         calculTotal == "population") %>% 
+  distinct(YtelLaw, sd, YintLaw, sampling, signAge, MBtype)
+```
+
+RAJOUTER UN COMMENTAIRE
+
+Cases when the triples HT-sample-sample and HT-population-population are not optimal (or not the only one with the lowest RMSE):
+
+```{r}
+temp %>% 
+  group_by(YtelLaw, sd, YintLaw, sampling, signAge, MBtype) %>% 
+  filter(relRMSEParam <= relRMSEBenchmark) %>% 
+  slice_min(relRMSEParam) %>% 
+  filter(parameter != "HT" | 
+           invMatrix != "sample" | 
+           calculTotal != "sample", 
+         parameter != "HT" | 
+           invMatrix != "population" | 
+           calculTotal != "population") %>% 
   distinct(YtelLaw, sd, YintLaw, sampling, signAge, MBtype)
   
 ```
 
-À CHANGER :
-The both estimators seems to be more effective that the others when the measure bias is not a constant with random noise (they are not optimal in 100% of the constant scenarios).
-
+À CHANGER : The both estimators seems to be more effective that the others when the measure bias is not a constant with random noise (they are not optimal in 100% of the constant scenarios).
 
 Here are the estimators that are more efficient in the constant cases:
 
 ```{r}
 temp %>% 
   filter(relRMSEParam <= relRMSEBenchmark, MBtype == "constant") %>% 
-  filter(parameter != "HT" | invMatrix == "sample" | calculTotal != "partial", 
-         parameter != "HT" | invMatrix != "true" | calculTotal != "full") %>% 
+  filter(parameter != "HT" | 
+           invMatrix == "sample" |
+           calculTotal != "sample",
+         
+         parameter != "HT" |
+           invMatrix != "population" |
+           calculTotal != "population") %>% 
   group_by(YtelLaw, sd, YintLaw, sampling, signAge, MBtype) %>% 
   slice_min(relRMSEParam) %>% 
   ungroup() %>% 
@@ -1213,6 +1271,7 @@ temp %>%
 ```
 
 When `MCO_unique` is efficient?
+
 ```{r}
 rm(temp)
 ```
@@ -1220,24 +1279,25 @@ rm(temp)
 ### Variances
 
 Here we focus on the special case when selection probabilities are known and the estimator is Horvitz-Thompson with the complete inverse matrix and the summation for $\hat{t}_{\phi\Delta}$ is made on the entire population.
+
 ```{r}
 results %>% 
   filter(parameter == "HT", probSelect == "true", 
-         invMatrix == "true", calculTotal == "full") %>% 
+         invMatrix == "population", calculTotal == "population") %>% 
   group_by(sampling, YintLaw, YtelLaw, sd, MBtype, signAge, phi) %>% 
   summarise(K = n(),
-            estVar2 = var(estTotYtelTrueMP),
-            expVar2 = mean(expVar2),
-            estVarPhi1 = var(estTotPhiYintTrueMP),
+            estSDEstimator = sd(estYtelTrueMP),
+            expSDEstimator = sqrt(mean(expVar2)),
+            estVarPhi1 = var(estPhiYintTrueMP),
             expVarPhi1 = mean(expVarPhi1),
             estVarPhi2 = var(estTotPhiYtelTrueMP),
             expVarPhi2 = mean(expVarPhi2),
-            estCovarphi12 = cov(estTotPhiYintTrueMP, estTotYtelTrueMP),
+            estCovarphi12 = cov(estPhiYintTrueMP, estTotPhiYtelTrueMP),
             expCovarPhi12 = mean(expCovarPhi12),
-            estCovarphi1Delta = cov(estTotPhiYintTrueMP, estTotPhiBias),
+            estCovarphi1Delta = cov(estPhiYintTrueMP, estPhiBias),
             expCovarPhi1Delta = mean(expCovarPhi1Delta),
-            estVarPhiDelta = var(estTotPhiBias),
+            estVarPhiDelta = var(estPhiBias),
             expVarPhiDelta = mean(expVarPhiDelta),
-            estCovarphi2Delta = cov(estTotPhiYtelTrueMP, estTotPhiBias),
+            estCovarphi2Delta = cov(estTotPhiYtelTrueMP, estPhiBias),
             expCovarPhi2Delta = mean(expCovarPhi2Delta))
 ```
