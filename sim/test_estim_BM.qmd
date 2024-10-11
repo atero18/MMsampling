@@ -335,6 +335,12 @@ simulationUncounf <-
     
     if (phi == "eq")
       phi <- rep(0.5, N)
+    
+    else if (phi == "1/3")
+      phi <- rep(1.0 / 3.0, N)
+    
+    else if (phi == "2/3")
+      phi <- rep(2.0 / 3.0, N)
   
     else if (phi == "var")
       phi <- seq_len(N) / N
@@ -347,6 +353,15 @@ simulationUncounf <-
       expDeltas <- expYints - expYtels
       maxBias <- max(abs(expDeltas))
       phi <- 0.5 - 0.5 * abs(expDeltas) / maxBias
+    }
+    else if (phi == "split3")
+    {
+      expDeltas <- expYints - expYtels
+      absExpDeltas <- abs(expDeltas)
+      quantiles <- quantile(absExpDeltas, c(1.0 / 3.0, 2.0 / 3.0))
+      phi <- rep(0.5, N)
+      phi[absExpDeltas >= quantiles[1L]] <- 2.0 / 3.0
+      phi[absExpDeltas >= quantiles[2L]] <- 1.0
     }
       
     
@@ -889,7 +904,7 @@ loop_simulation <- function(parameters, K = 2000L)
 Evaluation of $K$ experiments:
 
 ```{r}
-K <- 2000L
+K <- 1000L
 Kvec <- seq_len(K)
 ```
 
@@ -897,6 +912,7 @@ Kvec <- seq_len(K)
 load(file = "../results.RData")
 ```
 
+Here we evaluate our estimators on the simplest cases : Gaussian laws with $\phi_k \equiv \frac{1}{2}$, a few values for $\sigma$ and a changing sign for $\beta_{tel,age}$.
 
 ```{r}
 #| eval: false
@@ -904,17 +920,17 @@ load(file = "../results.RData")
 # Grid of all evaluated parameters
 parameters <- expand_grid(constBias = c(TRUE, FALSE),
                           sampling = "SRS",#c("SRS", "STSRS"),
-                          YtelLaw = c("gaussian", "exponential"),
-                          YintLaw = c("gaussian", "exponential", "split3"),
+                          YtelLaw = "gaussian",
+                          YintLaw = "gaussian",
                           signAge = c("plus", "minus"),
-                          phi = c("eq", "var"),
+                          phi = "eq",
                           sdY = c(1.0, 2.0, 5.0, "split3")) %>%
   # If there is only exponential laws the parameter sdY is of no interest
   mutate(sdY =
            ifelse(YtelLaw == "gaussian" |
                     YintLaw == "gaussian", sdY, NA_real_)) 
 
-results <- loop_simulation(parameters)
+resultsGaussian <- loop_simulation(parameters)
 
 ```
 
@@ -929,13 +945,13 @@ $$\text{relError} = \frac{1}{K}\sum_{k=1}^K \frac{\hat{t}_{\phi\Delta y,k}-t_{\p
 $$\text{relRMSE} = \frac{\sqrt{\frac{1}{K}\sum_{k=1}^K (\hat{t}_{\phi\Delta y,k}-t_{\phi\Delta y,k})^2}}{|\mathbb{E}[t_{\phi\Delta y}]|}$$
 
 ```{r}
-temp <- results %>% 
+temp <- resultsGaussian %>% 
   filter(YtelLaw == "gaussian", YintLaw == "gaussian", 
          sampling == "SRS", 
          MBtype == "constant", signAge == "plus", 
          trueEstimator, sd == 1.0) %>% 
   select(-sampling, -MBtype, -probSelect) %>% 
-  group_by(phi, parameter, invMatrices, calculTotal)
+  group_by(parameter, invMatrices, calculTotal)
 
 temp %>% 
   summarise(K = n(),
@@ -984,11 +1000,11 @@ The `relExpRMSETWBenchmark` variable is the expected standard deviation of the b
 Results of each parameter for the case of SRS with **variable** measure bias and Gaussian laws (and variable $\sigma$). First we focus on the bias:
 
 ```{r}
-temp <- results %>% 
+temp <- resultsGaussian %>% 
   filter(YtelLaw == "gaussian", YintLaw == "gaussian", 
          sampling == "SRS", MBtype == "variable", trueEstimator) %>% 
   select(-sampling, -MBtype, -probSelect) %>% 
-  group_by(sd, phi, parameter, invMatrices, calculTotal) %>% 
+  group_by(sd, signAge, parameter, invMatrices, calculTotal) %>% 
   summarise(#reldiffTotalTrueMean = round(mean(diffYtelTrueMP / abs(expYtel)) , 4L), 
             relError = round(mean(diffYtelEstMP / abs(expYtel)) , 4L),
             relErrorBenchmark = round(mean(diffBenchmark / abs(expYtel)), 4L),
@@ -997,7 +1013,7 @@ temp <- results %>%
             relEstRMSEBenchmark = round(sqrt(mean(diffBenchmark^2L / expYtel^2L)), 4L),
             relExpRMSETWBenchmark = round(mean(expSDTWBenchmark / abs(expYtel)), 4L)) %>% 
   ungroup() %>% 
-  group_by(sd) %>% 
+  group_by(sd, signAge) %>% 
   arrange(abs(relError), .by_group = TRUE) %>% 
   ungroup()
 
@@ -1049,7 +1065,7 @@ Estimators with a better RMSE than the benchmark that are the most present:
 temp %>% 
   select(-relError, -relErrorBenchmark) %>% 
   filter(relRMSEParam <= relEstRMSEBenchmark) %>% 
-  group_by(phi, parameter, invMatrices, calculTotal) %>% 
+  group_by(parameter, invMatrices, calculTotal) %>% 
   summarize(n = n()) %>% 
   arrange(-n)
 ```
@@ -1068,7 +1084,185 @@ temp %>%
 rm(temp)
 ```
 
+
+## Impact of the standard deviation
+
+We focus on the impact of the standard deviation. Is there estimators that give better RMSE than the benchmark, independently of $\sigma$?
+
+```{r}
+parameters <- expand_grid(constBias = TRUE,
+                          sampling = "SRS",#c("SRS", "STSRS"),
+                          YtelLaw = "gaussian",
+                          YintLaw = "gaussian",
+                          signAge = c("plus", "minus"),
+                          phi = "eq",
+                          sdY = c(0.1, 1.0, 2.0, 5.0, 10.0, 20.0, 40.0, 60.0))
+
+resultsSD <- loop_simulation(parameters, K = K)
+```
+
+```{r}
+temp <- resultsSD %>% 
+  filter(trueEstimator) %>% 
+  select(-YintLaw, -YtelLaw, -sampling, -MBtype, -probSelect) %>% 
+  group_by(signAge, sd, phi, parameter, invMatrices, calculTotal) %>% 
+  summarise(#reldiffTotalTrueMean = round(mean(diffYtelTrueMP / abs(expYtel)) , 4L), 
+            relError = round(mean(diffYtelEstMP / abs(expYtel)) , 4L),
+            relErrorBenchmark = round(mean(diffBenchmark / abs(expYtel)), 4L),
+            #relRMSETrue = round(sqrt(mean(diffYtelTrueMP^2L / expYtel^2L)), 4L),
+            relRMSEParam = round(sqrt(mean(diffYtelEstMP^2L / expYtel^2L)), 4L),
+            relEstRMSEBenchmark = round(sqrt(mean(diffBenchmark^2L / expYtel^2L)), 4L),
+            relExpRMSETWBenchmark = round(mean(expSDTWBenchmark / abs(expYtel)), 4L)) %>% 
+  ungroup() %>% 
+  group_by(signAge, sd) %>% 
+  arrange(relRMSEParam, .by_group = TRUE) %>% 
+  ungroup()
+```
+
+```{r}
+temp %>% 
+  group_by(signAge, sd) %>% 
+  filter(relRMSEParam <= relEstRMSEBenchmark)
+```
+We can observe there is always estimators that are better than the benchmark, for any couple (`signAge`, `sdY`). In particular, the estimator `HT-samples-sample` is always present. Our estimators are still approximately unbiased but their variance increases with $\sigma$.
+
+```{r}
+temp %>% 
+  filter(parameter == "HT", invMatrices == "samples", calculTotal == "sample") %>% 
+  mutate(ratioRMSE = relRMSEParam / relEstRMSEBenchmark) %>% 
+  ggplot() + geom_point(aes(x = sd, y = ratioRMSE, color = signAge)) +
+  geom_hline(yintercept = 1.0, color = "red") +
+  ggtitle("Ratio of the RMSE depending on the standard deviation")
+```
+Trajectories are similar for the both values of `signAge`, even if for small values of $\sigma$ the ratios are quite higher for `signAge = plus`. It seems that the ratio convergences to a value that is right under 1.
+
+Best estimators depending on `signAge` and $\sigma$:
+
+```{r}
+temp %>% 
+  select(-relError, -relErrorBenchmark) %>% 
+  mutate(ratioRMSE = relRMSEParam / relEstRMSEBenchmark) %>%
+  group_by(signAge, sd) %>% 
+  slice_min(ratioRMSE) %>% 
+  select(signAge, sd, phi, parameter, invMatrices, calculTotal, ratioRMSE)
+```
+
+The ratio is always right under one, which means that in those conditions ($\phi$ constant for instance), there are estimators that are better than the benchmark but not that much.
+
+```{r}
+temp %>% 
+  group_by(signAge, sd) %>% 
+  summarize(minRatioRMSE = min(relRMSEParam / relEstRMSEBenchmark),
+            maxRatioRMSE = max(relRMSEParam / relEstRMSEBenchmark))
+```
+
+
+## Impact of $\phi$
+
+We propose different values for $\phi$:
+
+```{r}
+parameters <- expand_grid(constBias = TRUE,
+                          sampling = "SRS",
+                          YtelLaw = "gaussian",
+                          YintLaw = "gaussian",
+                          signAge = c("plus", "minus"),
+                          phi = c("eq", "1/3", "2/3",
+                                  "var", "linear", "split3"),
+                          sdY = c(1.0, 2.0, 5.0))
+
+resultsPhi <- loop_simulation(parameters, K = K)
+```
+
+```{r}
+temp <- resultsPhi %>% 
+  filter(trueEstimator) %>% 
+  select(-YintLaw, -YtelLaw, -sampling, -MBtype, -probSelect) %>% 
+  group_by(signAge, sd, phi, parameter, invMatrices, calculTotal) %>% 
+  summarise(#reldiffTotalTrueMean = round(mean(diffYtelTrueMP / abs(expYtel)) , 4L), 
+            relError = round(mean(diffYtelEstMP / abs(expYtel)) , 4L),
+            relErrorBenchmark = round(mean(diffBenchmark / abs(expYtel)), 4L),
+            #relRMSETrue = round(sqrt(mean(diffYtelTrueMP^2L / expYtel^2L)), 4L),
+            relRMSEParam = round(sqrt(mean(diffYtelEstMP^2L / expYtel^2L)), 4L),
+            relEstRMSEBenchmark = round(sqrt(mean(diffBenchmark^2L / expYtel^2L)), 4L),
+            relExpRMSETWBenchmark = round(mean(expSDTWBenchmark / abs(expYtel)), 4L)) %>% 
+  ungroup() %>% 
+  group_by(signAge, sd, phi) %>% 
+  arrange(relRMSEParam, .by_group = TRUE) %>% 
+  ungroup()
+```
+
+List of the best(s) estimator(s) (for the RMSE) for each couple (`signAge`, `sd`):
+```{r}
+temp %>% 
+  filter(relRMSEParam <= relExpRMSETWBenchmark) %>% 
+  group_by(signAge, sd) %>% 
+  mutate(ratioRMSE = relRMSEParam / relEstRMSEBenchmark) %>%
+  select(-relError, -relErrorBenchmark, 
+         -relRMSEParam, -relEstRMSEBenchmark,
+         -relExpRMSETWBenchmark) %>% 
+  arrange(ratioRMSE) %>% 
+  slice_min(ratioRMSE)
+```
+
+Evolution of the RMSE ratio depending on $\sigma$, $\phi$ and `signAge`:
+```{r}
+temp %>% 
+  filter(parameter == "HT", invMatrices == "samples", calculTotal == "sample") %>% 
+  mutate(ratioRMSE = relRMSEParam / relEstRMSEBenchmark) %>% 
+  ggplot() + 
+  geom_point(aes(x = sd, y = ratioRMSE, color = phi, shape = signAge)) +
+  geom_hline(yintercept = 1.0, color = "red") +
+  ggtitle("Ratio of the RMSE depending on the standard deviation and phi")
+```
+`var` (i.e. a random choice for $\phi_k$) gives really bad results. So we will remove it from now on.
+
+```{r}
+temp %>% 
+  filter(parameter == "HT", invMatrices == "samples", calculTotal == "sample") %>% 
+  filter(phi != "var") %>% 
+  mutate(ratioRMSE = relRMSEParam / relEstRMSEBenchmark) %>% 
+  ggplot() + 
+  geom_point(aes(x = sd, y = ratioRMSE, color = phi, shape = signAge)) +
+  geom_hline(yintercept = 1.0, color = "red") +
+  ggtitle("Ratio of the RMSE depending on the standard deviation and phi")
+```
+`split3` gives results that depends too much on $\beta_{tel}$ (unfortunately, because it gives good results in the case $\beta_{tel,age} < 0$). So we also shall remove it.
+```{r}
+temp %>% 
+  filter(parameter == "HT",
+         invMatrices == "samples",
+         calculTotal == "sample",
+         !phi %in% c("var", "split3")) %>% 
+  mutate(ratioRMSE = relRMSEParam / relEstRMSEBenchmark) %>% 
+  group_by(signAge, sd) %>% 
+  select(phi, ratioRMSE) %>% 
+  slice_min(ratioRMSE)
+```
+The choice of the constant depends of the situation. However, the difference between the ratios is not extremely important.
+
 # More general cases
+
+```{r}
+#| eval: false
+
+# Grid of all evaluated parameters
+parameters <- expand_grid(constBias = c(TRUE, FALSE),
+                          sampling = "SRS",#c("SRS", "STSRS"),
+                          YtelLaw = c("gaussian", "exponential"),
+                          YintLaw = c("gaussian", "exponential", "split3"),
+                          signAge = c("plus", "minus"),
+                          phi = c("eq", "var"),
+                          sdY = c(1.0, 2.0, 5.0, "split3")) %>%
+  # If there is only exponential laws the parameter sdY is of no interest
+  mutate(sdY =
+           ifelse(YtelLaw == "gaussian" |
+                    YintLaw == "gaussian", sdY, NA_real_)) %>% 
+  filter(YtelLaw != "gaussian" || YintLaw != "gaussian")
+
+resultsGeneral <- loop_simulation(parameters)
+```
+
 
 ## Telephone total estimation
 
@@ -1077,7 +1271,7 @@ The size of the grid of the hyperparameters (and so the number of cases) is huge
 Note : in the case of an exponential law for $Y_{int}$ or $Y_{tel}$, the standard deviation parameter is not considered (the standard deviation will be equal to $(z_k^T\beta)^2$, with the adequate $\beta$).
 
 ```{r}
-temp <- results %>% 
+temp <- resultsGeneral %>% 
   filter(trueEstimator) %>% 
   group_by(YintLaw, YtelLaw, sd, signAge, MBtype, phi,
            sampling, parameter, invMatrices, calculTotal)
@@ -1168,7 +1362,7 @@ rm(temp)
 Here we focus on the special case when selection probabilities are known and the estimator is Horvitz-Thompson with the complete inverse matrices and the summation for $\hat{t}_{\phi\Delta}$ is made on the entire population. The goal is to compare the estimated (co)variances with the ones expected by the theory.
 
 ```{r}
-temp <- results %>% 
+temp <- resultsGeneral %>% 
   filter(parameter == "HT", probSelect == "true", 
          invMatrices == "population", calculTotal == "population")
 
@@ -1226,41 +1420,5 @@ temp %>%
 rm(temp)
 ```
 
-# Impact of the standard deviation
 
 
-```{r}
-parameters <- expand_grid(constBias = c(TRUE, FALSE),
-                          sampling = "SRS",#c("SRS", "STSRS"),
-                          YtelLaw = "gaussian",
-                          YintLaw = "gaussian",
-                          signAge = c("plus", "minus"),
-                          phi = "eq",
-                          sdY = c(1.0, 2.0, 5.0, 10.0, 20.0, 40.0))
-
-
-
-resultsSD <- loop_simulation(parameters, K = K)
-```
-```{r}
-resultsSD %>% 
-  filter(trueEstimator, parameter == "HT", 
-         invMatrices == "samples", 
-         calculTotal == "sample")
-```
-
-# Impact of $\phi$
-
-```{r}
-parameters <- expand_grid(constBias = c(TRUE, FALSE),
-                          sampling = "SRS",#c("SRS", "STSRS"),
-                          YtelLaw = "gaussian",
-                          YintLaw = "gaussian",
-                          signAge = c("plus", "minus"),
-                          phi = c("eq", "var", "linear"),
-                          sdY = c(1.0, 2.0, 5.0))
-
-
-
-resultsSD <- loop_simulation(parameters, K = K)
-```
