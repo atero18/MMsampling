@@ -208,7 +208,9 @@
 var_HT_seq_phi1 <- function(expY1, covarY1,
                             piMat,
                             pq1Mat,
-                            phi = rep(1.0, length(expY2)))
+                            phi = rep(1.0, length(expY2)),
+                            correcEstimWeights = FALSE,
+                            Z)
 {
 
   if (all(phi == 0.0))
@@ -219,11 +221,34 @@ var_HT_seq_phi1 <- function(expY1, covarY1,
   p1 <- diag(pq1Mat)
   invP1Mat <- (p1 %*% t(p1))^-1L
 
+  weightedPhis <- phi / pi
+
   # Y_1 variability
   varY1 <- piMat * pq1Mat * covarY1 * invP1Mat
+  varY1 <- weightedPhis %*% t(weightedPhis) * varY1
 
   # mode 1 selection variability
-  prodexpY1Mat <- expY1 %*% t(expY1)
+  if (correcEstimWeights)
+  {
+    inverse1 <- solve(t(Z) %*%
+                        diag(p1 * (1.0 - 2.0 * p1) / (1.0 - p1)^2L) %*% Z)
+    U1 <- inverse1 %*% t(Z) %*% diag((1.0 - 2.0 * p1) / (1.0 - p1))
+
+    muphi11 <- 2.0 * crossprod(phi * expY1 * (p1^-1L - 1.0), Z)
+
+    X <- (phi * expY1 + as.vector(muphi11 %*% U1)) / pi
+  }
+  else
+  {
+    X <- weightedPhis * expY1
+  }
+
+  prodexpY1Mat <- X %*% t(X)
+  rm(X)
+
+
+
+
   covarq1 <- pi2_to_covarInc(pq1Mat)
   varq1 <- prodexpY1Mat * piMat * covarq1 * invP1Mat
 
@@ -231,11 +256,8 @@ var_HT_seq_phi1 <- function(expY1, covarY1,
   covarPi <- pi2_to_covarInc(piMat)
   varS <- prodexpY1Mat * covarPi
 
-  vMat <- varY1 + varq1 + varS
+  sum(varY1 + varq1 + varS)
 
-  weightedPhis <- phi / pi
-
-  sum(weightedPhis %*% t(weightedPhis) * vMat)
 }
 
 
@@ -247,7 +269,9 @@ var_HT_seq_phi1 <- function(expY1, covarY1,
 var_HT_seq_phi2 <- function(expY2, covarY2,
                             piMat,
                             pq1Mat, pq2Mat,
-                            phi = numeric(length(expY2)))
+                            phi = numeric(length(expY2)),
+                            correcEstimWeights = FALSE,
+                            Z)
 {
 
   if (all(phi == 1.0))
@@ -267,9 +291,13 @@ var_HT_seq_phi2 <- function(expY2, covarY2,
   p1Bar <- 1.0 - p1
 
   p2 <- diag(pq2Mat)
+  p2Bar <- 1.0 - p2
 
   invp1BarMat <- (p1Bar %*% t(p1Bar))^-1L
   invProbsMatSelecMat <- invp1BarMat * (p2 %*% t(p2))^-1L
+
+  phiBar <- 1.0 - phi
+  weightedPhis <- phiBar / pi
 
   # Y_2 variability
   varY2 <- piMat *
@@ -278,9 +306,34 @@ var_HT_seq_phi2 <- function(expY2, covarY2,
     covarY2 *
     invProbsMatSelecMat
 
+  varY2 <- weightedPhis %*% t(weightedPhis) * varY2
+
+  if (correcEstimWeights)
+  {
+    inverse1 <- solve(t(Z) %*% diag(p1 * (1.0 - 2.0 * p1) / p1Bar^2L) %*% Z)
+    U1 <- inverse1 %*% t(Z) %*% diag((1.0 - 2.0 * p1) / p1Bar)
+
+    muphi21 <- 2.0 * crossprod(phiBar * expY2 * p1 / p1Bar, Z)
+
+    inverse2 <- solve(t(Z) %*% diag(p2 * (1.0 - 2.0 * p2) / p2Bar^2L) %*% Z)
+    U2 <- inverse2 %*% t(Z) %*% diag((1.0 - 2.0 * p2) / p2Bar)
+
+    muphi22 <- 2.0 * crossprod(phiBar * expY2 * (p2^-1L - 1.0), Z)
+
+    X <- (phiBar * expY2 +
+            as.vector(muphi21 %*% U1) +
+            as.vector(muphi22 %*% U2)) / pi
+
+  }
+  else
+  {
+    X <- weightedPhis * expY2 / pi
+  }
+
+  prodexpY2Mat <- X %*% t(X)
+  rm(X)
 
   # mode 2 selection variability
-  prodexpY2Mat <- expY2 %*% t(expY2)
   covarq2 <- pi2_to_covarInc(pq2Mat)
   varq2 <- prodexpY2Mat *
     piMat *
@@ -302,9 +355,7 @@ var_HT_seq_phi2 <- function(expY2, covarY2,
 
   vMat <- varY2 + varq2 + varq1 + varS
 
-  weightedPhis <- (1.0 - phi) / pi
-
-  sum(weightedPhis %*% t(weightedPhis) * vMat)
+  sum(vMat)
 }
 
 #' @export

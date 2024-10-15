@@ -6,7 +6,15 @@
 of known selection probabilities. Using estimated values give an approximate
 variance in the case of known selection probabilities}
 \usage{
-var_HT_seq_phi1(expY1, covarY1, piMat, pq1Mat, phi = rep(1, length(expY2)))
+var_HT_seq_phi1(
+  expY1,
+  covarY1,
+  piMat,
+  pq1Mat,
+  phi = rep(1, length(expY2)),
+  correcEstimWeights = FALSE,
+  Z
+)
 }
 \description{
 Calculate the true variance of the HT estimator of t_phi1 in the case

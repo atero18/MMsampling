@@ -13,7 +13,9 @@ var_HT_seq_phi2(
   piMat,
   pq1Mat,
   pq2Mat,
-  phi = numeric(length(expY2))
+  phi = numeric(length(expY2)),
+  correcEstimWeights = FALSE,
+  Z
 )
 }
 \description{

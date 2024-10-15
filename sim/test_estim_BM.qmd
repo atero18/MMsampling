@@ -408,7 +408,8 @@ simulationUncounf <-
         trueProbsSelect[maskInt] <- pInt[maskInt]
         trueProbsSelect[maskTel] <- ((1.0 - pInt) * pTel)[maskTel]
         
-        if (rankMatrix(Z[maskInt, , drop = FALSE]) == p && rankMatrix(Z[maskTel, , drop = FALSE]) == p)
+        if (rankMatrix(Z[maskInt, , drop = FALSE]) == p &&
+            rankMatrix(Z[maskTel, , drop = FALSE]) == p)
           modeChoiceOK <- TRUE
         else
           warning("Singular Zint / Ztel")
@@ -767,7 +768,9 @@ simulationUncounf <-
                                      piMat = piMat,
                                      pq1Mat = pq1Mat,
                                      pq2Mat = pq2Mat,
-                                     phi = numeric(N)) %>% sqrt()
+                                     phi = numeric(N),
+                                     correcEstimWeights = TRUE,
+                                     Z) %>% sqrt()
     
     results <- results %>% 
       mutate(expSDTWBenchmark = sdTWBenchmark)
@@ -904,7 +907,7 @@ loop_simulation <- function(parameters, K = 2000L)
 Evaluation of $K$ experiments:
 
 ```{r}
-K <- 1000L
+K <- 15L
 Kvec <- seq_len(K)
 ```
 
