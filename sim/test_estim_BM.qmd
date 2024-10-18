@@ -275,9 +275,9 @@ simulationUncounf <-
     }
     else if (YtelLaw == "exponential")
     {
-      sdYtel <- NA_real_
-      expYtels <- sdYtels <- as.vector(abs(Z %*% betaTel))
-      covarYtel <- diag(sdYtels^2L)
+      sdTel <- "null"
+      expYtels <- sdTels <- as.vector(abs(Z %*% betaTel))
+      covarYtel <- diag(sdTels^2L)
     }
     
     if (YintLaw == "gaussian")
@@ -293,23 +293,28 @@ simulationUncounf <-
     }
     else if (YintLaw == "exponential")
     {
-      sdInt <- NA_real_
+      sdInt <- "null"
       expYints <- sdInts <- as.vector(abs(Z %*% betaInt))
       covarYint <- diag(sdInts^2L)
     }
     else if (YintLaw == "split3")
     {
       expYints <- as.vector(Z %*% betaInt)
+      quantilesInt <- quantile(expYints, probs = c(1.0 / 3.0, 2.0 / 3.0))
       
-      quantilesTel <- quantile(expYtels, probs = c(1.0 / 3.0, 2.0 / 3.0))
+      if (sdInt != "split3")
+      {
+        sdInts <- rep(as.numeric(sdInt), N)
+        covarYint <- diag(sdInts^2L)
+      }
       
       # Between first and second quantile of 3rd degree we add one
-      expYints[expDeltas > quantilesInt[1L]] <- 
-        expYints[expDeltas > quantilesInt[1L]] + 1.0
+      expYints[expYints > quantilesInt[1L]] <- 
+        expYints[expYints > quantilesInt[1L]] + 1.0
       
       # After the second quantile of 3rd degree we add one more
-      expYints[expDeltas > quantilesInt[2L]] <- 
-        expYints[expDeltas > quantilesInt[2L]] + 1.0
+      expYints[expYints > quantilesInt[2L]] <- 
+        expYints[expYints > quantilesInt[2L]] + 1.0
     }
     
     if (YintLaw %in% c("gaussian", "split3") && sdInt == "split3")
@@ -932,7 +937,7 @@ parameters <- expand_grid(constBias = c(TRUE, FALSE),
   # If there is only exponential laws the parameter sdY is of no interest
   mutate(sdY =
            ifelse(YtelLaw == "gaussian" |
-                    YintLaw == "gaussian", sdY, NA_real_)) 
+                    YintLaw == "gaussian", sdY, "null")) 
 
 resultsGaussian <- loop_simulation(parameters)
 
@@ -1237,6 +1242,13 @@ The choice of the constant depends of the situation. However, the difference bet
 Note: The is a superposition of "eq", 1/3 and 2/3 for any $\sigma$ with `signAge=plus`.
 
 # More general cases
+
+Percentage of values for $z_k^T\beta_{tel}$ that are $< 0$ with `signAge=minus`:
+
+```{r}
+glue("{sum(Z %*% betaTel < 0.0) * 100.0 / N} %")
+```
+
 
 ```{r}
 #| eval: false
