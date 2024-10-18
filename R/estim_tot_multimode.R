@@ -210,7 +210,9 @@ var_HT_seq_phi1 <- function(expY1, covarY1,
                             pq1Mat,
                             phi = rep(1.0, length(expY2)),
                             correcEstimWeights = FALSE,
-                            Z)
+                            Z,
+                            biasedMode,
+                            modes)
 {
 
   if (all(phi == 0.0))
@@ -230,13 +232,19 @@ var_HT_seq_phi1 <- function(expY1, covarY1,
   # mode 1 selection variability
   if (correcEstimWeights)
   {
+
     inverse1 <- solve(t(Z) %*%
                         diag(p1 * (1.0 - 2.0 * p1) / (1.0 - p1)^2L) %*% Z)
-    U1 <- inverse1 %*% t(Z) %*% diag((1.0 - 2.0 * p1) / (1.0 - p1))
+
+    indicator1 <- as.numeric(modes == biasedMode)
+    U1 <- inverse1 %*% t(Z) %*% diag(indicator1 - p1)
+    rm(inverse1)
 
     muphi11 <- 2.0 * crossprod(phi * expY1 * (p1^-1L - 1.0), Z)
 
     X <- (phi * expY1 + as.vector(muphi11 %*% U1)) / pi
+
+    rm(U1)
   }
   else
   {
@@ -271,8 +279,13 @@ var_HT_seq_phi2 <- function(expY2, covarY2,
                             pq1Mat, pq2Mat,
                             phi = numeric(length(expY2)),
                             correcEstimWeights = FALSE,
-                            Z)
+                            Z,
+                            biasedMode,
+                            refMode,
+                            modes)
 {
+
+  expit <- function(x) 1.0 / (1.0 + exp(-x))
 
   if (all(phi == 1.0))
     return(0.0)
@@ -299,6 +312,8 @@ var_HT_seq_phi2 <- function(expY2, covarY2,
   phiBar <- 1.0 - phi
   weightedPhis <- phiBar / pi
 
+  ##browser()
+
   # Y_2 variability
   varY2 <- piMat *
     pq1BarMat *
@@ -311,18 +326,25 @@ var_HT_seq_phi2 <- function(expY2, covarY2,
   if (correcEstimWeights)
   {
     inverse1 <- solve(t(Z) %*% diag(p1 * (1.0 - 2.0 * p1) / p1Bar^2L) %*% Z)
-    U1 <- inverse1 %*% t(Z) %*% diag((1.0 - 2.0 * p1) / p1Bar)
+    indicator1 <- as.numeric(modes == biasedMode)
+    U1 <- inverse1 %*% t(Z) %*% diag(indicator1 - p1)
+    rm(inverse1)
 
     muphi21 <- 2.0 * crossprod(phiBar * expY2 * p1 / p1Bar, Z)
 
     inverse2 <- solve(t(Z) %*% diag(p2 * (1.0 - 2.0 * p2) / p2Bar^2L) %*% Z)
-    U2 <- inverse2 %*% t(Z) %*% diag((1.0 - 2.0 * p2) / p2Bar)
+    indicator2 <- as.numeric(modes == refMode)
+
+    U2 <- inverse2 %*% t(Z) %*% diag(indicator2 - p2)
+    rm(inverse2)
 
     muphi22 <- 2.0 * crossprod(phiBar * expY2 * (p2^-1L - 1.0), Z)
 
     X <- (phiBar * expY2 +
             as.vector(muphi21 %*% U1) +
             as.vector(muphi22 %*% U2)) / pi
+
+    rm(U1, U2)
 
   }
   else

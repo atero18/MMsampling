@@ -275,8 +275,9 @@ simulationUncounf <-
     }
     else if (YtelLaw == "exponential")
     {
-      expYtels <- as.vector(abs(Z %*% betaTel))
-      covarYtel <- diag(expYtels^2L)
+      sdYtel <- NA_real_
+      expYtels <- sdYtels <- as.vector(abs(Z %*% betaTel))
+      covarYtel <- diag(sdYtels^2L)
     }
     
     if (YintLaw == "gaussian")
@@ -292,8 +293,9 @@ simulationUncounf <-
     }
     else if (YintLaw == "exponential")
     {
-      expYints <- as.vector(abs(Z %*% betaInt))
-      covarYint <- diag(expYints^2L)
+      sdInt <- NA_real_
+      expYints <- sdInts <- as.vector(abs(Z %*% betaInt))
+      covarYint <- diag(sdInts^2L)
     }
     else if (YintLaw == "split3")
     {
@@ -310,7 +312,7 @@ simulationUncounf <-
         expYints[expDeltas > quantilesInt[2L]] + 1.0
     }
     
-    if (sdInt %in% c("gaussian", "split3") && sdInt == "split3")
+    if (YintLaw %in% c("gaussian", "split3") && sdInt == "split3")
     {
       quantilesInt <- quantile(expYints, probs = c(1.0 / 3.0, 2.0 / 3.0))
       sdInts <- rep(3.0, N)
@@ -769,8 +771,7 @@ simulationUncounf <-
                                      pq1Mat = pq1Mat,
                                      pq2Mat = pq2Mat,
                                      phi = numeric(N),
-                                     correcEstimWeights = TRUE,
-                                     Z) %>% sqrt()
+                                     correcEstimWeights = FALSE) %>% sqrt()
     
     results <- results %>% 
       mutate(expSDTWBenchmark = sdTWBenchmark)
@@ -907,19 +908,19 @@ loop_simulation <- function(parameters, K = 2000L)
 Evaluation of $K$ experiments:
 
 ```{r}
-K <- 15L
+K <- 2500L
 Kvec <- seq_len(K)
 ```
 
 ```{r}
+#| eval: false
+
 load(file = "../results.RData")
 ```
 
 Here we evaluate our estimators on the simplest cases : Gaussian laws with $\phi_k \equiv \frac{1}{2}$, a few values for $\sigma$ and a changing sign for $\beta_{tel,age}$.
 
 ```{r}
-#| eval: false
-
 # Grid of all evaluated parameters
 parameters <- expand_grid(constBias = c(TRUE, FALSE),
                           sampling = "SRS",#c("SRS", "STSRS"),
@@ -927,7 +928,7 @@ parameters <- expand_grid(constBias = c(TRUE, FALSE),
                           YintLaw = "gaussian",
                           signAge = c("plus", "minus"),
                           phi = "eq",
-                          sdY = c(1.0, 2.0, 5.0, "split3")) %>%
+                          sdY = 1.0) %>%
   # If there is only exponential laws the parameter sdY is of no interest
   mutate(sdY =
            ifelse(YtelLaw == "gaussian" |
@@ -952,7 +953,7 @@ temp <- resultsGaussian %>%
   filter(YtelLaw == "gaussian", YintLaw == "gaussian", 
          sampling == "SRS", 
          MBtype == "constant", signAge == "plus", 
-         trueEstimator, sd == 1.0) %>% 
+         trueEstimator) %>% 
   select(-sampling, -MBtype, -probSelect) %>% 
   group_by(parameter, invMatrices, calculTotal)
 
@@ -1000,7 +1001,7 @@ The `relExpRMSETWBenchmark` variable is the expected standard deviation of the b
 
 # Ex : Gaussian variable measure bias
 
-Results of each parameter for the case of SRS with **variable** measure bias and Gaussian laws (and variable $\sigma$). First we focus on the bias:
+Results of each parameter for the case of SRS with **variable** measure bias and Gaussian laws and $\sigma = 1$. First we focus on the bias:
 
 ```{r}
 temp <- resultsGaussian %>% 
@@ -1016,7 +1017,7 @@ temp <- resultsGaussian %>%
             relEstRMSEBenchmark = round(sqrt(mean(diffBenchmark^2L / expYtel^2L)), 4L),
             relExpRMSETWBenchmark = round(mean(expSDTWBenchmark / abs(expYtel)), 4L)) %>% 
   ungroup() %>% 
-  group_by(sd, signAge) %>% 
+  group_by(signAge) %>% 
   arrange(abs(relError), .by_group = TRUE) %>% 
   ungroup()
 
@@ -1024,7 +1025,7 @@ temp %>%
   select(-relRMSEParam, -relEstRMSEBenchmark, -relExpRMSETWBenchmark)
 ```
 
-We can observe that the relative estimated bias is close to zero. It increases with the conditional standard deviation of $Y_{tel}$ and $Y_{int}$ (`sd`).
+We can observe that the relative estimated bias is close to zero.
 
 Even with a variable measure bias, the G-COMP model with only a constant for the bias is approximately unbiased. It is due to the fact that we chose here a centered measure bias, respectively to the couple (age, sex).
 
@@ -1033,33 +1034,24 @@ And now the RMSE:
 ```{r}
 temp %>% 
   select(-relError, -relErrorBenchmark) %>% 
-  group_by(sd) %>% 
   arrange(relRMSEParam, .by_group = TRUE)
 ```
 
-It is better to have $\phi_k \equiv \phi$ compared to $\phi_k = \frac{k}{N}$ for any conditional variance of $Y_{tel}$ and $Y_{int}$ and any estimator.
+It is better to have $\phi_k \equiv \phi$ compared to $\phi_k = \frac{k}{N}$ for any estimator.
 
-The estimator HT with **complete** inverse matrices and summing the bias on the sample only is the greatest (in term of RMSE) for any value and the standard deviation. Its RMSE is better than the RMSE of the benchmark, which is itself better than the benchmark with true probabilities.
+The estimator HT with **complete** inverse matrices and summing the bias on the sample only is the greatest (in term of RMSE). Its RMSE is better than the RMSE of the benchmark, which is itself better than the benchmark with true probabilities.
 
-Summing on $S_{r\bullet}$ exclusively seems also working like with the constant case. More importantly the calculation on the sample only gives the greatest results for each value of $\sigma$.
+Summing on $S_{r\bullet}$ exclusively seems also working like with the constant case. More importantly the calculation on the sample only gives the greatest result.
 
-Even if the G-COMp 0 degree model is unbiased, in every case it does not give efficient RMSE (always greater than the benchmark).
+Even if the G-COMP 0 degree model is unbiased, in every case it does not give efficient RMSE (always greater than the benchmark).
 
-Only a few of the estimators give an interesting RMSE. Some of the others can give a RMSE about more than twice the RMSE of the benchmark. It is important to chose carefully the used estimator. On the other hand we can observe that the positive gain **is not really high** (in particular chen $\sigma$ is the highest, i.e. $\sigma = 5$) :
+Only a few of the estimators give an interesting RMSE. Some of the others can give a RMSE about more than twice the RMSE of the benchmark. It is important to chose carefully the used estimator. On the other hand we can observe that the positive gain **is not really high**:
 
 ```{r}
 temp %>%
   mutate(ratioRMSE = relRMSEParam / relEstRMSEBenchmark) %>% 
   ggplot() + geom_histogram(aes(x = ratioRMSE)) +
   ggtitle("Ratio RMSE parameter compared to RMSE benchmark")
-```
-
-```{r}
-temp %>% 
-  select(-relError, -relErrorBenchmark) %>% 
-  group_by(sd) %>% 
-  summarize(minRatioRMSE = min(relRMSEParam / relEstRMSEBenchmark),
-            maxRatioRMSE = max(relRMSEParam / relEstRMSEBenchmark))
 ```
 
 Estimators with a better RMSE than the benchmark that are the most present:
@@ -1090,10 +1082,10 @@ rm(temp)
 
 ## Impact of the standard deviation
 
-We focus on the impact of the standard deviation. Is there estimators that give better RMSE than the benchmark, independently of $\sigma$?
+We focus on the impact of the standard deviation. Is there estimators that give better RMSE than the benchmark, independently of $\sigma$? The bias is is considered as variable.
 
 ```{r}
-parameters <- expand_grid(constBias = TRUE,
+parameters <- expand_grid(constBias = FALSE,
                           sampling = "SRS",#c("SRS", "STSRS"),
                           YtelLaw = "gaussian",
                           YintLaw = "gaussian",
@@ -1127,16 +1119,9 @@ temp %>%
   group_by(signAge, sd) %>% 
   filter(relRMSEParam <= relEstRMSEBenchmark)
 ```
-We can observe there is always estimators that are better than the benchmark, for any couple (`signAge`, `sdY`). In particular, the estimator `HT-samples-sample` is always present. Our estimators are still approximately unbiased but their variance increases with $\sigma$.
+We can observe there is always estimators that are better than the benchmark, for any couple (`signAge`, `sd`). In particular, the estimator `HT-samples-sample` is always present. Our estimators are still approximately unbiased but their variance increases with $\sigma$.
 
-```{r}
-temp %>% 
-  filter(parameter == "HT", invMatrices == "samples", calculTotal == "sample") %>% 
-  mutate(ratioRMSE = relRMSEParam / relEstRMSEBenchmark) %>% 
-  ggplot() + geom_point(aes(x = sd, y = ratioRMSE, color = signAge)) +
-  geom_hline(yintercept = 1.0, color = "red") +
-  ggtitle("Ratio of the RMSE depending on the standard deviation")
-```
+
 Trajectories are similar for the both values of `signAge`, even if for small values of $\sigma$ the ratios are quite higher for `signAge = plus`. It seems that the ratio convergences to a value that is right under 1.
 
 Best estimators depending on `signAge` and $\sigma$:
@@ -1150,7 +1135,11 @@ temp %>%
   select(signAge, sd, phi, parameter, invMatrices, calculTotal, ratioRMSE)
 ```
 
-The ratio is always right under one, which means that in those conditions ($\phi$ constant for instance), there are estimators that are better than the benchmark but not that much.
+The greatness of an estimator does not depend on `signAge` (if it is the best for `signAge = minus`, it is the best for `signAge = plus`).
+
+The RMSE ratio increases with $\sigma$. For any value of `signAge` and for $\sigma \in \{0,1,2\}$ we have really interesting ratios, while for higher values the ratio is always right under one, which means that in those conditions there are estimators that are better than the benchmark but not that much (if we follows blindly  the empirical results).
+
+The estimator needs to be chosen rightfully, specifically pour low values of $\sigma$ : the RMSE can be about 45% higher than the benchmark in the worst case.
 
 ```{r}
 temp %>% 
@@ -1158,14 +1147,23 @@ temp %>%
   summarize(minRatioRMSE = min(relRMSEParam / relEstRMSEBenchmark),
             maxRatioRMSE = max(relRMSEParam / relEstRMSEBenchmark))
 ```
+If we focus on `HT-samples-sample`, we have the following results:
 
+```{r}
+temp %>% 
+  filter(parameter == "HT", invMatrices == "samples", calculTotal == "sample") %>% 
+  mutate(ratioRMSE = relRMSEParam / relEstRMSEBenchmark) %>% 
+  ggplot() + geom_point(aes(x = sd, y = ratioRMSE, color = signAge)) +
+  geom_hline(yintercept = 1.0, color = "red") +
+  ggtitle("Ratio of the RMSE depending on the standard deviation (HT-samples-sample)")
+```
 
 ## Impact of $\phi$
 
-We propose different values for $\phi$:
+We propose different values for $\phi$, in the Gaussian case with variable bias and variable $\sigma$:
 
 ```{r}
-parameters <- expand_grid(constBias = TRUE,
+parameters <- expand_grid(constBias = FALSE,
                           sampling = "SRS",
                           YtelLaw = "gaussian",
                           YintLaw = "gaussian",
@@ -1208,7 +1206,9 @@ temp %>%
   slice_min(ratioRMSE)
 ```
 
-Evolution of the RMSE ratio depending on $\sigma$, $\phi$ and `signAge`:
+For any situation the best estimator is `(HT-population-sample)`, with $\phi_k \equiv \frac{2}{3}$. Like previously the RMSE ratio increases with $\sigma$.
+
+Evolution of the RMSE ratio depending on $\sigma$, $\phi$ and `signAge`, for the estimator `(HT-samples-sample)`:
 ```{r}
 temp %>% 
   filter(parameter == "HT", invMatrices == "samples", calculTotal == "sample") %>% 
@@ -1218,31 +1218,23 @@ temp %>%
   geom_hline(yintercept = 1.0, color = "red") +
   ggtitle("Ratio of the RMSE depending on the standard deviation and phi")
 ```
-`var` (i.e. a random choice for $\phi_k$) gives really bad results. So we will remove it from now on.
+`var` (i.e. a random choice for $\phi_k$) and `split3` gives really bad results. So we will remove it from now on.
 
 ```{r}
 temp %>% 
   filter(parameter == "HT", invMatrices == "samples", calculTotal == "sample") %>% 
-  filter(phi != "var") %>% 
+  filter(phi != "var", phi != "split3") %>% 
   mutate(ratioRMSE = relRMSEParam / relEstRMSEBenchmark) %>% 
   ggplot() + 
   geom_point(aes(x = sd, y = ratioRMSE, color = phi, shape = signAge)) +
   geom_hline(yintercept = 1.0, color = "red") +
   ggtitle("Ratio of the RMSE depending on the standard deviation and phi")
 ```
-`split3` gives results that depends too much on $\beta_{tel}$ (unfortunately, because it gives good results in the case $\beta_{tel,age} < 0$). So we also shall remove it.
-```{r}
-temp %>% 
-  filter(parameter == "HT",
-         invMatrices == "samples",
-         calculTotal == "sample",
-         !phi %in% c("var", "split3")) %>% 
-  mutate(ratioRMSE = relRMSEParam / relEstRMSEBenchmark) %>% 
-  group_by(signAge, sd) %>% 
-  select(phi, ratioRMSE) %>% 
-  slice_min(ratioRMSE)
-```
+
+The "linear" possibility gives bad results (with ratio stricly superior to 1). 
 The choice of the constant depends of the situation. However, the difference between the ratios is not extremely important.
+
+Note: The is a superposition of "eq", 1/3 and 2/3 for any $\sigma$ with `signAge=plus`.
 
 # More general cases
 
@@ -1261,7 +1253,7 @@ parameters <- expand_grid(constBias = c(TRUE, FALSE),
   mutate(sdY =
            ifelse(YtelLaw == "gaussian" |
                     YintLaw == "gaussian", sdY, NA_real_)) %>% 
-  filter(YtelLaw != "gaussian" || YintLaw != "gaussian")
+  filter(YtelLaw != "gaussian" | YintLaw != "gaussian")
 
 resultsGeneral <- loop_simulation(parameters)
 ```

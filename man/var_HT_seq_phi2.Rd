@@ -15,7 +15,10 @@ var_HT_seq_phi2(
   pq2Mat,
   phi = numeric(length(expY2)),
   correcEstimWeights = FALSE,
-  Z
+  Z,
+  biasedMode,
+  refMode,
+  modes
 )
 }
 \description{
