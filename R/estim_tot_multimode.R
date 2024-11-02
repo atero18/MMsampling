@@ -230,7 +230,7 @@
 
   # diagonal matrix of ^p_1k * (1-^p1k)
   lambda1S <- diag(p1[I] * (1.0 - p1[I]) / pi[I])
-  partialW1 <- t(Z[I, , drop = FALSE]) %*%
+  partialW1 <- -t(Z[I, , drop = FALSE]) %*%
     lambda1S %*%
     Z[I, , drop = FALSE]
 
@@ -270,7 +270,7 @@
 
   # diagonal matrix of ^p_1k * (1-^p1k)
   lambda1S <- diag(p1[I] * (1.0 - p1[I]) / pi[I])
-  partialW1 <- t(Z[I, , drop = FALSE]) %*%
+  partialW1 <- -t(Z[I, , drop = FALSE]) %*%
     lambda1S %*%
     Z[I, , drop = FALSE]
 
@@ -312,7 +312,7 @@
   # diagonal matrix of ^p_1k * (1-^p1k)
   lambda2Sm <- diag(p2[indicatorSm] * (1.0 - p2[indicatorSm]) /
                       (pi[indicatorSm] * p1Bar[indicatorSm]))
-  partialW2 <- t(Z[indicatorSm, , drop = FALSE]) %*%
+  partialW2 <- -t(Z[indicatorSm, , drop = FALSE]) %*%
     lambda2Sm %*%
     Z[indicatorSm, , drop = FALSE]
 
