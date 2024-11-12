@@ -9,16 +9,18 @@ known selection probabilities.}
 \usage{
 var_HT_seq_phi2(
   expY2,
-  covarY2,
+  I,
   piMat,
   pq1Mat,
   pq2Mat,
-  phi = numeric(length(expY2)),
-  correcEstimWeights = FALSE,
   Z,
   biasedMode,
   refMode,
-  modes
+  modes,
+  phi = rep(1, length(expY2)),
+  correcEstimWeights = FALSE,
+  constY2 = FALSE,
+  covarY2 = NULL
 )
 }
 \description{

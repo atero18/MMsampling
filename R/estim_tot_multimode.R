@@ -772,6 +772,8 @@ var_estim_tot_BM <- function(modeTotBiased = "HT", modeTotRef = "HT",
                              phi = numeric(length(expY2)),
                              subResults = FALSE)
 {
+
+  return(NA_real_)
   N <- length(expY2)
 
   pi <- diag(piMat)

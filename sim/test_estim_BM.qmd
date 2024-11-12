@@ -663,6 +663,15 @@ simulationUncounf <-
     
       estTotPhiYtelHTEstmMP <- sum(estTotPhiYtelHTEstmMP)
       
+      temp <-
+        phi[maskTel] *
+        estimWeights[maskTel] *
+        Ytels[maskTel]
+      
+      normEstPhiBiasDiffHT <- (estTotPhiYintHTEstMP - sum(temp)) / sum(phi)
+      
+      rm(temp)
+      
       # Don't know why but some columns are
       #  automatically converted as character
       partialResults$estPhiBias <- as.numeric(partialResults$estPhiBias)
@@ -680,6 +689,7 @@ simulationUncounf <-
         add_column(.after = "n", trueYtel = trueYtel) %>% 
         add_column(.after = "trueYtel", expYtel = expTotYtel) %>% 
         add_column(.before = "estPhiBias", truePhiBias = trueTotalBias) %>% 
+        add_column(.adter = "estPhiBias", normEstPhiBiasDiffHT = normEstPhiBiasDiffHT) %>% 
         add_column(.after = "truePhiBias", expPhiBias = expPhiBias) %>% 
         add_column(.after = "expPhiBias", 
                    estPhiYintTrueMP = estTotPhiYintHTTrueMP) %>% 
@@ -789,12 +799,13 @@ simulationUncounf <-
 -   `trueYtel`: $t_{tel} =\sum_{k \in U} y_{2k}$ for this iteration
 -   `expYtel` : $\mathbb{E}[t_{tel}]=\mathbb{E} [\sum_{k \in U} y_{2k}]$
 -   `estPhiBias` : $t_{\phi \hat{\Delta y}}$
+-   `estPhiBiasDiffHT` : $\hat{t}_{\hat{p},\phi y_1} - \hat{t}_{\hat{p},\phi y_2}$
 -   `truePhiBias` : $t_{\phi\Delta y}=\sum_{k\in U} \phi_k \Delta y_k$
 -   `expPhiBias` : $\mathbb{E}[t_{\phi\Delta y}]$
 -   `estPhiYintTrueMP` : $\hat{t}_{p,\phi y_1} = \sum_{k \in S_r}\frac{\phi_k y_{1k}}{\pi_k p_{1k}}$
 -   `estPhiYintEstMP` : $\hat{t}_{\hat{p},\phi y_1} = \sum_{k \in S_r}\frac{\phi_k y_{1k}}{\pi_k \hat{p}_{1k}}$
--   `estYtelTrueMP` : $\hat{t}_{py_2}:= \hat{t}_{p,\phi y_1} + \hat{t}_{p,\phi y_2} - t_{\phi \hat{\Delta y}}$
--   `estYtelEstMP` : $\hat{t}_{\hat{p}y_2}:= \hat{t}_{\hat{p},\phi y_1} + \hat{t}_{\hat{p},\phi y_2} - t_{\phi \hat{\Delta y}}$
+-   `estYtelTrueMP` : $\hat{t}_{py_2}:= \hat{t}_{p,\phi y_1} + \hat{t}_{p,\bar{\phi} y_2} - t_{\phi \hat{\Delta y}}$
+-   `estYtelEstMP` : $\hat{t}_{\hat{p}y_2}:= \hat{t}_{\hat{p},\phi y_1} + \hat{t}_{\hat{p},\bar{\phi} y_2} - t_{\phi \hat{\Delta y}}$
 -   `expVar2` : $\mathbb{V}[\hat{t}_{\hat{p}y_2}]$ PAS ENCORE VRAI, À CONSIDÉRER
 -   `TWBenchmark` : $\sum_{k \in S_{mr}} \frac{y_{2k}}{\pi_k(1-p_{1k})p_{2k}}$
 -   `benchmark` : $\sum_{k \in S_{mr}} \frac{y_{2k}}{\pi_k(1-\hat{p}_{1k})\hat{p}_{2k}}$
@@ -902,7 +913,11 @@ loop_simulation <- function(parameters, K = 2000L)
            diffYtelEstMP = estYtelEstMP - trueYtel) %>% 
     mutate(.after = "estTotPhiYtelTrueMP",
            diffYtelTrueMP = estYtelTrueMP - trueYtel) %>% 
-    mutate(.after = diffYtelTrueMP, diffBenchmark = benchmark - trueYtel)
+    mutate(.after = "diffYtelTrueMP", 
+           diffWithoutCorrectionEstMP = estPhiYintEstMP + 
+             estTotPhiYtelEstMP - 
+             trueYtel) %>% 
+    mutate(.after = "diffYtelTrueMP", diffBenchmark = benchmark - trueYtel)
   
   results
 }
@@ -964,23 +979,23 @@ temp <- resultsGaussian %>%
 
 temp %>% 
   summarise(K = n(),
+            relErrorWithoutCorr = round(mean(diffWithoutCorrectionEstMP / abs(expYtel)), 4L),
             relError = round(mean(diffPhiBias / abs(expPhiBias)), 4L), 
             relRMSE = round(sqrt(mean(diffPhiBias^2L / expPhiBias^2L)), 4L)) %>% 
   ungroup() %>% 
   arrange(relRMSE)
 ```
 
-The relative error `relError` is close to zero for each estimator. RMSEs are about the same, being in \[0.13, 0.18\]. For the best RMSE we have the model that consider the bias constant (up to a centered noise): the G-COMP model with a simple constant $\delta$ for the MB consideration.
+The relative error `relError` is close to zero for each estimator. It is clear that it is an improvement compared to the estimator that totally neglect the bias, i.e. $\hat{t}_{pq\phi1}-\hat{t}_{pq\bar{\phi}2}$. RMSEs are about the same, being in \[0.13, 0.18\]. For the best RMSE we have the model that consider the bias constant (up to a centered noise): the G-COMP model with a simple constant $\delta$ for the MB consideration.
 
 ## telephone total estimation
 
 Our different estimators are all approximately unbiased, so we focus on the RMSE appearing when we estimate the total $t_2$ with each estimator:
 
+
 ```{r}
 temp %>% 
   summarise(K = n(),
-            relError = round(mean(diffYtelEstMP / abs(expYtel)), 4L),
-            relBenchmarkError = round(mean(diffBenchmark / abs(expYtel)), 4L),
             relEstRMSE = round(sqrt(mean(diffYtelEstMP^2L / expYtel^2L)), 4L),
             relEstRMSEBenchmark = round(sqrt(mean(diffBenchmark^2L / expYtel^2L)), 4L),
             relExpRMSETWBenchmark = mean(expSDTWBenchmark / abs(expYtel))) %>% 
@@ -1003,6 +1018,73 @@ The case $\phi = \frac{1}{N}, \frac{2}{N}, \cdots$ gives a RMSE higher than the 
 With $\phi$ fixed, the other estimators give a RMSE nearly equal the benckmark.
 
 The `relExpRMSETWBenchmark` variable is the expected standard deviation of the benchmark calculated with the true selection probabilities. The bias is equal to zero with the true weights so the RMSE is equal to the standard deviation. Biases of the estimators are nearly zero so RMSE and standard deviations can be compared. We can observe that for every estimator the (estimated) RMSE is **clearly lower** than the standard deviation / RMSE of the benchmark with true probabilities.
+
+## Bias detection
+
+We would like to check if, in the case of a constant bias, the estimator
+
+$$\frac{1}{||\phi||_1}(\hat{t}_{pq\phi1}-\hat{t}_{pq\phi2})$$
+
+detects the bias, in the sense of its expected value is equal to the constant bias $\delta$. Moreover, we would like to be sure that this estimator tends to a normal law. Of course this estimator shouldn't be used to estimate the total of the bias in the global estimator, because it would directly erase the information coming from $S_{r\bullet}$.
+
+Here we use the empirical standard deviation based on our $K$ observations. 
+
+```{r}
+temp <- resultsGaussian %>% 
+  filter(YtelLaw == "gaussian", YintLaw == "gaussian", 
+         sampling == "SRS", 
+         MBtype == "constant", signAge == "plus", 
+         trueEstimator) %>% 
+  select(experiment, normEstPhiBiasDiffHT) %>% 
+  group_by(experiment) %>% 
+  slice_head() %>% 
+  ungroup() %>% 
+  select(normEstPhiBiasDiffHT)
+
+estimBias <- temp$normEstPhiBiasDiffHT
+```
+
+For $\delta = 1$, we would like to have an empirical mean close to it:
+
+```{r}
+empMean <- mean(estimBias)
+glue("empirical mean: {empMean} (expected: {1})")
+```
+
+Note that both the estimators used are only approximately unbiased.
+
+Then we evaluate the coverage of our confidence intervals. For $\alpha = 0.05$, we have
+
+```{r}
+empSD <- sd(estimBias)
+
+alpha <- 0.05
+CIlower <- estimBias - qnorm(1.0 - alpha / 2.0) * empSD
+CIupper <- estimBias + qnorm(1.0 - alpha / 2.0) * empSD
+
+coverage <- mean(CIlower <= 1.0 & 1.0 <= CIupper)
+
+glue("coverage: {coverage} (expected: {1 - alpha})")
+```
+
+
+
+And finally we check the normality of our estimator:
+
+```{r}
+temp %>% 
+ggplot() + 
+  geom_density(aes(x = normEstPhiBiasDiffHT)) + 
+  geom_vline(aes(xintercept = 1.0, colour = "constant"), show.legend = TRUE) +
+  ggtitle("Detection of a constant bias") +
+  xlab("normalized HT-difference estimator") +
+  scale_color_manual(name = "bias", values = c(constant = "red"))
+
+ks.test(x = (estimBias - 1.0) / empSD, y = "pnorm")
+```
+
+With an important p-value the Kolmogorov-Smirnov test ensure that our estimator is normal.
+
 
 # Ex : Gaussian variable measure bias
 
@@ -1039,10 +1121,9 @@ And now the RMSE:
 ```{r}
 temp %>% 
   select(-relError, -relErrorBenchmark) %>% 
+  mutate(percRMSE = 100.0 * relRMSEParam / relEstRMSEBenchmark, .after = relEstRMSEBenchmark) %>% 
   arrange(relRMSEParam, .by_group = TRUE)
 ```
-
-It is better to have $\phi_k \equiv \phi$ compared to $\phi_k = \frac{k}{N}$ for any estimator.
 
 The estimator HT with **complete** inverse matrices and summing the bias on the sample only is the greatest (in term of RMSE). Its RMSE is better than the RMSE of the benchmark, which is itself better than the benchmark with true probabilities.
 
@@ -1122,10 +1203,23 @@ temp <- resultsSD %>%
 ```{r}
 temp %>% 
   group_by(signAge, sd) %>% 
-  filter(relRMSEParam <= relEstRMSEBenchmark)
+  filter(relRMSEParam <= relEstRMSEBenchmark) %>% 
+  mutate(percRMSE = 100.0 * relRMSEParam / relEstRMSEBenchmark, .after = relEstRMSEBenchmark) %>% 
+  arrange(percRMSE, .by_group = TRUE)
 ```
-We can observe there is always estimators that are better than the benchmark, for any couple (`signAge`, `sd`). In particular, the estimator `HT-samples-sample` is always present. Our estimators are still approximately unbiased but their variance increases with $\sigma$.
+We can observe there is always estimators that are better than the benchmark (but sometimes not that much), for any couple (`signAge`, `sd`). In particular, the estimator `HT-samples-sample` is always present. Our estimators are still approximately unbiased but their variance increase with $\sigma$.
 
+For each couple (signAge, sd), we draw the best estimator:
+
+```{r}
+temp %>% 
+  group_by(signAge, sd) %>% 
+  filter(relRMSEParam <= relEstRMSEBenchmark) %>% 
+  mutate(percRMSE = 100.0 * relRMSEParam / relEstRMSEBenchmark, .after = relEstRMSEBenchmark) %>% 
+  slice_min(percRMSE)
+```
+
+For low values of $\sigma$ the best estimator is HT-population-sample. For $\sigma \geq 10$ it is best to use the 1 degree G-Computation model. However with $\sigma \geq 10$ the gain is really weak.
 
 Trajectories are similar for the both values of `signAge`, even if for small values of $\sigma$ the ratios are quite higher for `signAge = plus`. It seems that the ratio convergences to a value that is right under 1.
 
@@ -1161,6 +1255,19 @@ temp %>%
   ggplot() + geom_point(aes(x = sd, y = ratioRMSE, color = signAge)) +
   geom_hline(yintercept = 1.0, color = "red") +
   ggtitle("Ratio of the RMSE depending on the standard deviation (HT-samples-sample)")
+```
+And if we draw the best result we have with all estimators:
+
+```{r}
+temp %>% 
+  select(-relError, -relErrorBenchmark) %>% 
+  mutate(ratioRMSE = relRMSEParam / relEstRMSEBenchmark) %>%
+  group_by(signAge, sd) %>% 
+  slice_min(ratioRMSE) %>% 
+  select(signAge, sd, phi, parameter, invMatrices, calculTotal, ratioRMSE) %>% 
+  ggplot() + geom_point(aes(x = sd, y = ratioRMSE, color = signAge)) +
+  geom_hline(yintercept = 1.0, color = "red") +
+  ggtitle("Ratio of the RMSE depending on the standard deviation (best estimator)")
 ```
 
 ## Impact of $\phi$
@@ -1198,6 +1305,39 @@ temp <- resultsPhi %>%
   ungroup()
 ```
 
+List of the estimators and their RMSE ratio depending on signAge, sigma and phi :
+```{r}
+temp %>% 
+  filter(relRMSEParam <= relExpRMSETWBenchmark) %>% 
+  group_by(signAge, sd, parameter, invMatrices, calculTotal) %>% 
+  mutate(ratioRMSE = relRMSEParam / relEstRMSEBenchmark) %>%
+  select(-relError, -relErrorBenchmark, 
+         -relRMSEParam, -relEstRMSEBenchmark,
+         -relExpRMSETWBenchmark) %>% 
+  arrange(ratioRMSE, .by_group = TRUE)
+```
+
+We remove the linear, var and split3 options because they give bad results. 
+
+Here we print the minimum and maximum RMSE ratios obtained with each situation and each estimator that gives at least one result with an RMSE better than the benchmark:
+
+```{r}
+temp %>% 
+  filter(!phi %in% c("var", "linear", "split3")) %>% 
+  group_by(signAge, sd, parameter, invMatrices, calculTotal) %>% 
+  filter(relRMSEParam < relEstRMSEBenchmark) %>% 
+  mutate(ratioRMSE = relRMSEParam / relEstRMSEBenchmark) %>%
+  select(-relError, -relErrorBenchmark, 
+         -relRMSEParam, -relEstRMSEBenchmark,
+         -relExpRMSETWBenchmark) %>% 
+  summarize(minRMSE = min(ratioRMSE), 
+            maxRMSE = max(ratioRMSE), 
+            diffMaxMin = maxRMSE - minRMSE,
+            percMaxMin = 100.0 * (diffMaxMin) / maxRMSE) %>% 
+  group_by(signAge, sd) %>% 
+  arrange(minRMSE, .by_group = TRUE)
+```
+
 List of the best(s) estimator(s) (for the RMSE) for each couple (`signAge`, `sd`):
 ```{r}
 temp %>% 
@@ -1207,11 +1347,23 @@ temp %>%
   select(-relError, -relErrorBenchmark, 
          -relRMSEParam, -relEstRMSEBenchmark,
          -relExpRMSETWBenchmark) %>% 
-  arrange(ratioRMSE) %>% 
   slice_min(ratioRMSE)
 ```
 
 For any situation the best estimator is `(HT-population-sample)`, with $\phi_k \equiv \frac{2}{3}$. Like previously the RMSE ratio increases with $\sigma$.
+
+
+Evolution of the RMSE ratio depending on $\sigma$, $\phi$ and `signAge`, for the estimator `(HT-population-sample)`:
+
+```{r}
+temp %>% 
+  filter(parameter == "HT", invMatrices == "population", calculTotal == "sample") %>% 
+  mutate(ratioRMSE = relRMSEParam / relEstRMSEBenchmark) %>% 
+  ggplot() + 
+  geom_point(aes(x = sd, y = ratioRMSE, color = phi, shape = signAge)) +
+  geom_hline(yintercept = 1.0, color = "red") +
+  ggtitle("Ratio of the RMSE depending on the standard deviation and phi (HT-population-sample)")
+```
 
 Evolution of the RMSE ratio depending on $\sigma$, $\phi$ and `signAge`, for the estimator `(HT-samples-sample)`:
 ```{r}
@@ -1221,7 +1373,7 @@ temp %>%
   ggplot() + 
   geom_point(aes(x = sd, y = ratioRMSE, color = phi, shape = signAge)) +
   geom_hline(yintercept = 1.0, color = "red") +
-  ggtitle("Ratio of the RMSE depending on the standard deviation and phi")
+  ggtitle("Ratio of the RMSE depending on the standard deviation and phi (HT-samples-sample)")
 ```
 `var` (i.e. a random choice for $\phi_k$) and `split3` gives really bad results. So we will remove it from now on.
 
@@ -1239,7 +1391,81 @@ temp %>%
 The "linear" possibility gives bad results (with ratio stricly superior to 1). 
 The choice of the constant depends of the situation. However, the difference between the ratios is not extremely important.
 
-Note: The is a superposition of "eq", 1/3 and 2/3 for any $\sigma$ with `signAge=plus`.
+Note: There is a superposition of "eq", 1/3 and 2/3 for any $\sigma$ with `signAge=plus`.
+
+## Bias detection
+
+
+We would like to check if, in the case of a constant bias, the estimator
+
+$$\frac{1}{||\phi||_1}(\hat{t}_{pq\phi1}-\hat{t}_{pq\phi2})$$
+
+detects the bias, in the sense of its expected value is equal to the constant bias $\delta$. Moreover, we would like to be sure that this estimator tends to a normal law.
+
+Here we use the empirical standard deviation based on our $K$ observations. 
+
+```{r}
+temp <- resultsGaussian %>% 
+  filter(YtelLaw == "gaussian", YintLaw == "gaussian", 
+         sampling == "SRS", 
+         MBtype == "variable", signAge == "plus", 
+         trueEstimator) %>% 
+  select(experiment, normEstPhiBiasDiffHT) %>% 
+  group_by(experiment) %>% 
+  slice_head() %>% 
+  ungroup() %>% 
+  select(normEstPhiBiasDiffHT)
+
+estimBias <- temp$normEstPhiBiasDiffHT
+```
+
+The expected value is equal to 
+
+$$\frac{1}{||\phi||_1}(||\phi||_1\delta_0 + \sum_{k \in U} \phi_k. age_k. \delta_{age} + \sum_{k \in U} \phi_k .sexe_k. \delta_{sexe})$$
+
+In our situation we have that $\sum_{k \in U} age_k. \delta_{age} + \sum_{k \in U}.sexe_k. \delta_{sexe} = 0$, by construction. So if the $\phi_k$ are constant (which is the case here), the expected value simply becomes $\delta_0$, which is equal to $1$.
+
+```{r}
+empMean <- mean(estimBias)
+glue("empirical mean: {empMean} (expected: {1})")
+```
+
+The empirical mean is close to the nominal value, even with approximately unbiased estimators.
+
+For $\alpha = 0.05$, we have
+
+```{r}
+empSD <- sd(estimBias)
+
+alpha <- 0.05
+CIlower <- estimBias - qnorm(1.0 - alpha / 2.0) * empSD
+CIupper <- estimBias + qnorm(1.0 - alpha / 2.0) * empSD
+
+coverage <- mean(CIlower <= 1.0 & 1.0 <= CIupper)
+
+glue("coverage: {coverage} (expected: {1 - alpha})")
+```
+
+the coverage is very close to the target.
+
+
+We check the normality of our estimator:
+
+```{r}
+temp %>% 
+ggplot() + 
+  geom_density(aes(x = normEstPhiBiasDiffHT)) + 
+  geom_vline(aes(xintercept = 1.0, colour = "expected"), show.legend = TRUE) +
+  ggtitle("Detection of a variable bias (average)") +
+  xlab("normalized HT-difference estimator") +
+  scale_color_manual(name = "bias", values = c(expected = "red"))
+
+
+ks.test(x = (estimBias - 1.0) / empSD, y = "pnorm")
+```
+
+With an important p-value the Kolmogorov-Smirnov test ensure that our estimator is normal.
+
 
 # More general cases
 

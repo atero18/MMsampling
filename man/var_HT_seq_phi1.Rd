@@ -8,14 +8,16 @@ variance in the case of known selection probabilities}
 \usage{
 var_HT_seq_phi1(
   expY1,
-  covarY1,
+  I,
   piMat,
   pq1Mat,
-  phi = rep(1, length(expY2)),
-  correcEstimWeights = FALSE,
   Z,
   biasedMode,
-  modes
+  modes,
+  phi = rep(1, length(expY1)),
+  correcEstimWeights = FALSE,
+  constY1 = FALSE,
+  covarY1 = NULL
 )
 }
 \description{
