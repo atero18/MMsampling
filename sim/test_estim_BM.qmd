@@ -369,8 +369,8 @@ simulationUncounf <-
       absExpDeltas <- abs(expDeltas)
       quantiles <- quantile(absExpDeltas, c(1.0 / 3.0, 2.0 / 3.0))
       phi <- rep(0.5, N)
-      phi[absExpDeltas >= quantiles[1L]] <- 2.0 / 3.0
-      phi[absExpDeltas >= quantiles[2L]] <- 1.0
+      phi[absExpDeltas >= quantiles[1L]] <- 1.0 / 3.0
+      phi[absExpDeltas >= quantiles[2L]] <- 1.0 / 6.0
     }
       
     
@@ -1130,8 +1130,7 @@ CI2upper <- estimatorsPhi2 + qnorm(1.0 - alpha2 / 2.0) * empSD2
 resSuperpositions <- data.frame(ratio = ratioDeltas, 
                                 delta = deltas, 
                                 percSuperposition = 0.0,
-                                percPresenceMean2 = 0.0,
-                                alpha = alpha1)
+                                percPresenceMean2 = 0.0)
 
 avgEstWeightsInt <- as.numeric(temp$avgEstWeightsInt)
 for (delta in deltas)
@@ -1160,8 +1159,6 @@ for (delta in deltas)
     c(percSuperposition, percPresenceMean2)
 }
 
-resSuperpositions$alpha12 <- 1.0 - resSuperpositions$percPresenceMean2 / 100.0
-
 resSuperpositions
 ```
 
@@ -1181,21 +1178,6 @@ $$\frac{1}{||\phi||_1}(\hat{t}_{pq\phi1}-\hat{t}_{pq\phi2})$$
 detects the bias, in the sense of its expected value is equal to the constant bias $\delta$. Moreover, we would like to be sure that this estimator tends to a normal law. Of course this estimator shouldn't be used to estimate the total of the bias in the global estimator, because it would directly erase the information coming from $S_{r\bullet}$.
 
 Here we use the empirical standard deviation based on our $K$ observations. 
-
-```{r}
-temp <- resultsGaussian %>% 
-  filter(YtelLaw == "gaussian", YintLaw == "gaussian", 
-         sampling == "SRS", 
-         MBtype == "constant", signAge == "plus", 
-         trueEstimator) %>% 
-  select(experiment, normEstPhiBiasDiffHT) %>% 
-  group_by(experiment) %>% 
-  slice_head() %>% 
-  ungroup() %>% 
-  select(normEstPhiBiasDiffHT)
-
-estimBias <- temp$normEstPhiBiasDiffHT
-```
 
 #### $\delta = 1$
 
@@ -1227,6 +1209,46 @@ With an important p-value the Kolmogorov-Smirnov test ensure that our estimator 
 #### Coverage depending on $\delta$
 
 Then we evaluate the coverage of our confidence intervals. For $\alpha = 0.05$, we have
+
+
+```{r}
+alpha <- .05
+
+nInt <- as.numeric(temp$nInt)
+
+resDetection <- data.frame(ratio = ratioDeltas, 
+                           delta = deltas, 
+                           percPresenceZero = 0.0,
+                           percPresenceDelta = 0.0)
+
+
+for (delta in deltas)
+{
+  estimatorPhiDelta <- 1.0 / (0.5 * N) * (estimatorsPhi1 + 
+  .5 * avgEstWeightsInt * nInt * (delta - 1.0) - 
+  estimatorsPhi2)
+
+  empSDPhiDelta <- sd(estimatorPhiDelta)
+
+  CIlower <-  estimatorPhiDelta - qnorm(1.0 - alpha / 2.0) * empSDPhiDelta
+  CIupper <- estimatorPhiDelta + qnorm(1.0 - alpha / 2.0) * empSDPhiDelta
+  
+  presenceZero <- CIlower <= 0.0 & 0.0 <= CIupper
+  
+  percPresenceZero <- 100.0 * mean(presenceZero) 
+  
+  presenceDelta <- CIlower <= delta & delta <= CIupper
+  
+  percPresenceDelta <- 100.0 * mean(presenceDelta)
+  
+  resDetection[resSuperpositions$delta == delta, 
+                    c("percPresenceZero", "percPresenceDelta")] <- 
+    c(percPresenceZero, percPresenceDelta)
+}
+
+
+resDetection
+```
 
 ```{r}
 empSD <- sd(estimBias)
@@ -1463,7 +1485,7 @@ temp <- resultsPhi %>%
 List of the estimators and their RMSE ratio depending on signAge, sigma and phi :
 ```{r}
 temp %>% 
-  filter(relRMSEParam <= relExpRMSETWBenchmark) %>% 
+  filter(relRMSEParam <= relEstRMSEBenchmark) %>% 
   group_by(signAge, sd, parameter, invMatrices, calculTotal) %>% 
   mutate(ratioRMSE = relRMSEParam / relEstRMSEBenchmark) %>%
   select(-relError, -relErrorBenchmark, 
@@ -1496,7 +1518,7 @@ temp %>%
 List of the best(s) estimator(s) (for the RMSE) for each couple (`signAge`, `sd`):
 ```{r}
 temp %>% 
-  filter(relRMSEParam <= relExpRMSETWBenchmark) %>% 
+  filter(relRMSEParam <= relEstRMSEBenchmark) %>% 
   group_by(signAge, sd) %>% 
   mutate(ratioRMSE = relRMSEParam / relEstRMSEBenchmark) %>%
   select(-relError, -relErrorBenchmark, 
