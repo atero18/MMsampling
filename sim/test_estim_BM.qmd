@@ -317,6 +317,8 @@ simulationUncounf <-
         expYints[expYints > quantilesInt[2L]] + 1.0
     }
     
+    expTotYint <- sum(expYints)
+    
     if (YintLaw %in% c("gaussian", "split3") && sdInt == "split3")
     {
       quantilesInt <- quantile(expYints, probs = c(1.0 / 3.0, 2.0 / 3.0))
@@ -329,7 +331,7 @@ simulationUncounf <-
     clusterExport(cluster,
                   varlist = c("expYtels", "sdInts", "sdTels",
                               "covarYtel", 
-                              "expYints", "covarYint"),
+                              "expYints", "expTotYint", "covarYint"),
                   envir = environment())
     
     clusterExport(cluster, "gen_choice_bimode")
@@ -411,7 +413,9 @@ simulationUncounf <-
         modes <- gen_choice_bimode(I, pInt, pTel)
         trueProbsSelect <- rep(NA_real_, N)
         maskInt <- modes == "int"
+        nInt <- sum(maskInt)
         maskTel <- modes == "tel"
+        nTel <- sum(maskTel)
         trueProbsSelect[maskInt] <- pInt[maskInt]
         trueProbsSelect[maskTel] <- ((1.0 - pInt) * pTel)[maskTel]
         
@@ -663,14 +667,15 @@ simulationUncounf <-
     
       estTotPhiYtelHTEstmMP <- sum(estTotPhiYtelHTEstmMP)
       
-      temp <-
+      estPhiYtelEstMP <-
         phi[maskTel] *
         estimWeights[maskTel] *
         Ytels[maskTel]
       
-      normEstPhiBiasDiffHT <- (estTotPhiYintHTEstMP - sum(temp)) / sum(phi)
+      estPhiYtelEstMP <- sum(estPhiYtelEstMP)
       
-      rm(temp)
+      normEstPhiBiasDiffHT <-
+        (estTotPhiYintHTEstMP - estPhiYtelEstMP) / sum(phi)
       
       # Don't know why but some columns are
       #  automatically converted as character
@@ -686,26 +691,32 @@ simulationUncounf <-
       partialResults <- partialResults %>% 
         add_column(.before = 1L, expn = sum(pi)) %>% 
         add_column(.after = "expn", n = sum(I)) %>% 
-        add_column(.after = "n", trueYtel = trueYtel) %>% 
+        add_column(.after = "n", nInt = nInt) %>% 
+        add_column(.after = "nInt", nTel = nTel) %>% 
+        add_column(.after = "nTel", expYint = expTotYint) %>% 
+        add_column(.after = "expYint", trueYtel = trueYtel) %>% 
         add_column(.after = "trueYtel", expYtel = expTotYtel) %>% 
         add_column(.before = "estPhiBias", truePhiBias = trueTotalBias) %>% 
         add_column(.adter = "estPhiBias", normEstPhiBiasDiffHT = normEstPhiBiasDiffHT) %>% 
         add_column(.after = "truePhiBias", expPhiBias = expPhiBias) %>% 
         add_column(.after = "expPhiBias", 
                    estPhiYintTrueMP = estTotPhiYintHTTrueMP) %>% 
+        add_column(.after = "estPhiYintTrueMP", avgEstWeightsInt = mean(trueWeights[maskInt])) %>% 
         add_column(.after = "estPhiYintTrueMP", 
                    estPhiYintEstMP = estTotPhiYintHTEstMP) %>% 
-        add_column(.after = "estPhiYintEstMP", 
-                   estTotPhiYtelTrueMP = estTotPhiYtelHTTrueMP) %>% 
-        add_column(.after = "estTotPhiYtelTrueMP", 
-                   estTotPhiYtelEstMP = estTotPhiYtelHTEstmMP) %>% 
-        mutate(.after = "estTotPhiYtelEstMP",
+        add_column(.after = "estPhiYintEstMP", avgEstWeightsTel = mean(trueWeights[maskTel])) %>%
+        add_column(.after = "avgEstWeightsTel", estPhiYtelEstMP = estPhiYtelEstMP) %>% 
+        add_column(.after = "estPhiYtelEstMP", 
+                   estPhiBarYtelTrueMP = estTotPhiYtelHTTrueMP) %>% 
+        add_column(.after = "estPhiBarYtelTrueMP", 
+                   estPhiBarYtelEstMP = estTotPhiYtelHTEstmMP) %>% 
+        mutate(.after = "estPhiBarYtelEstMP",
                estYtelTrueMP = estPhiYintTrueMP + 
-                 estTotPhiYtelTrueMP -
+                 estPhiBarYtelTrueMP -
                  estPhiBias) %>% 
         mutate(.after = "estYtelTrueMP", 
                estYtelEstMP = estPhiYintEstMP + 
-                 estTotPhiYtelEstMP -
+                 estPhiBarYtelEstMP -
                  estPhiBias) %>% 
         add_column(.after = "estYtelEstMP", benchmark = benchmark) %>% 
         add_column(.after = "benchmark", TWBenchmark = trueWeightsBenchmark)
@@ -909,13 +920,13 @@ loop_simulation <- function(parameters, K = 2000L)
   
   results <- results %>% 
     mutate(.after = "estPhiBias", diffPhiBias = estPhiBias - truePhiBias) %>% 
-    mutate(.after = "estTotPhiYtelEstMP", 
+    mutate(.after = "estPhiBarYtelEstMP", 
            diffYtelEstMP = estYtelEstMP - trueYtel) %>% 
-    mutate(.after = "estTotPhiYtelTrueMP",
+    mutate(.after = "estPhiBarYtelTrueMP",
            diffYtelTrueMP = estYtelTrueMP - trueYtel) %>% 
     mutate(.after = "diffYtelTrueMP", 
            diffWithoutCorrectionEstMP = estPhiYintEstMP + 
-             estTotPhiYtelEstMP - 
+             estPhiBarYtelEstMP - 
              trueYtel) %>% 
     mutate(.after = "diffYtelTrueMP", diffBenchmark = benchmark - trueYtel)
   
@@ -1019,7 +1030,149 @@ With $\phi$ fixed, the other estimators give a RMSE nearly equal the benckmark.
 
 The `relExpRMSETWBenchmark` variable is the expected standard deviation of the benchmark calculated with the true selection probabilities. The bias is equal to zero with the true weights so the RMSE is equal to the standard deviation. Biases of the estimators are nearly zero so RMSE and standard deviations can be compared. We can observe that for every estimator the (estimated) RMSE is **clearly lower** than the standard deviation / RMSE of the benchmark with true probabilities.
 
+## Convergence in law
+
+```{r}
+temp <- resultsGaussian %>% 
+  filter(YtelLaw == "gaussian", YintLaw == "gaussian", 
+         sampling == "SRS", 
+         MBtype == "constant", signAge == "plus", 
+         phi == "eq", trueEstimator) %>% 
+  select(experiment, nInt, nTel, estPhiYintEstMP, expYint, avgEstWeightsInt,
+         estPhiYtelEstMP, estPhiBarYtelEstMP, expYtel, normEstPhiBiasDiffHT) %>% 
+  group_by(experiment) %>% 
+  slice_head(n = 1L) %>% 
+  ungroup()
+```
+
+### $\hat{t}_{pq\phi1}$
+
+With $\phi \equiv \frac{1}{2}$
+
+```{r}
+estimatorsPhi1 <- temp$estPhiYintEstMP
+
+empMean1 <- mean(estimatorsPhi1)
+
+expMean1 <- as.numeric(0.5 * temp[1L, "expYint"])
+
+glue("empirical mean: {empMean1} (expected: {expMean1})")
+```
+
+```{r}
+
+empSD1 <- sd(estimatorsPhi1)
+
+temp %>% 
+ggplot() + 
+  geom_density(aes(x = estPhiYintEstMP)) + 
+  geom_vline(aes(xintercept = empMean1, colour = "constant"), show.legend = TRUE) +
+  ggtitle("HT-phi1 estimator with estimated probabilities") +
+  xlab("Estimator") +
+  scale_color_manual(name = "bias", values = c(constant = "red"))
+
+ks.test(x = (estimatorsPhi1 - empMean1) / empSD1, y = "pnorm")
+```
+
+### $\hat{t}_{pq\bar{\phi}2}$
+
+
+With $\phi \equiv \frac{1}{2}$
+
+```{r}
+estimatorsPhi2 <- temp$estPhiYtelEstMP
+
+empMean2 <- mean(estimatorsPhi2)
+
+expMean2 <- 0.5 * as.numeric(temp[1L, "expYtel"])
+
+glue("empirical mean: {empMean2} (expected: {expMean2})")
+```
+
+```{r}
+empSD2 <- sd(estimatorsPhi2)
+
+temp %>% 
+ggplot() + 
+  geom_density(aes(x = estimatorsPhi2)) + 
+  geom_vline(aes(xintercept = empMean2, colour = "constant"), show.legend = TRUE) +
+  ggtitle("HT-phi1 estimator with estimated probabilities") +
+  xlab("Estimator") +
+  scale_color_manual(name = "bias", values = c(constant = "red"))
+
+ks.test(x = (estimatorsPhi2 - empMean2) / empSD2, y = "pnorm")
+```
+
 ## Bias detection
+
+### Superposition
+
+We would like to test our ability to detect the presence or absence of a constant measure bias with the superposition of confidence intervals of $\hat{t}_{pq\phi1}$ and $\hat{t}_{pq\phi2}$. If there is no measure bias then we can assume there will be superposition of the confidence intervals.
+
+We will change the value of the constants and test the coverage of our test. We consider the ratio between the measure bias and the expected mean of the telephone answers.
+
+```{r}
+ratioDeltas <- c(0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 1.0, 2.0)
+deltas <- ratioDeltas * abs(expMean2 / N)
+```
+
+Then for each measure bias we try the recognition of an eventual measure bias, with confidence intervals with errors $\alpha_1 = \alpha_2 = 0.05$.
+
+
+```{r}
+alpha1 <- alpha2 <- .05
+
+nInt <- as.numeric(temp$nInt)
+
+CI2lower <- estimatorsPhi2 - qnorm(1.0 - alpha2 / 2.0) * empSD2
+CI2upper <- estimatorsPhi2 + qnorm(1.0 - alpha2 / 2.0) * empSD2
+
+resSuperpositions <- data.frame(ratio = ratioDeltas, 
+                                delta = deltas, 
+                                percSuperposition = 0.0,
+                                percPresenceMean2 = 0.0,
+                                alpha = alpha1)
+
+avgEstWeightsInt <- as.numeric(temp$avgEstWeightsInt)
+for (delta in deltas)
+{
+  # We remove the actual bias (equal to 1)
+  phi1 <- estimatorsPhi1 + .5 * avgEstWeightsInt * nInt * (delta - 1.0)
+  empSD1Delta <- sd(phi1)
+  CI1lowerBis <- phi1 - qnorm(1.0 - alpha1 / 2.0) * empSD1Delta
+  CI1upperBis <- phi1 + qnorm(1.0 - alpha1 / 2.0) * empSD1Delta
+  
+  superposition <- 
+    (CI1lowerBis <= CI2lower & CI2lower <= CI1upperBis) | 
+    (CI1lowerBis <= CI2upper & CI2upper <= CI1upperBis) |
+    (CI2lower <= CI1lowerBis & CI1lowerBis <= CI2upper) | 
+    (CI2lower <= CI1upperBis & CI1upperBis <= CI2upper)
+  
+  presenceExpMean2 <- 
+    (CI1lowerBis <= expMean2 & expMean2 <= CI1upperBis) & 
+    (CI2lower <= expMean2 & expMean2 <= CI2upper)
+  
+  percSuperposition <- 100.0 * mean(superposition)
+  percPresenceMean2 <- 100.0 * mean(presenceExpMean2)
+  
+  resSuperpositions[resSuperpositions$delta == delta, 
+                    c("percSuperposition", "percPresenceMean2")] <-
+    c(percSuperposition, percPresenceMean2)
+}
+
+resSuperpositions$alpha12 <- 1.0 - resSuperpositions$percPresenceMean2 / 100.0
+
+resSuperpositions
+```
+
+Superposition on the true total is not great. In fact we have that
+
+$$\max \{\alpha_1,\alpha_2\}\leq\alpha_{12}\leq\alpha_1 + \min\{\alpha_1,\alpha_2\} + \alpha_2$$
+with $1-\alpha_{12}$ the probability of having a superposition on the supposed total $t_2$ of the two confidence intervals. 
+
+Using the superposition implies a lot of false negative non-measure bias detection. The percentage of superposition becomes zero only after a ratio of $1.0$.
+
+### HT-difference
 
 We would like to check if, in the case of a constant bias, the estimator
 
@@ -1044,6 +1197,8 @@ temp <- resultsGaussian %>%
 estimBias <- temp$normEstPhiBiasDiffHT
 ```
 
+#### $\delta = 1$
+
 For $\delta = 1$, we would like to have an empirical mean close to it:
 
 ```{r}
@@ -1053,23 +1208,7 @@ glue("empirical mean: {empMean} (expected: {1})")
 
 Note that both the estimators used are only approximately unbiased.
 
-Then we evaluate the coverage of our confidence intervals. For $\alpha = 0.05$, we have
-
-```{r}
-empSD <- sd(estimBias)
-
-alpha <- 0.05
-CIlower <- estimBias - qnorm(1.0 - alpha / 2.0) * empSD
-CIupper <- estimBias + qnorm(1.0 - alpha / 2.0) * empSD
-
-coverage <- mean(CIlower <= 1.0 & 1.0 <= CIupper)
-
-glue("coverage: {coverage} (expected: {1 - alpha})")
-```
-
-
-
-And finally we check the normality of our estimator:
+we check the normality of our estimator:
 
 ```{r}
 temp %>% 
@@ -1084,6 +1223,22 @@ ks.test(x = (estimBias - 1.0) / empSD, y = "pnorm")
 ```
 
 With an important p-value the Kolmogorov-Smirnov test ensure that our estimator is normal.
+
+#### Coverage depending on $\delta$
+
+Then we evaluate the coverage of our confidence intervals. For $\alpha = 0.05$, we have
+
+```{r}
+empSD <- sd(estimBias)
+
+alpha <- 0.05
+CIlower <- estimBias - qnorm(1.0 - alpha / 2.0) * empSD
+CIupper <- estimBias + qnorm(1.0 - alpha / 2.0) * empSD
+
+coverage <- mean(CIlower <= 1.0 & 1.0 <= CIupper)
+
+glue("coverage: {coverage} (expected: {1 - alpha})")
+```
 
 
 # Ex : Gaussian variable measure bias
@@ -1637,15 +1792,15 @@ temp %>%
             expSDEstimator = sqrt(mean(expVar2)),
             estVarPhi1 = var(estPhiYintTrueMP),
             expVarPhi1 = mean(expVarPhi1),
-            estVarPhi2 = var(estTotPhiYtelTrueMP),
+            estVarPhi2 = var(estPhiBarYtelTrueMP),
             expVarPhi2 = mean(expVarPhi2),
-            estCovarphi12 = cov(estPhiYintTrueMP, estTotPhiYtelTrueMP),
+            estCovarphi12 = cov(estPhiYintTrueMP, estPhiBarYtelTrueMP),
             expCovarPhi12 = mean(expCovarPhi12),
             estCovarphi1Delta = cov(estPhiYintTrueMP, estPhiBias),
             expCovarPhi1Delta = mean(expCovarPhi1Delta),
             estVarPhiDelta = var(estPhiBias),
             expVarPhiDelta = mean(expVarPhiDelta),
-            estCovarphi2Delta = cov(estTotPhiYtelTrueMP, estPhiBias),
+            estCovarphi2Delta = cov(estPhiBarYtelTrueMP, estPhiBias),
             expCovarPhi2Delta = mean(expCovarPhi2Delta))
 ```
 
