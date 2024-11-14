@@ -27,6 +27,12 @@ library(marginaleffects)
 devtools::load_all()
 ```
 
+```{r}
+#| echo: false
+load(file = "../results.RData")
+```
+
+
 Linear models on both modes
 
 # Building constants
@@ -257,18 +263,10 @@ simulationUncounf <-
     {
       expYtels <- as.vector(Z %*% betaTel)
       
-      if (sdTel == "split3")
-      {
-        quantilesTel <- quantile(expYtels, probs = c(1.0 / 3.0, 2.0 / 3.0))
-        sdTels <- rep(3.0, N)
-        sdTels[sdTels <= quantilesTel[2L]] <- 2.0
-        sdTels[sdTels <= quantilesTel[1L]] <- 1.0
-      }
-      else
-      {
-        sdTel <- as.numeric(sdTel)
-        sdTels <- rep(sdTel, N)
-      }
+      
+      sdTel <- as.numeric(sdTel)
+      sdTels <- rep(sdTel, N)
+      
       
       covarYtel <- diag(sdTels^2L)
         
@@ -284,12 +282,11 @@ simulationUncounf <-
     {
       expYints <- as.vector(Z %*% betaInt)
       
-      if (sdInt != "split3")
-      {
-        sdInt <- as.numeric(sdInt)
-        sdInts <- rep(sdInt, N)
-        covarYint <- diag(sdInts^2L)
-      }
+
+      sdInt <- as.numeric(sdInt)
+      sdInts <- rep(sdInt, N)
+      covarYint <- diag(sdInts^2L)
+      
     }
     else if (YintLaw == "exponential")
     {
@@ -302,11 +299,10 @@ simulationUncounf <-
       expYints <- as.vector(Z %*% betaInt)
       quantilesInt <- quantile(expYints, probs = c(1.0 / 3.0, 2.0 / 3.0))
       
-      if (sdInt != "split3")
-      {
-        sdInts <- rep(as.numeric(sdInt), N)
-        covarYint <- diag(sdInts^2L)
-      }
+
+      sdInt <- as.numeric(sdInt)
+      sdInts <- rep(as.numeric(sdInt), N)
+      covarYint <- diag(sdInts^2L)
       
       # Between first and second quantile of 3rd degree we add one
       expYints[expYints > quantilesInt[1L]] <- 
@@ -318,15 +314,6 @@ simulationUncounf <-
     }
     
     expTotYint <- sum(expYints)
-    
-    if (YintLaw %in% c("gaussian", "split3") && sdInt == "split3")
-    {
-      quantilesInt <- quantile(expYints, probs = c(1.0 / 3.0, 2.0 / 3.0))
-      sdInts <- rep(3.0, N)
-      sdInts[sdInts <= quantilesInt[2L]] <- 2.0
-      sdInts[sdInts <= quantilesInt[1L]] <- 1.0
-      covarYint <- diag(sdInts^2L)
-    }
     
     clusterExport(cluster,
                   varlist = c("expYtels", "sdInts", "sdTels",
@@ -952,6 +939,7 @@ load(file = "../results.RData")
 Here we evaluate our estimators on the simplest cases : Gaussian laws with $\phi_k \equiv \frac{1}{2}$, a few values for $\sigma$ and a changing sign for $\beta_{tel,age}$.
 
 ```{r}
+#| eval: false
 # Grid of all evaluated parameters
 parameters <- expand_grid(constBias = c(TRUE, FALSE),
                           sampling = "SRS",#c("SRS", "STSRS"),
@@ -1184,6 +1172,7 @@ Here we use the empirical standard deviation based on our $K$ observations.
 For $\delta = 1$, we would like to have an empirical mean close to it:
 
 ```{r}
+estimBias <- temp$normEstPhiBiasDiffHT
 empMean <- mean(estimBias)
 glue("empirical mean: {empMean} (expected: {1})")
 ```
@@ -1193,6 +1182,7 @@ Note that both the estimators used are only approximately unbiased.
 we check the normality of our estimator:
 
 ```{r}
+empSD <- sd(estimBias)
 temp %>% 
 ggplot() + 
   geom_density(aes(x = normEstPhiBiasDiffHT)) + 
@@ -1348,6 +1338,7 @@ rm(temp)
 We focus on the impact of the standard deviation. Is there estimators that give better RMSE than the benchmark, independently of $\sigma$? The bias is is considered as variable.
 
 ```{r}
+#| eval: false
 parameters <- expand_grid(constBias = FALSE,
                           sampling = "SRS",#c("SRS", "STSRS"),
                           YtelLaw = "gaussian",
@@ -1452,6 +1443,7 @@ temp %>%
 We propose different values for $\phi$, in the Gaussian case with variable bias and variable $\sigma$:
 
 ```{r}
+#| eval: false
 parameters <- expand_grid(constBias = FALSE,
                           sampling = "SRS",
                           YtelLaw = "gaussian",
@@ -1663,7 +1655,7 @@ parameters <- expand_grid(constBias = c(TRUE, FALSE),
                           YintLaw = c("gaussian", "exponential", "split3"),
                           signAge = c("plus", "minus"),
                           phi = c("eq", "var"),
-                          sdY = c(1.0, 2.0, 5.0, "split3")) %>%
+                          sdY = c(1.0, 2.0, 5.0)) %>%
   # If there is only exponential laws the parameter sdY is of no interest
   mutate(sdY =
            ifelse(YtelLaw == "gaussian" |
@@ -1777,32 +1769,32 @@ temp <- resultsGeneral %>%
          invMatrices == "population", calculTotal == "population")
 
 
-tempBis <- temp %>% 
-  filter(sampling == "SRS",
-         YintLaw == "gaussian", YtelLaw == "gaussian",
-         phi == "eq", sd == 1.0, MBtype == "variable",
-         signAge == "plus")
+# tempBis <- temp %>% 
+#   filter(sampling == "SRS",
+#          YintLaw == "gaussian", YtelLaw == "gaussian",
+#          phi == "eq", sd == "1", MBtype == "variable",
+#          signAge == "plus")
 ```
 
 Before comparison, we can observe on the Gaussian case (variable measure bias, positive coefficient for age on telephone, $\phi_k \equiv \frac{1}{2}$) with $\sigma =1$ that the variance do not stabilize completely:
 
 ```{r}
-sumSqErrors <- cumsum(tempBis[, c("diffPhiBias", "diffYtelEstMP")]^2L)
-
-RMSEs <- 
-  data.frame(totPhiDelta =  sumSqErrors[-1L, "diffPhiBias"] / Kvec[-1L],
-             totYtel = sumSqErrors[-1L, "diffYtelEstMP"] / Kvec[-1L],
-             K = Kvec[-1L])
-
-RMSEs %>% 
-  pivot_longer(cols = c("totPhiDelta", "totYtel"), 
-               names_to = "target", 
-               values_to = "estRMSE") %>% 
-  ggplot() +
-  geom_point(aes(x = K, y = estRMSE, colour = target)) +
-  ggtitle("Estimated RMSE depending on the number of evaluations (K)")
-
-rm(tempBis, RMSEs)
+# sumSqErrors <- cumsum(tempBis[, c("diffPhiBias", "diffYtelEstMP")]^2L)
+# 
+# RMSEs <- 
+#   data.frame(totPhiDelta =  sumSqErrors[-1L, "diffPhiBias"] / Kvec[-1L],
+#              totYtel = sumSqErrors[-1L, "diffYtelEstMP"] / Kvec[-1L],
+#              K = Kvec[-1L])
+# 
+# RMSEs %>% 
+#   pivot_longer(cols = c("totPhiDelta", "totYtel"), 
+#                names_to = "target", 
+#                values_to = "estRMSE") %>% 
+#   ggplot() +
+#   geom_point(aes(x = K, y = estRMSE, colour = target)) +
+#   ggtitle("Estimated RMSE depending on the number of evaluations (K)")
+# 
+# rm(tempBis, RMSEs)
 ```
 
 
