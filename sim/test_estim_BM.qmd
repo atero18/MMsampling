@@ -30,6 +30,7 @@ devtools::load_all()
 
 ```{r}
 #| echo: false
+#| eval: false
 load(file = "../results.RData")
 ```
 
@@ -950,8 +951,6 @@ simulationUncounf <-
                   varlist = "monoSim", 
                   envir = environment())
     
-    #browser()
-    
     #results <- lapply(X = seq_len(K), FUN = monoSim)
     results <- parLapply(cluster, X = seq_len(K), fun = monoSim)
     
@@ -1356,7 +1355,6 @@ simulation_tphi <- function(Z,
     pi <- rep(n / N, N)
     piMat <- matrix(n * (n - 1L) / (N * (N - 1L)), nrow = N, ncol = N)
     diag(piMat) <- n / N
-  
   }
   
   
@@ -1405,10 +1403,14 @@ simulation_tphi <- function(Z,
     trueWeights <- (pi * trueProbsSelect)^-1L
   
     # Estimation of mode selection probabilities
-    estimProbsSelect <- 
+    estimProbsSelectTable <- 
       MMsampling::estim_response_prob_sequential(I, pi, Z,
                                                  modes, 
-                                                 c("int", "tel"))$unconditional
+                                                 c("int", "tel"),
+                                                 chosenOnly = FALSE)$unconditional
+  
+    estimProbsSelect <- get_value_by_mode(estimProbsSelectTable, modes)
+    
   
     estimWeights <- (pi * estimProbsSelect)^-1L
     
@@ -1429,14 +1431,27 @@ simulation_tphi <- function(Z,
     totPhi1TW <- sum(phi[maskInt] * trueWeights[maskInt] * Yobs[maskInt])
     totPhi1EW <- sum(phi[maskInt] * estimWeights[maskInt] * Yobs[maskInt])
     
+    estimpq1Mat <- 
+      estimProbsSelectTable[, "int"] %*% t(estimProbsSelectTable[, "int"])
+    
+    diag(estimpq1Mat) <- estimProbsSelectTable[, "int"]
+    
+    estimApprVarCenteredInt <- 
+      estim_var_centered_phiweb(Yobs,
+                                modes, I,
+                                piMat,
+                                estimpq1Mat, Z,
+                                phi, correcEstimWeights = TRUE)
+    
     totPhi2TW <- sum(phi[maskTel] * trueWeights[maskTel] * Yobs[maskTel])
     totPhi2EW <- sum(phi[maskTel] * estimWeights[maskTel] * Yobs[maskTel])
     
     c(totPhi1TW = totPhi1TW, totPhi1EW = totPhi1EW, 
+      estimApprVarCenteredInt = estimApprVarCenteredInt,
       totPhi2TW = totPhi2TW, totPhi2EW = totPhi2EW)
   }
   
-  sapply(seq_len(K), FUN = monoSim) %>% t()
+  sapply(seq_len(K), FUN = monoSim) %>% t() %>% as.tibble()
 }
 ```
 
@@ -1464,6 +1479,7 @@ compareTphi <- simulation_tphi(K = Kbis,
                                seed = 200L)
 ```
 
+
 ```{r}
 compareTphi$differenceEW <- compareTphi$totPhi1EW - compareTphi$totPhi2EW
 ```
@@ -1474,6 +1490,10 @@ varPhi2 <- var(compareTphi[seq_len(Kbis / 2.0), "totPhi2EW"])
 varDiffPhi <- 
   var(compareTphi[seq_len(Kbis / 2.0), "totPhi1EW"] - 
         compareTphi[seq_len(Kbis / 2.0), "totPhi2EW"])
+```
+
+```{r}
+mean(compareTphi$estimApprVarCenteredInt[-seq_len(Kbis / 2.0)])
 ```
 
 ### Superposition

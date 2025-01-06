@@ -17,6 +17,7 @@ estim_response_prob_global(
 
 estim_response_prob_sequential(
   I,
+  pi,
   Z,
   modes,
   orderModes,

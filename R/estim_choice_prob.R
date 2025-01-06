@@ -158,16 +158,17 @@ estim_response_prob_sequential <- function(I, pi, Z, modes, orderModes,
       }
       else
       {
-
         if (usefastglm)
         {
           subResponse <- response[subset & maskGroup] %>% as.numeric() # nolint: object_usage_linter
           subZ <- Z[subset & maskGroup, , drop = FALSE] # nolint: object_usage_linter
+          suppressWarnings({
           modelGroup <-
             fastglm::fastglm(x = subZ, y = subResponse,
                              weights =
                                (pi * unconditionalVec)[subset & maskGroup]^-1L,
                              family = binomial, link = link)
+          })
 
           #fittedProbsGroup <- modelGroup$fitted.values
         }
@@ -176,8 +177,6 @@ estim_response_prob_sequential <- function(I, pi, Z, modes, orderModes,
           modelGroup <- glm(response ~ Z, family = binomial,
                             subset = subset & maskGroup,
                             weights = (pi * unconditionalVec)^-1L, link = link)
-
-
         }
 
         fittedProbsGroup <- predict(modelGroup,
