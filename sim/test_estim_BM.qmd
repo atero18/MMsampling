@@ -640,7 +640,7 @@ simulationUncounf <-
     
       # Estimation of mode selection probabilities
       estimProbsSelect <- 
-        MMsampling::estim_response_prob_sequential(I, Z,
+        MMsampling::estim_response_prob_sequential(I, pi, Z,
                                                    modes, 
                                                    c("int", "tel"))$unconditional
     
@@ -1406,7 +1406,7 @@ simulation_tphi <- function(Z,
   
     # Estimation of mode selection probabilities
     estimProbsSelect <- 
-      MMsampling::estim_response_prob_sequential(I, Z,
+      MMsampling::estim_response_prob_sequential(I, pi, Z,
                                                  modes, 
                                                  c("int", "tel"))$unconditional
   

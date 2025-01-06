@@ -67,7 +67,7 @@ estim_response_prob_global <- function(I, modes, Z,
 #' @importFrom stats glm binomial predict.glm predict
 #' @importFrom checkmate assertFlag assertVector
 #' @export
-estim_response_prob_sequential <- function(I, Z, modes, orderModes,
+estim_response_prob_sequential <- function(I, pi, Z, modes, orderModes,
                                            RGH = NULL, constRGH = FALSE,
                                            link = "logit",
                                            chosenOnly = TRUE)
@@ -75,6 +75,7 @@ estim_response_prob_sequential <- function(I, Z, modes, orderModes,
   ## Ajouter vérification arguments ?
   if (anyNA(modes))
     modes[is.na(modes)] <- "nr"
+
   modes <- as.factor(modes)
   M <- levels(modes)
   N <- length(modes)
@@ -98,8 +99,6 @@ estim_response_prob_sequential <- function(I, Z, modes, orderModes,
                min.len = 1L, unique = TRUE)
 
   assertSubset(orderModes, M)
-
-
 
 
   # Will contain the conditional probs for each mode
@@ -166,6 +165,8 @@ estim_response_prob_sequential <- function(I, Z, modes, orderModes,
           subZ <- Z[subset & maskGroup, , drop = FALSE] # nolint: object_usage_linter
           modelGroup <-
             fastglm::fastglm(x = subZ, y = subResponse,
+                             weights =
+                               (pi * unconditionalVec)[subset & maskGroup]^-1L,
                              family = binomial, link = link)
 
           #fittedProbsGroup <- modelGroup$fitted.values
@@ -173,7 +174,8 @@ estim_response_prob_sequential <- function(I, Z, modes, orderModes,
         else
         {
           modelGroup <- glm(response ~ Z, family = binomial,
-                            subset = subset & maskGroup, link = link)
+                            subset = subset & maskGroup,
+                            weights = (pi * unconditionalVec)^-1L, link = link)
 
 
         }
