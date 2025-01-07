@@ -1,22 +1,28 @@
 .bPhi11 <- function(Yobs, I, pi, maskInt, p1, Z,
-                    phi = rep(1.0, length(expY1)))
+                    phi = rep(1.0, length(Yobs)))
 {
 
-  weightedY1 <- phi * Yobs
-  weightedY1Int <- weightedY1[maskInt]
-  p1Int <- p1[maskInt]
+  p1Sr <- p1[maskInt]
+
+  # Estimation of the expected value of the derivative of the total estimator
+  muPhi11 <- 2.0 * crossprod(Z[maskInt, , drop = FALSE],
+                       phi[maskInt] * Yobs[maskInt] *
+                         (1.0 - p1Sr) / (pi[maskInt] * p1Sr^2L))
 
 
-  muPhi11 <- crossprod(Z[maskInt, , drop = FALSE],
-                       2.0 * weightedY1Int * (1.0 - p1Int) / p1Int)
 
-  # diagonal matrix of ^p_1k * (1-^p1k)
-  lambda1S <- diag(p1[I] * (1.0 - p1[I]) / pi[I])
-  partialW1 <- -t(Z[I, , drop = FALSE]) %*%
+  # Estimation of the partial derivative expectation of the logistic score
+  # function
+  n <- sum(I)
+  p1S <- p1[I]
+
+  lambda1S <- diag(p1S * (1.0 - p1S) / pi[I], nrow = n, ncol = n)
+  minusPartialW1 <-
+    t(Z[I, , drop = FALSE]) %*%
     lambda1S %*%
     Z[I, , drop = FALSE]
 
-  bPhi11 <- solve(partialW1) %*% muPhi11
+  bPhi11 <- -solve(minusPartialW1) %*% muPhi11
 
   return(bPhi11)
 }
@@ -62,8 +68,8 @@
 }
 
 
-.bPhi22 <- function(expY2, I, pi, maskInt, p1, R2, p2, Z,
-                    phi = rep(1.0, length(expY1)),
+.bPhi22 <- function(Yobs, I, pi, maskInt, p1, R2, p2, Z,
+                    phi = rep(1.0, length(Yobs)),
                     constY = FALSE)
 
 {
@@ -103,7 +109,7 @@
 }
 
 #' Estimates the approximate variance of the HT estimator of t_phi1 with known
-#' or estimated mode selection probabilities.
+#' or estimated mode selection probabilities. Homoscedasticity is assumed.
 #' @export
 estim_appr_var_seq_phi1 <- function(Yobs,
                                     modes,
@@ -111,6 +117,7 @@ estim_appr_var_seq_phi1 <- function(Yobs,
                                     pq1Mat,
                                     Z,
                                     phi = rep(1.0, length(Yobs)),
+                                    sd1 = 0.0,
                                     correcEstimWeights = FALSE)
 {
   if (all(phi == 0.0))
@@ -120,10 +127,13 @@ estim_appr_var_seq_phi1 <- function(Yobs,
 
   pi <- diag(piMat)
   piSr <- pi[maskInt]
+  piMatSr <- piMat[maskInt, maskInt]
+
+  p1 <- diag(pq1Mat)
+  pq1MatSr <- pq1Mat[maskInt, maskInt]
 
   # Weights equal to the probability of being in the set of web respondents
-  weights <- (pi * diag(pq1Mat))^-1L
-  weightsWeb <- weights[maskInt]
+  weights <- (pi * p1)^-1L
 
   # The y_1k are weighted by the phi_k
   weightedY1Sr <- phi[maskInt] * Yobs[maskInt]
@@ -131,34 +141,36 @@ estim_appr_var_seq_phi1 <- function(Yobs,
   # Sampling variability (S)
   # There is no correction needed for probabilities estimation
 
-  covarpInt <- pi2_to_covarInc(piMat[maskInt, maskInt])
+  covarpSr <- pi2_to_covarInc(piMatSr)
   varSEst <-
     t(weightedY1Sr / piSr) %*%
-    (covarpInt *
-    (piMat[maskInt, maskInt] * pq1Mat[maskInt, maskInt])^-1L) %*%
+    (covarpSr / (piMatSr * pq1MatSr)) %*%
     (weightedY1Sr / piSr) %>%
     as.numeric()
 
   # q1 variability (R1)
   # If we use estimated p_1k weights we have to make a correction.
-
-  p1 <- diag(pq1Mat)
-  covarq1Int <- pi2_to_covarInc(pq1Mat[maskInt, maskInt])
+  covarq1Sr <- pi2_to_covarInc(pq1MatSr)
   correctedY1Sr <- weightedY1Sr / p1[maskInt]
 
-  # If the probabilities p_1k are estimations we add a term
-  # that uses the covariates used by the regression estimators
+  #   If the probabilities p_1k are estimations we add a term
+  #   that uses the covariates used by the regression estimators
   if (correcEstimWeights)
   {
     bPhi11 <- .bPhi11(Yobs, I, pi, maskInt, p1, Z, phi)
-    correctedY1Sr <- correctedY1Sr - Z[maskInt, , drop = FALSE] %*% bPhi11
+    correctedY1Sr <- correctedY1Sr - Z[maskInt, ] %*% bPhi11
   }
 
   varq1Est <- t(correctedY1Sr / piSr) %*%
-    (covarq1Int / pq1Mat[maskInt, maskInt]) %*%
+    (covarq1Sr / pq1MatSr) %*%
     (correctedY1Sr / piSr) %>% as.numeric()
 
-  varSEst + varq1Est
+  # Y1 variability
+  # We suppose we have an estimator of the variance
+  # of the Y1
+  varY1Est <- sum(phi^2L) * sd1^2L
+
+  varSEst + varq1Est + varY1Est
 }
 
 #' Calculate the true variance of the HT estimator of t_phi1 in the case
@@ -182,6 +194,7 @@ var_HT_seq_phi1 <- function(expY1,
     return(0.0)
 
   pi <- diag(piMat)
+  piMatSr <- piMat[maskInt, maskInt]
 
   p1 <- diag(pq1Mat)
   invP1Mat <- (p1 %*% t(p1))^-1L
@@ -189,6 +202,8 @@ var_HT_seq_phi1 <- function(expY1,
   maskInt <- as.numeric(modes == biasedMode)
 
   covarPi <- pi2_to_covarInc(piMat)
+
+  pq1MatSr <- pq1Mat[maskInt, maskInt]
 
   weightedY1 <- phi * expY1
 
@@ -204,7 +219,7 @@ var_HT_seq_phi1 <- function(expY1,
     weightedY1Sr <- weightedY1[maskInt]
     varS <- weightedY1Sr / piSr %*% t(weightedY1Sr / piSr) *
       covarPi[maskInt, maskInt] /
-      (piMat[maskInt, maskInt] * pq1Mat[maskInt, maskInt])
+      (piMatSr * pq1MatSr)
   }
   # Otherwise we can do it on U
   else
@@ -227,7 +242,7 @@ var_HT_seq_phi1 <- function(expY1,
     }
 
     varq1 <- (correctedY1Sr / piSr) %*% t(correctedY1Sr / piSr) *
-      covarq1[maskInt, maskInt] / pq1Mat[maskInt, maskInt]
+      covarq1[maskInt, maskInt] / pq1MatSr
   }
   else
   {

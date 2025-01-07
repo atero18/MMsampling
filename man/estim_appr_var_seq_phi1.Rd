@@ -3,7 +3,7 @@
 \name{estim_appr_var_seq_phi1}
 \alias{estim_appr_var_seq_phi1}
 \title{Estimates the approximate variance of the HT estimator of t_phi1 with known
-or estimated mode selection probabilities.}
+or estimated mode selection probabilities. Homoscedasticity is assumed.}
 \usage{
 estim_appr_var_seq_phi1(
   Yobs,
@@ -13,10 +13,11 @@ estim_appr_var_seq_phi1(
   pq1Mat,
   Z,
   phi = rep(1, length(Yobs)),
+  sd1 = 0,
   correcEstimWeights = FALSE
 )
 }
 \description{
 Estimates the approximate variance of the HT estimator of t_phi1 with known
-or estimated mode selection probabilities.
+or estimated mode selection probabilities. Homoscedasticity is assumed.
 }

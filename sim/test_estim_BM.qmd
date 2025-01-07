@@ -1402,7 +1402,7 @@ simulation_tphi <- function(Z,
     
     trueWeights <- (pi * trueProbsSelect)^-1L
   
-    # Estimation of mode selection probabilities
+    # Estimation of mode selection probabilities (taken unconditionally)
     estimProbsSelectTable <- 
       MMsampling::estim_response_prob_sequential(I, pi, Z,
                                                  modes, 
@@ -1428,6 +1428,7 @@ simulation_tphi <- function(Z,
     # Creating the observed outcome vector
     Yobs <- set_Yobs(Yint = Yints, Ytel = Ytels, modes = modes)
     
+    # Estimations with Y1
     totPhi1TW <- sum(phi[maskInt] * trueWeights[maskInt] * Yobs[maskInt])
     totPhi1EW <- sum(phi[maskInt] * estimWeights[maskInt] * Yobs[maskInt])
     
@@ -1436,28 +1437,50 @@ simulation_tphi <- function(Z,
     
     diag(estimpq1Mat) <- estimProbsSelectTable[, "int"]
     
+      # the variance of Y1 is assumed known for simplicity
+    estimApprVarPhi1 <- 
+      estim_appr_var_seq_phi1(Yobs,
+                              modes, I,
+                              piMat,
+                              estimpq1Mat, Z,
+                              phi, correcEstimWeights = FALSE,
+                              sd1 = sdInt)
+      # parameter equal to
+      #  phi_k (y_1k - average on U of the y_1l) / sum of the phi_k on U,
+      #  equal to phi_k y_1k / sum of the phi_k on U - average on U of the y_1l
+      #  (the last term is not a statistic)
+    totCenteredPhi1EW <- 
+      sum(phi[maskInt] * 
+            (estimWeights[maskInt] * Yobs[maskInt] - mean(Yints))) /
+      sum(phi[maskInt] * estimWeights[maskInt])
+    
     estimApprVarCenteredInt <- 
       estim_var_centered_phiweb(Yobs,
                                 modes, I,
                                 piMat,
                                 estimpq1Mat, Z,
-                                phi, correcEstimWeights = TRUE)
+                                phi, correcEstimWeights = FALSE)
     
+    # Estimations with Y2
     totPhi2TW <- sum(phi[maskTel] * trueWeights[maskTel] * Yobs[maskTel])
     totPhi2EW <- sum(phi[maskTel] * estimWeights[maskTel] * Yobs[maskTel])
     
+    ## NOTE : Attention calcul probas estimées ici, précédemment pris sans
+    ## conditionnement
     c(totPhi1TW = totPhi1TW, totPhi1EW = totPhi1EW, 
+      estimApprVarPhi1 = estimApprVarPhi1,
+      totCenteredPhi1EW = totCenteredPhi1EW,
       estimApprVarCenteredInt = estimApprVarCenteredInt,
       totPhi2TW = totPhi2TW, totPhi2EW = totPhi2EW)
   }
   
-  sapply(seq_len(K), FUN = monoSim) %>% t() %>% as.tibble()
+  sapply(seq_len(K), FUN = monoSim) %>% t() %>% as_tibble()
 }
 ```
 
 
 ```{r}
-Kbis <- 10000L
+Kbis <- 2000L
 ```
 
 ```{r}
@@ -1493,8 +1516,21 @@ varDiffPhi <-
 ```
 
 ```{r}
+mean(compareTphi$estimApprVarPhi1[-seq_len(Kbis / 2.0)])
+```
+
+```{r}
+var(compareTphi$totCenteredPhi1EW[seq_len(Kbis / 2.0)])
+```
+
+```{r}
 mean(compareTphi$estimApprVarCenteredInt[-seq_len(Kbis / 2.0)])
 ```
+
+```{r}
+rm(varPhi1, varPhi2, varDiffPhi, compareTphi)
+```
+
 
 ### Superposition
 

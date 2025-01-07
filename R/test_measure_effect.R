@@ -19,10 +19,11 @@ estim_var_centered_phiweb <- function(Yobs,
 
   sumPhi <- sum(phi)
 
-  # Returns the variance of Hovitz-Thompson total
+  # Returns the variance of Horvitz-Thompson total
   # (with or without estimated probabilities)of the variable
   # phi_k (y_1k - average on U of the y_1l) / sum of the phi_k on U
-  estim_appr_var_seq_phi1(errTerms / sumPhi, modes, I, piMat,
+  estim_appr_var_seq_phi1(errTerms, modes, I, piMat,
                           pq1Mat, Z, phi,
-                          correcEstimWeights)
+                          sd1 = 0.0,
+                          correcEstimWeights) / sumPhi^2L
 }
