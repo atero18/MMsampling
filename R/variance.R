@@ -1,13 +1,13 @@
-.bPhi11 <- function(Yobs, I, pi, maskInt, p1, Z,
+.bPhi11 <- function(Yobs, I, pi, maskSr, p1, Z,
                     phi = rep(1.0, length(Yobs)))
 {
 
-  p1Sr <- p1[maskInt]
+  p1Sr <- p1[maskSr]
 
   # Estimation of the expected value of the derivative of the total estimator
-  muPhi11 <- 2.0 * crossprod(Z[maskInt, , drop = FALSE],
-                       phi[maskInt] * Yobs[maskInt] *
-                         (1.0 - p1Sr) / (pi[maskInt] * p1Sr^2L))
+  muPhi11 <- 2.0 * crossprod(Z[maskSr, , drop = FALSE],
+                       phi[maskSr] * Yobs[maskSr] *
+                         (1.0 - p1Sr) / (pi[maskSr] * p1Sr^2L))
 
 
 
@@ -68,7 +68,7 @@
 }
 
 
-.bPhi22 <- function(Yobs, I, pi, maskInt, p1, R2, p2, Z,
+.bPhi22 <- function(Yobs, I, pi, maskSr, p1, R2, p2, Z,
                     phi = rep(1.0, length(Yobs)),
                     constY = FALSE)
 
@@ -96,7 +96,7 @@
     muPhi22 <- crossprod(2.0 * weigtedY2 * (1.0 - p2) / p2, Z)
   }
 
-  indicatorSm <- I & !maskInt
+  indicatorSm <- I & !maskSr
   # diagonal matrix of ^p_1k * (1-^p1k)
   lambda2Sm <- diag(p2[indicatorSm] * (1.0 - p2[indicatorSm]) /
                       (pi[indicatorSm] * p1Bar[indicatorSm]))
@@ -123,20 +123,17 @@ estim_appr_var_seq_phi1 <- function(Yobs,
   if (all(phi == 0.0))
     return(0.0)
 
-  maskInt <- modes == "int"
+  maskSr <- modes == "int"
 
   pi <- diag(piMat)
-  piSr <- pi[maskInt]
-  piMatSr <- piMat[maskInt, maskInt]
+  piSr <- pi[maskSr]
+  piMatSr <- piMat[maskSr, maskSr]
 
   p1 <- diag(pq1Mat)
-  pq1MatSr <- pq1Mat[maskInt, maskInt]
+  pq1MatSr <- pq1Mat[maskSr, maskSr]
 
-  # Weights equal to the probability of being in the set of web respondents
-  weights <- (pi * p1)^-1L
-
-  # The y_1k are weighted by the phi_k
-  weightedY1Sr <- phi[maskInt] * Yobs[maskInt]
+  # The y_1k are weighted with the phi_k
+  weightedY1Sr <- phi[maskSr] * Yobs[maskSr]
 
   # Sampling variability (S)
   # There is no correction needed for probabilities estimation
@@ -149,21 +146,22 @@ estim_appr_var_seq_phi1 <- function(Yobs,
     as.numeric()
 
   # q1 variability (R1)
-  # If we use estimated p_1k weights we have to make a correction.
+  # If we use estimated p_1k weights we have to make a correction
+  correctedY1Sr <- weightedY1Sr / p1[maskSr]
   covarq1Sr <- pi2_to_covarInc(pq1MatSr)
-  correctedY1Sr <- weightedY1Sr / p1[maskInt]
 
   #   If the probabilities p_1k are estimations we add a term
   #   that uses the covariates used by the regression estimators
   if (correcEstimWeights)
   {
-    bPhi11 <- .bPhi11(Yobs, I, pi, maskInt, p1, Z, phi)
-    correctedY1Sr <- correctedY1Sr - Z[maskInt, ] %*% bPhi11
+    bPhi11 <- .bPhi11(Yobs, I, pi, maskSr, p1, Z, phi)
+    correctedY1Sr <- correctedY1Sr - Z[maskSr, ] %*% bPhi11
   }
 
   varq1Est <- t(correctedY1Sr / piSr) %*%
     (covarq1Sr / pq1MatSr) %*%
-    (correctedY1Sr / piSr) %>% as.numeric()
+    (correctedY1Sr / piSr) %>%
+    as.numeric()
 
   # Y1 variability
   # We suppose we have an estimator of the variance
@@ -194,16 +192,16 @@ var_HT_seq_phi1 <- function(expY1,
     return(0.0)
 
   pi <- diag(piMat)
-  piMatSr <- piMat[maskInt, maskInt]
+  piMatSr <- piMat[maskSr, maskSr]
 
   p1 <- diag(pq1Mat)
   invP1Mat <- (p1 %*% t(p1))^-1L
 
-  maskInt <- as.numeric(modes == biasedMode)
+  maskSr <- as.numeric(modes == biasedMode)
 
   covarPi <- pi2_to_covarInc(piMat)
 
-  pq1MatSr <- pq1Mat[maskInt, maskInt]
+  pq1MatSr <- pq1Mat[maskSr, maskSr]
 
   weightedY1 <- phi * expY1
 
@@ -215,10 +213,10 @@ var_HT_seq_phi1 <- function(expY1,
   # in Sr
   if (constY1)
   {
-    piSr <- pi[maskInt]
-    weightedY1Sr <- weightedY1[maskInt]
+    piSr <- pi[maskSr]
+    weightedY1Sr <- weightedY1[maskSr]
     varS <- weightedY1Sr / piSr %*% t(weightedY1Sr / piSr) *
-      covarPi[maskInt, maskInt] /
+      covarPi[maskSr, maskSr] /
       (piMatSr * pq1MatSr)
   }
   # Otherwise we can do it on U
@@ -236,13 +234,13 @@ var_HT_seq_phi1 <- function(expY1,
 
     if (correcEstimWeights)
     {
-      bPhi11 <- .bPhi11(expY1, I, maskInt, p1, Z, phi, constY)
+      bPhi11 <- .bPhi11(expY1, I, maskSr, p1, Z, phi, constY)
       correctedY1Sr <- correctedY1Sr -
-        crossprod(Z[maskInt, , drop = FALSE], bPhi11)
+        crossprod(Z[maskSr, , drop = FALSE], bPhi11)
     }
 
     varq1 <- (correctedY1Sr / piSr) %*% t(correctedY1Sr / piSr) *
-      covarq1[maskInt, maskInt] / pq1MatSr
+      covarq1[maskSr, maskSr] / pq1MatSr
   }
   else
   {
@@ -250,7 +248,7 @@ var_HT_seq_phi1 <- function(expY1,
 
     if (correcEstimWeights)
     {
-      bPhi11 <- .bPhi11(expY1, I, maskInt, p1, Z, phi, constY)
+      bPhi11 <- .bPhi11(expY1, I, maskSr, p1, Z, phi, constY)
       correctedY1 <- correctedY1Sr - crossprod(Z, bPhi11)
     }
 
@@ -313,7 +311,7 @@ var_HT_seq_phi2 <- function(expY2, I,
 
   p2 <- diag(pq2Mat)
 
-  maskInt <- as.numeric(modes == biasedMode)
+  maskSr <- as.numeric(modes == biasedMode)
   R2 <- as.numeric(modes == refMode)
 
   weightedY2 <- phi * expY2
@@ -389,7 +387,7 @@ var_HT_seq_phi2 <- function(expY2, I,
 
     if (correcEstimWeights)
     {
-      bPhi22 <- .bPhi22(expY2, I, maskInt, p1, R2, p2, Z, phi, constY)
+      bPhi22 <- .bPhi22(expY2, I, maskSr, p1, R2, p2, Z, phi, constY)
       correctedY2Smr <- correctedY2Smr -
         crossprod(Z[R2, , drop = FALSE], bPhi22)
     }
@@ -406,7 +404,7 @@ var_HT_seq_phi2 <- function(expY2, I,
 
     if (correcEstimWeights)
     {
-      bPhi22 <- .bPhi22(expY2, I, maskInt, p1, R2, p2, Z, phi, constY)
+      bPhi22 <- .bPhi22(expY2, I, maskSr, p1, R2, p2, Z, phi, constY)
       correctedY2 <- correctedY2 - crossprod(Z, bPhi22)
     }
 
@@ -477,7 +475,7 @@ covar_difference_HT <- function(expY1, expY2, I,
 
     if (correcEstimWeights)
     {
-      bPhi11 <- .bPhi11(expY1, I, maskInt, p1, Z, phi, constY)
+      bPhi11 <- .bPhi11(expY1, I, maskSr, p1, Z, phi, constY)
       correctedY1 <- correctedY1Sr - crossprod(Z, bPhi11)
     }
 

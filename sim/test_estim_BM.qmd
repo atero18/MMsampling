@@ -22,6 +22,7 @@ library(ggplot2)
 library(Matrix)
 library(progress)
 library(marginaleffects)
+library(progressr)
 ```
 
 ```{r}
@@ -44,7 +45,7 @@ set.seed(145L)
 ```
 
 ```{r}
-N <- 1000L
+N <- 10000L
 phi <- rep(0.5, N)
 ```
 
@@ -191,7 +192,7 @@ gen_choice_bimode <- function(I, p1, p2, checkRank = FALSE, Z = NULL)
 ```
 
 ```{r}
-gen_ExpY <- function(Z, 
+gen_expY <- function(Z, 
                     betaInt, YintLaw = "gaussian", sdInt,
                     betaTel, YtelLaw = "gaussian", sdTel)
 {
@@ -278,7 +279,7 @@ gen_Y <- function(Z,
   
   if (recExpY)
   {
-    dataY <- gen_ExpY(Z, 
+    dataY <- gen_expY(Z, 
                       betaInt, YintLaw, sigmaInt,
                       betaTel, YtelLaw, sigmaTel)
     
@@ -403,7 +404,7 @@ simulationUncounf <-
            sdInt = 1.0, sdTel = 1.0, 
            phi = rep(0.5, N), K = 1000L,
            Z = NULL,
-           n = ceiling(N / 4L),
+           n = ceiling(N / 10L),
            seed = 123L,
            cluster = NULL)
   {
@@ -464,7 +465,7 @@ simulationUncounf <-
     }
     
     
-    dataExpY <- gen_ExpY(Z, 
+    dataExpY <- gen_expY(Z, 
                          betaInt, YintLaw, sdInt,
                          betaTel, YtelLaw, sdTel)
     
@@ -526,7 +527,7 @@ simulationUncounf <-
                   envir = environment())
     
     clusterExport(cluster, c("gen_choice_bimode", 
-                  "gen_ExpY", "gen_Y", "set_Yobs", "set_phi"))
+                  "gen_expY", "gen_Y", "set_Yobs", "set_phi"))
       
     
     if (class(phi) == "character")
@@ -1159,7 +1160,7 @@ loop_simulation <- function(parameters, K = 2000L)
 Evaluation of $K$ experiments:
 
 ```{r}
-K <- 10L
+K <- 1000L
 Kvec <- seq_len(K)
 ```
 
@@ -1332,8 +1333,8 @@ simulation_tphi <- function(Z,
                             betaInt, betaTel, 
                             YintLaw = "gaussian", YtelLaw = "gaussian",
                             sdInt = 1.0, sdTel = 1.0, 
-                            phi = rep(0.5, N), K = 1000L,
-                            n = ceiling(N / 4L),
+                            phi = rep(0.5, N), K = 10000L,
+                            n = ceiling(N / 10L),
                             seed = 123L)
 {
   set.seed(seed)
@@ -1358,7 +1359,7 @@ simulation_tphi <- function(Z,
   }
   
   
-  dataExpY <- gen_ExpY(Z, 
+  dataExpY <- gen_expY(Z, 
                        betaInt, YintLaw, sdInt,
                        betaTel, YtelLaw, sdTel)
   
@@ -1388,7 +1389,7 @@ simulation_tphi <- function(Z,
     }
     
     
-    dataModes <- gen_choice_bimode(I, pInt, pTel)
+    dataModes <-gen_choice_bimode(I, pInt, pTel)
     modes <- dataModes$mode
     
     maskInt <- modes == "int"
@@ -1402,16 +1403,14 @@ simulation_tphi <- function(Z,
     
     trueWeights <- (pi * trueProbsSelect)^-1L
   
-    # Estimation of mode selection probabilities (taken unconditionally)
-    estimProbsSelectTable <- 
-      MMsampling::estim_response_prob_sequential(I, pi, Z,
+    # Estimation of mode selection probabilities
+    estimProbsData <- MMsampling::estim_response_prob_sequential(I, pi, Z,
                                                  modes, 
                                                  c("int", "tel"),
-                                                 chosenOnly = FALSE)$unconditional
-  
-    estimProbsSelect <- get_value_by_mode(estimProbsSelectTable, modes)
+                                                 chosenOnly = FALSE)
     
-  
+    estimProbsSelect <- 
+      MMsampling::get_value_by_mode(estimProbsData$unconditional, modes)
     estimWeights <- (pi * estimProbsSelect)^-1L
     
     # Generating values for Y_int and Y_tel
@@ -1429,61 +1428,202 @@ simulation_tphi <- function(Z,
     Yobs <- set_Yobs(Yint = Yints, Ytel = Ytels, modes = modes)
     
     # Estimations with Y1
+      # Estimation of the internet design covariance matrix
+    estimpq1Mat <- 
+      estimProbsData$conditional[, "int"] %*% 
+      t(estimProbsData$conditional[, "int"])
+    
+    diag(estimpq1Mat) <- estimProbsData$conditional[, "int"]
+    
+     # Total of phi_k y_1k with true probabilities
+    expPhi1 <- sum(phi * expYints)
     totPhi1TW <- sum(phi[maskInt] * trueWeights[maskInt] * Yobs[maskInt])
+    
+        # Estimation of the approximate variance of the total estimator
+        # the variance of Y1 is assumed known and homoscedastic for simplicity
+    apprVarPhi1TW <- 
+      MMsampling::estim_appr_var_seq_phi1(Yobs,
+                                          modes, 
+                                          I,
+                                          piMat,
+                                          pq1Mat,
+                                          Z,
+                                          phi, 
+                                          sd1 = sdInt,
+                                          correcEstimWeights = FALSE)
+    
+      # Total of phi_k y_1k with estimated probabilities
     totPhi1EW <- sum(phi[maskInt] * estimWeights[maskInt] * Yobs[maskInt])
     
-    estimpq1Mat <- 
-      estimProbsSelectTable[, "int"] %*% t(estimProbsSelectTable[, "int"])
-    
-    diag(estimpq1Mat) <- estimProbsSelectTable[, "int"]
-    
-      # the variance of Y1 is assumed known for simplicity
-    estimApprVarPhi1 <- 
-      estim_appr_var_seq_phi1(Yobs,
-                              modes, I,
-                              piMat,
-                              estimpq1Mat, Z,
-                              phi, correcEstimWeights = FALSE,
-                              sd1 = sdInt)
+    apprVarPhi1EW <- 
+      MMsampling::estim_appr_var_seq_phi1(Yobs,
+                                          modes, 
+                                          I,
+                                          piMat,
+                                          estimpq1Mat, 
+                                          Z,
+                                          phi, 
+                                          sd1 = sdInt,
+                                          correcEstimWeights = TRUE)
+     
+     
       # parameter equal to
       #  phi_k (y_1k - average on U of the y_1l) / sum of the phi_k on U,
       #  equal to phi_k y_1k / sum of the phi_k on U - average on U of the y_1l
       #  (the last term is not a statistic)
-    totCenteredPhi1EW <- 
+    expCtrdPhi1 <- expPhi1 / sum(phi) - mean(expYints)
+    totCtrdPhi1TW <- 
+      sum(phi[maskInt] * 
+            (trueWeights[maskInt] * Yobs[maskInt] - mean(Yints))) /
+      sum(phi[maskInt] * trueWeights[maskInt])
+    
+    apprVarCtrdPhi1TW <- 
+      MMsampling::estim_var_centered_phiweb(Yobs,
+                                            modes, 
+                                            I,
+                                            piMat,
+                                            pq1Mat,
+                                            Z,
+                                            phi, 
+                                            correcEstimWeights = FALSE)
+    
+    totCtrdPhi1EW <- 
       sum(phi[maskInt] * 
             (estimWeights[maskInt] * Yobs[maskInt] - mean(Yints))) /
       sum(phi[maskInt] * estimWeights[maskInt])
     
-    estimApprVarCenteredInt <- 
-      estim_var_centered_phiweb(Yobs,
-                                modes, I,
-                                piMat,
-                                estimpq1Mat, Z,
-                                phi, correcEstimWeights = FALSE)
+    apprVarCtrdPhi1EW <- 
+      MMsampling::estim_var_centered_phiweb(Yobs,
+                                            modes, 
+                                            I,
+                                            piMat,
+                                            estimpq1Mat, 
+                                            Z,
+                                            phi, 
+                                            correcEstimWeights = TRUE)
     
     # Estimations with Y2
+    
+      # Estimation of the internet design covariance matrix
+    estimpq2 <-  estimProbsData$conditional[, "tel"]
+    estimpq2Mat <- 
+      estimpq2 %*% t(estimpq2)
+    
+    diag(estimpq2Mat) <- estimpq2
+    
+      # Total of phi_k y_2k with true probabilities
     totPhi2TW <- sum(phi[maskTel] * trueWeights[maskTel] * Yobs[maskTel])
+    
+    
+        # Estimation of the approximate variance of the total estimator
+        # the variance of Y1 is assumed known and homoscedastic for simplicity
+    # apprVarPhi2TW <-
+    #   estim_appr_var_seq_phi2(Yobs,
+    #                           modes,
+    #                           I,
+    #                           piMat,
+    #                           pq1Mat,
+    #                           pq2Mat,
+    #                           Z,
+    #                           phi,
+    #                           sd2 = sdTel,
+    #                           correcEstimWeights = FALSE)
+
+    apprVarPhi2TW <- NA_real_
+    
+      # Total of phi_k y_2k with estimated probabilities
+    expPhi2 <- sum(phi * expYtels)
     totPhi2EW <- sum(phi[maskTel] * estimWeights[maskTel] * Yobs[maskTel])
     
+    
+    # apprVarPhi2EW <- 
+    #   estim_appr_var_seq_phi2(Yobs,
+    #                           modes, 
+    #                           I,
+    #                           piMat,
+    #                           estimpq1Mat,
+    #                           estimpq2Mat,
+    #                           Z,
+    #                           phi, 
+    #                           sd2 = sdTel,
+    #                           correcEstimWeights = TRUE)
+    
+    apprVarPhi2EW <- NA_real_
+    
+      # parameter equal to
+      #  phi_k (y_1k - average on U of the y_1l) / sum of the phi_k on U,
+      #  equal to phi_k y_1k / sum of the phi_k on U - average on U of the y_1l
+      #  (the last term is not a statistic)
+    expCtrdPhi2 <- expPhi2 / sum(phi) - mean(expYtels)
+    totCtrdPhi2TW <- 
+      sum(phi[maskTel] * 
+            (trueWeights[maskTel] * Yobs[maskTel] - mean(Ytels))) /
+      sum(phi[maskTel] * trueWeights[maskTel])
+    
+    # apprVarCtrdPhi2TW <- 
+    #   estim_var_centered_phitel(Yobs,
+    #                             modes, 
+    #                             I,
+    #                             piMat,
+    #                             pq1Mat,
+    #                             pq2Mat,
+    #                             Z,
+    #                             phi, 
+    #                             correcEstimWeights = FALSE)
+    
+    apprVarCtrdPhi2TW <- NA_real_
+    
+    totCtrdPhi2EW <- 
+      sum(phi[maskTel] * 
+            (estimWeights[maskTel] * Yobs[maskTel] - mean(Ytels))) /
+      sum(phi[maskTel] * trueWeights[maskTel])
+    
+    # apprVarCtrdPhi2EW <- 
+    #   estim_var_centered_phiweb(Yobs,
+    #                             modes, 
+    #                             I,
+    #                             piMat,
+    #                             estimpq1Mat, 
+    #                             estimpq2Mat,
+    #                             Z,
+    #                             phi, 
+    #                             correcEstimWeights = TRUE)
+    
+    apprVarCtrdPhi2EW <- NA_real_
     ## NOTE : Attention calcul probas estimées ici, précédemment pris sans
     ## conditionnement
-    c(totPhi1TW = totPhi1TW, totPhi1EW = totPhi1EW, 
-      estimApprVarPhi1 = estimApprVarPhi1,
-      totCenteredPhi1EW = totCenteredPhi1EW,
-      estimApprVarCenteredInt = estimApprVarCenteredInt,
-      totPhi2TW = totPhi2TW, totPhi2EW = totPhi2EW)
+    tibble(estimand = rep(c("phi1", "centered phi1", 
+                            "phi2", "centered phi2"), each = 2L), 
+           expEstimand = rep(c(expPhi1, expCtrdPhi1, expPhi2, expCtrdPhi2), 
+                             each = 2L),
+           estimator = c("totPhi1TW", "totPhi1EW", 
+                         "totCtrdPhi1TW", "totCtrdPhi1EW", 
+                         "totPhi2TW", "totPhi2EW",
+                         "totCtrdPhi2TW", "totCtrdPhi2EW"), 
+           estimation = c(totPhi1TW, totPhi1EW, 
+                          totCtrdPhi1TW, totCtrdPhi1EW, 
+                          totPhi2TW, totPhi2EW,
+                          totCtrdPhi2TW, totCtrdPhi2EW), 
+           apprVar = c(apprVarPhi1TW, apprVarPhi1EW, 
+                       apprVarCtrdPhi1TW, apprVarCtrdPhi1EW,
+                       apprVarPhi2TW, apprVarPhi2EW,
+                       apprVarCtrdPhi2TW, apprVarCtrdPhi2EW))
   }
   
-  sapply(seq_len(K), FUN = monoSim) %>% t() %>% as_tibble()
+  pv <- profr(expr = monoSim())
+  return(pv)
+  #with_progress({res <- lapply(seq_len(K), FUN = monoSim)})
+  #do.call("rbind", res)
 }
 ```
 
 
 ```{r}
-Kbis <- 2000L
+Kbis <- 5L
 ```
 
 ```{r}
+# handlers(global = TRUE)
 betaIntTemp <- betaTel
 betaIntTemp[1L] <- betaIntTemp[1L] + 1.0
 
@@ -1503,6 +1643,18 @@ compareTphi <- simulation_tphi(K = Kbis,
 ```
 
 
+
+
+```{r}
+compareTphi %>% 
+  group_by(estimand, weights) %>% 
+  summarize(expEstimad = mean(expEstimand),
+            mean = mean(estimation), 
+            avg_AV = mean(apprVar),
+            var = var(estimation)) %>% 
+  mutate(ratioVar = avg_AV / var)
+```
+
 ```{r}
 compareTphi$differenceEW <- compareTphi$totPhi1EW - compareTphi$totPhi2EW
 ```
@@ -1518,14 +1670,22 @@ varDiffPhi <-
 ```{r}
 mean(compareTphi$estimApprVarPhi1[-seq_len(Kbis / 2.0)])
 ```
+```{r}
+mean(compareTphi$estimApprVarPhi1[-seq_len(Kbis / 2.0)]) / varPhi1
+```
 
 ```{r}
-var(compareTphi$totCenteredPhi1EW[seq_len(Kbis / 2.0)])
+var(compareTphi$totCtrdPhi1EW[seq_len(Kbis / 2.0)])
 ```
 
 ```{r}
 mean(compareTphi$estimApprVarCenteredInt[-seq_len(Kbis / 2.0)])
 ```
+
+```{r}
+mean(compareTphi$estimApprVarCenteredInt[-seq_len(Kbis / 2.0)]) / var(compareTphi$totCtrdPhi1EW[seq_len(Kbis / 2.0)])
+```
+
 
 ```{r}
 rm(varPhi1, varPhi2, varDiffPhi, compareTphi)
