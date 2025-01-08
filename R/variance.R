@@ -16,15 +16,12 @@
   n <- sum(I)
   p1S <- p1[I]
 
-  lambda1S <- diag(p1S * (1.0 - p1S) / pi[I], nrow = n, ncol = n)
+  lambda1S <- p1S * (1.0 - p1S) / pi[I]
   minusPartialW1 <-
     t(Z[I, , drop = FALSE]) %*%
-    lambda1S %*%
-    Z[I, , drop = FALSE]
+    (lambda1S * Z[I, , drop = FALSE])
 
-  bPhi11 <- -solve(minusPartialW1) %*% muPhi11
-
-  return(bPhi11)
+  - solve(minusPartialW1) %*% muPhi11
 }
 
 

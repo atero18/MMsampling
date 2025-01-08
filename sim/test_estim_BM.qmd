@@ -1389,7 +1389,7 @@ simulation_tphi <- function(Z,
     }
     
     
-    dataModes <-gen_choice_bimode(I, pInt, pTel)
+    dataModes <-  gen_choice_bimode(I, pInt, pTel)
     modes <- dataModes$mode
     
     maskInt <- modes == "int"
@@ -1404,13 +1404,14 @@ simulation_tphi <- function(Z,
     trueWeights <- (pi * trueProbsSelect)^-1L
   
     # Estimation of mode selection probabilities
-    estimProbsData <- estim_response_prob_sequential(I, pi, Z,
+    estimProbsData <- 
+      MMsampling::estim_response_prob_sequential(I, pi, Z,
                                                  modes, 
                                                  c("int", "tel"),
                                                  chosenOnly = FALSE)
     
     estimProbsSelect <- 
-      get_value_by_mode(estimProbsData$unconditional, modes)
+       MMsampling::get_value_by_mode(estimProbsData$unconditional, modes)
     estimWeights <- (pi * estimProbsSelect)^-1L
     
     # Generating values for Y_int and Y_tel
@@ -1429,11 +1430,9 @@ simulation_tphi <- function(Z,
     
     # Estimations with Y1
       # Estimation of the internet design covariance matrix
-    estimpq1Mat <- 
-      estimProbsData$conditional[, "int"] %*% 
-      t(estimProbsData$conditional[, "int"])
-    
-    diag(estimpq1Mat) <- estimProbsData$conditional[, "int"]
+    estimpq1 <-  estimProbsData$conditional[, "int"]
+    estimpq1Mat <- estimpq1 %*% t(estimpq1)
+    diag(estimpq1Mat) <- estimpq1
     
      # Total of phi_k y_1k with true probabilities
     expPhi1 <- sum(phi * expYints)
@@ -1466,7 +1465,7 @@ simulation_tphi <- function(Z,
                               sd1 = sdInt,
                               correcEstimWeights = TRUE)
      
-     
+    
       # parameter equal to
       #  phi_k (y_1k - average on U of the y_1l) / sum of the phi_k on U,
       #  equal to phi_k y_1k / sum of the phi_k on U - average on U of the y_1l
@@ -1611,12 +1610,13 @@ simulation_tphi <- function(Z,
   }
   
   # pv <- profr::profr(expr = monoSim(), interval = 0.001)
+  # return(profvis::profvis(lapply(seq_len(10L), FUN = monoSim))) #prof_output = "test.res"))
   # pv <- profvis::profvis(monoSim())
   # pv <- microbenchmark::microbenchmark(monoSim(), times = 10L)
   # return(pv)
   
   # with_progress({res <- lapply(seq_len(K), FUN = monoSim)})
-  res <- lapply(seq_len(K), FUN = monoSim)
+  res <- mclapply(seq_len(K), FUN = monoSim, mc.cores = detectCores() - 1L)
   do.call("rbind", res)
 }
 ```
@@ -1624,7 +1624,7 @@ simulation_tphi <- function(Z,
 ### TEMP
 
 ```{r}
-Kbis <- 10L
+Kbis <- 50L
 ```
 
 ```{r}
@@ -1632,6 +1632,7 @@ Kbis <- 10L
 betaIntTemp <- betaTel
 betaIntTemp[1L] <- betaIntTemp[1L] + 1.0
 
+tic()
 compareTphi <- simulation_tphi(K = Kbis,
                                Z = Z,
                                sampling = "SRS",
@@ -1645,6 +1646,7 @@ compareTphi <- simulation_tphi(K = Kbis,
                                sdInt = 1.0,
                                sdTel = 1.0,
                                seed = 200L)
+glue("{toc()}")
 ```
 
 

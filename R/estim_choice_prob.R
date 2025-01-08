@@ -90,15 +90,21 @@ estim_response_prob_sequential <- function(I, pi, Z, modes, orderModes,
 
   RGHNames <- unique(RGH)
 
+
+
   # If the package `fastglm` is installed we will prefer to use it
   usefastglm <- requireNamespace("fastglm", quietly = TRUE)
 
+
   orderModes <- orderModes[tolower(orderModes) != "nr"]
+
+
   assertVector(orderModes,
                any.missing = FALSE, all.missing  = FALSE,
                min.len = 1L, unique = TRUE)
 
   assertSubset(orderModes, M)
+
 
 
   # Will contain the conditional probs for each mode
