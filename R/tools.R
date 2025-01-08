@@ -154,6 +154,7 @@ checkTable <- function(table,
 assertTable <- makeAssertionFunction(checkTable)
 
 #' @importFrom simstudy genCorMat
+#' @export
 get_value_by_mode <- function(data, modes)
 {
 

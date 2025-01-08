@@ -204,7 +204,7 @@ estim_response_prob_sequential <- function(I, pi, Z, modes, orderModes,
   conditionalProbs[, "nr"] <-
     1.0 - conditionalProbs[, mode]
 
-  unconditionalProbs[, "nr"] <- 1.0 - apply(unconditionalProbs, MARGIN = 1L, sum)
+  unconditionalProbs[, "nr"] <- 1.0 - rowSums(unconditionalProbs)
 
   if (chosenOnly)
   {

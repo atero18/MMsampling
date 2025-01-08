@@ -1404,13 +1404,13 @@ simulation_tphi <- function(Z,
     trueWeights <- (pi * trueProbsSelect)^-1L
   
     # Estimation of mode selection probabilities
-    estimProbsData <- MMsampling::estim_response_prob_sequential(I, pi, Z,
+    estimProbsData <- estim_response_prob_sequential(I, pi, Z,
                                                  modes, 
                                                  c("int", "tel"),
                                                  chosenOnly = FALSE)
     
     estimProbsSelect <- 
-      MMsampling::get_value_by_mode(estimProbsData$unconditional, modes)
+      get_value_by_mode(estimProbsData$unconditional, modes)
     estimWeights <- (pi * estimProbsSelect)^-1L
     
     # Generating values for Y_int and Y_tel
@@ -1442,29 +1442,29 @@ simulation_tphi <- function(Z,
         # Estimation of the approximate variance of the total estimator
         # the variance of Y1 is assumed known and homoscedastic for simplicity
     apprVarPhi1TW <- 
-      MMsampling::estim_appr_var_seq_phi1(Yobs,
-                                          modes, 
-                                          I,
-                                          piMat,
-                                          pq1Mat,
-                                          Z,
-                                          phi, 
-                                          sd1 = sdInt,
-                                          correcEstimWeights = FALSE)
+      estim_appr_var_seq_phi1(Yobs,
+                              modes, 
+                              I,
+                              piMat,
+                              pq1Mat,
+                              Z,
+                              phi, 
+                              sd1 = sdInt,
+                              correcEstimWeights = FALSE)
     
       # Total of phi_k y_1k with estimated probabilities
     totPhi1EW <- sum(phi[maskInt] * estimWeights[maskInt] * Yobs[maskInt])
     
     apprVarPhi1EW <- 
-      MMsampling::estim_appr_var_seq_phi1(Yobs,
-                                          modes, 
-                                          I,
-                                          piMat,
-                                          estimpq1Mat, 
-                                          Z,
-                                          phi, 
-                                          sd1 = sdInt,
-                                          correcEstimWeights = TRUE)
+      estim_appr_var_seq_phi1(Yobs,
+                              modes, 
+                              I,
+                              piMat,
+                              estimpq1Mat, 
+                              Z,
+                              phi, 
+                              sd1 = sdInt,
+                              correcEstimWeights = TRUE)
      
      
       # parameter equal to
@@ -1478,14 +1478,14 @@ simulation_tphi <- function(Z,
       sum(phi[maskInt] * trueWeights[maskInt])
     
     apprVarCtrdPhi1TW <- 
-      MMsampling::estim_var_centered_phiweb(Yobs,
-                                            modes, 
-                                            I,
-                                            piMat,
-                                            pq1Mat,
-                                            Z,
-                                            phi, 
-                                            correcEstimWeights = FALSE)
+      estim_var_centered_phiweb(Yobs,
+                                modes, 
+                                I,
+                                piMat,
+                                pq1Mat,
+                                Z,
+                                phi, 
+                                correcEstimWeights = FALSE)
     
     totCtrdPhi1EW <- 
       sum(phi[maskInt] * 
@@ -1493,14 +1493,14 @@ simulation_tphi <- function(Z,
       sum(phi[maskInt] * estimWeights[maskInt])
     
     apprVarCtrdPhi1EW <- 
-      MMsampling::estim_var_centered_phiweb(Yobs,
-                                            modes, 
-                                            I,
-                                            piMat,
-                                            estimpq1Mat, 
-                                            Z,
-                                            phi, 
-                                            correcEstimWeights = TRUE)
+      estim_var_centered_phiweb(Yobs,
+                                modes, 
+                                I,
+                                piMat,
+                                estimpq1Mat, 
+                                Z,
+                                phi, 
+                                correcEstimWeights = TRUE)
     
     # Estimations with Y2
     
@@ -1610,16 +1610,21 @@ simulation_tphi <- function(Z,
                        apprVarCtrdPhi2TW, apprVarCtrdPhi2EW))
   }
   
-  pv <- profr(expr = monoSim())
-  return(pv)
-  #with_progress({res <- lapply(seq_len(K), FUN = monoSim)})
-  #do.call("rbind", res)
+  # pv <- profr::profr(expr = monoSim(), interval = 0.001)
+  # pv <- profvis::profvis(monoSim())
+  # pv <- microbenchmark::microbenchmark(monoSim(), times = 10L)
+  # return(pv)
+  
+  # with_progress({res <- lapply(seq_len(K), FUN = monoSim)})
+  res <- lapply(seq_len(K), FUN = monoSim)
+  do.call("rbind", res)
 }
 ```
 
+### TEMP
 
 ```{r}
-Kbis <- 5L
+Kbis <- 10L
 ```
 
 ```{r}
@@ -1641,8 +1646,6 @@ compareTphi <- simulation_tphi(K = Kbis,
                                sdTel = 1.0,
                                seed = 200L)
 ```
-
-
 
 
 ```{r}
