@@ -1344,11 +1344,11 @@ simulation_tphi <- function(Z,
   expit <- function(x) 1.0 / (1.0 + exp(-x))
 
   pInt <- expit(Z %*% alphaInt) %>% as.numeric()
-  pq1Mat <- pInt %*% t(pInt)
+  pq1Mat <- tcrossprod(pInt)
   diag(pq1Mat) <- pInt
   
   pTel <- expit(Z %*% alphaTel) %>% as.numeric()
-  pq2Mat <- pTel %*% t(pTel)
+  pq2Mat <- tcrossprod(pTel)
   diag(pq2Mat) <- pTel
 
   if (sampling == "SRS")
@@ -1430,9 +1430,8 @@ simulation_tphi <- function(Z,
     
     # Estimations with Y1
       # Estimation of the internet design covariance matrix
-    estimpq1 <-  estimProbsData$conditional[, "int"]
-    estimpq1Mat <- estimpq1 %*% t(estimpq1)
-    diag(estimpq1Mat) <- estimpq1
+    # estimpq1 <-  estimProbsData$conditional[, "int"]
+    # estimpq1Mat <- pi_to_pi2(estimpq1)
     
      # Total of phi_k y_1k with true probabilities
     expPhi1 <- sum(phi * expYints)
@@ -1454,18 +1453,18 @@ simulation_tphi <- function(Z,
       # Total of phi_k y_1k with estimated probabilities
     totPhi1EW <- sum(phi[maskInt] * estimWeights[maskInt] * Yobs[maskInt])
     
-    apprVarPhi1EW <- 
-      estim_appr_var_seq_phi1(Yobs,
-                              modes, 
-                              I,
-                              piMat,
-                              estimpq1Mat, 
-                              Z,
-                              phi, 
-                              sd1 = sdInt,
-                              correcEstimWeights = TRUE)
+    # apprVarPhi1EW <- 
+    #   estim_appr_var_seq_phi1(Yobs,
+    #                           modes, 
+    #                           I,
+    #                           piMat,
+    #                           estimpq1Mat, 
+    #                           Z,
+    #                           phi, 
+    #                           sd1 = sdInt,
+    #                           correcEstimWeights = TRUE)
      
-    
+    apprVarPhi1EW <- NA_real_
       # parameter equal to
       #  phi_k (y_1k - average on U of the y_1l) / sum of the phi_k on U,
       #  equal to phi_k y_1k / sum of the phi_k on U - average on U of the y_1l
@@ -1477,7 +1476,7 @@ simulation_tphi <- function(Z,
       sum(phi[maskInt] * trueWeights[maskInt])
     
     apprVarCtrdPhi1TW <- 
-      estim_var_centered_phiweb(Yobs,
+      estim_var_centered_phi1(Yobs,
                                 modes, 
                                 I,
                                 piMat,
@@ -1491,24 +1490,24 @@ simulation_tphi <- function(Z,
             (estimWeights[maskInt] * Yobs[maskInt] - mean(Yints))) /
       sum(phi[maskInt] * estimWeights[maskInt])
     
-    apprVarCtrdPhi1EW <- 
-      estim_var_centered_phiweb(Yobs,
-                                modes, 
-                                I,
-                                piMat,
-                                estimpq1Mat, 
-                                Z,
-                                phi, 
-                                correcEstimWeights = TRUE)
+    # apprVarCtrdPhi1EW <- 
+    #   estim_var_centered_phi1(Yobs,
+    #                             modes, 
+    #                             I,
+    #                             piMat,
+    #                             estimpq1Mat, 
+    #                             Z,
+    #                             phi, 
+    #                             correcEstimWeights = TRUE)
+    
+    apprVarCtrdPhi1EW <- NA_real_
     
     # Estimations with Y2
     
       # Estimation of the internet design covariance matrix
-    estimpq2 <-  estimProbsData$conditional[, "tel"]
-    estimpq2Mat <- 
-      estimpq2 %*% t(estimpq2)
-    
-    diag(estimpq2Mat) <- estimpq2
+    # estimpq2 <-  estimProbsData$conditional[, "tel"]
+    # estimpq2Mat <- pi_to_pi2(estimpq2)
+
     
       # Total of phi_k y_2k with true probabilities
     totPhi2TW <- sum(phi[maskTel] * trueWeights[maskTel] * Yobs[maskTel])
@@ -1578,7 +1577,7 @@ simulation_tphi <- function(Z,
       sum(phi[maskTel] * trueWeights[maskTel])
     
     # apprVarCtrdPhi2EW <- 
-    #   estim_var_centered_phiweb(Yobs,
+    #   estim_var_centered_phi1(Yobs,
     #                             modes, 
     #                             I,
     #                             piMat,
@@ -1606,7 +1605,9 @@ simulation_tphi <- function(Z,
            apprVar = c(apprVarPhi1TW, apprVarPhi1EW, 
                        apprVarCtrdPhi1TW, apprVarCtrdPhi1EW,
                        apprVarPhi2TW, apprVarPhi2EW,
-                       apprVarCtrdPhi2TW, apprVarCtrdPhi2EW))
+                       apprVarCtrdPhi2TW, apprVarCtrdPhi2EW)) %>% 
+      mutate(weights = rep_len(c("true", "estimated"), length.out = n()),
+             .after = "estimator")
   }
   
   # pv <- profr::profr(expr = monoSim(), interval = 0.001)
@@ -1615,8 +1616,8 @@ simulation_tphi <- function(Z,
   # pv <- microbenchmark::microbenchmark(monoSim(), times = 10L)
   # return(pv)
   
-  # with_progress({res <- lapply(seq_len(K), FUN = monoSim)})
-  res <- mclapply(seq_len(K), FUN = monoSim, mc.cores = detectCores() - 1L)
+  with_progress({res <- lapply(seq_len(K), FUN = monoSim)})
+  # res <- mclapply(seq_len(K), FUN = monoSim, mc.cores = detectCores() - 1L)
   do.call("rbind", res)
 }
 ```
@@ -1624,7 +1625,7 @@ simulation_tphi <- function(Z,
 ### TEMP
 
 ```{r}
-Kbis <- 50L
+Kbis <- 500L
 ```
 
 ```{r}
@@ -1633,6 +1634,7 @@ betaIntTemp <- betaTel
 betaIntTemp[1L] <- betaIntTemp[1L] + 1.0
 
 tic()
+pv <- profvis::profvis({
 compareTphi <- simulation_tphi(K = Kbis,
                                Z = Z,
                                sampling = "SRS",
@@ -1640,12 +1642,13 @@ compareTphi <- simulation_tphi(K = Kbis,
                                alphaTel = alphaTel,
                                betaInt = betaIntTemp,
                                betaTel = betaTel,
-                               YtelLaw = "gaussian",
                                YintLaw = "gaussian",
+                               YtelLaw = "gaussian",
                                phi = "eq",
                                sdInt = 1.0,
                                sdTel = 1.0,
                                seed = 200L)
+})
 glue("{toc()}")
 ```
 

@@ -1,9 +1,9 @@
-estim_var_centered_phiweb <- function(Yobs,
-                                      modes, I,
-                                      piMat,
-                                      pq1Mat, Z,
-                                      phi = rep(1.0, length(Yobs)),
-                                      correcEstimWeights = TRUE)
+estim_var_centered_phi1 <- function(Yobs,
+                                    modes, I,
+                                    piMat,
+                                    pq1Mat, Z,
+                                    phi = rep(1.0, length(Yobs)),
+                                    correcEstimWeights = TRUE)
 {
 
   maskInt <- modes == "int"
@@ -25,5 +25,35 @@ estim_var_centered_phiweb <- function(Yobs,
   estim_appr_var_seq_phi1(errTerms, modes, I, piMat,
                           pq1Mat, Z, phi,
                           sd1 = 0.0,
+                          correcEstimWeights) / sumPhi^2L
+}
+
+estim_var_centered_phi2 <- function(Yobs,
+                                    modes, I,
+                                    piMat,
+                                    pq1Mat,
+                                    pq2Mat, Z,
+                                    phi = rep(1.0, length(Yobs)),
+                                    correcEstimWeights = TRUE)
+{
+  maskTel <- modes == "tel"
+  weightsTel <- (diag(piMat)[maskTel] *
+                   (1.0 - diag(pq1Mat)[maskTel]) *
+                   diag(pq2Mat)[maskTel])^-1L
+
+  # Estimator of the mean of phi * y2 on the finite population U
+  HajekTel <- sum(Yobs[maskTel] * weightsTel) / sum(weightsTel)
+
+  errTerms <- rep(NA_real_, length(Yobs))
+  errTerms[maskTel] <- Yobs[maskTel] - HajekTel
+
+  sumPhi <- sum(phi)
+
+  # Returns the variance of Horvitz-Thompson total
+  # (with or without estimated probabilities) of the variable
+  # phi_k (y_2k - average on U of the y_2l) / sum of the phi_k on U
+  estim_appr_var_seq_phi2(errTerms, modes, I, piMat,
+                          pq1Mat, Z, phi,
+                          sd2 = 0.0,
                           correcEstimWeights) / sumPhi^2L
 }

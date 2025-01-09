@@ -53,7 +53,17 @@ pi2_to_covarInc <- function(pi2)
   pi2 - pi %*% t(pi)
 }
 
+#' @describeIn mats_interaction Calcul of the second order probability matrix
+#' in case of independency
+#' @param pi First order probability vector
+#' @export
+pi_to_pi2 <- function(pi)
+{
+  pi2 <- pi %*% t(pi)
+  diag(pi2) <- pi
 
+  pi
+}
 
 #' @importFrom tibble add_column
 add_nr_prob <- function(probs, nrName = "nr")
