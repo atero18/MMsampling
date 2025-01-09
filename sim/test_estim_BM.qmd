@@ -1408,15 +1408,15 @@ simulation_tphi <- function(Z,
     trueWeights <- (pi * trueProbsSelect)^-1L
   
     # Estimation of mode selection probabilities
-    estimProbsData <- 
-      MMsampling::estim_response_prob_sequential(I, pi, Z,
-                                                 modes, 
-                                                 c("int", "tel"),
-                                                 chosenOnly = FALSE)
-    
-    estimProbsSelect <- 
-       MMsampling::get_value_by_mode(estimProbsData$unconditional, modes)
-    estimWeights <- (pi * estimProbsSelect)^-1L
+    # estimProbsData <- 
+    #   MMsampling::estim_response_prob_sequential(I, pi, Z,
+    #                                              modes, 
+    #                                              c("int", "tel"),
+    #                                              chosenOnly = FALSE)
+    # 
+    # estimProbsSelect <- 
+    #    MMsampling::get_value_by_mode(estimProbsData$unconditional, modes)
+    # estimWeights <- (pi * estimProbsSelect)^-1L
     
     # Generating values for Y_int and Y_tel
     dataY <- gen_Y(Z, 
@@ -1455,7 +1455,8 @@ simulation_tphi <- function(Z,
                               correcEstimWeights = FALSE)
     
       # Total of phi_k y_1k with estimated probabilities
-    totPhi1EW <- sum(phi[maskInt] * estimWeights[maskInt] * Yobs[maskInt])
+    # totPhi1EW <- sum(phi[maskInt] * estimWeights[maskInt] * Yobs[maskInt])
+    totPhi1EW <- NA_real_
     
     # apprVarPhi1EW <- 
     #   estim_appr_var_seq_phi1(Yobs,
@@ -1475,8 +1476,7 @@ simulation_tphi <- function(Z,
       #  (the last term is not a statistic)
     expCtrdPhi1 <- expPhi1 / sum(phi) - mean(expYints)
     totCtrdPhi1TW <- 
-      sum(phi[maskInt] * 
-            (trueWeights[maskInt] * Yobs[maskInt] - mean(Yints))) /
+      sum(phi[maskInt] * trueWeights[maskInt] * (Yobs[maskInt] - mean(Yints))) /
       sum(phi[maskInt] * trueWeights[maskInt])
     
     apprVarCtrdPhi1TW <- 
@@ -1489,10 +1489,12 @@ simulation_tphi <- function(Z,
                                 phi, 
                                 correcEstimWeights = FALSE)
     
-    totCtrdPhi1EW <- 
-      sum(phi[maskInt] * 
-            (estimWeights[maskInt] * Yobs[maskInt] - mean(Yints))) /
-      sum(phi[maskInt] * estimWeights[maskInt])
+    # totCtrdPhi1EW <- 
+    #   sum(phi[maskInt] * 
+    #         (estimWeights[maskInt] * Yobs[maskInt] - mean(Yints))) /
+    #   sum(phi[maskInt] * estimWeights[maskInt])
+    
+    totCtrdPhi1EW <- NA_real_
     
     # apprVarCtrdPhi1EW <- 
     #   estim_var_centered_phi1(Yobs,
@@ -1509,8 +1511,8 @@ simulation_tphi <- function(Z,
     # Estimations with Y2
     
       # Estimation of the internet design covariance matrix
-    estimpq2 <-  estimProbsData$conditional[, "tel"]
-    estimpq2Mat <- pi_to_pi2(estimpq2)
+    # estimpq2 <-  estimProbsData$conditional[, "tel"]
+    # estimpq2Mat <- pi_to_pi2(estimpq2)
 
     
       # Total of phi_k y_2k with true probabilities
@@ -1533,7 +1535,8 @@ simulation_tphi <- function(Z,
 
       # Total of phi_k y_2k with estimated probabilities
     expPhi2 <- sum(phi * expYtels)
-    totPhi2EW <- sum(phi[maskTel] * estimWeights[maskTel] * Yobs[maskTel])
+    # totPhi2EW <- sum(phi[maskTel] * estimWeights[maskTel] * Yobs[maskTel])
+    totPhi2EW <- NA_real_
     
     
     # apprVarPhi2EW <- 
@@ -1551,13 +1554,12 @@ simulation_tphi <- function(Z,
     apprVarPhi2EW <- NA_real_
     
       # parameter equal to
-      #  phi_k (y_1k - average on U of the y_1l) / sum of the phi_k on U,
-      #  equal to phi_k y_1k / sum of the phi_k on U - average on U of the y_1l
+      #  phi_k (y_2k - average on U of the y_2l) / sum of the phi_k on U,
+      #  equal to phi_k y_2k / sum of the phi_k on U - average on U of the y_2l
       #  (the last term is not a statistic)
     expCtrdPhi2 <- expPhi2 / sum(phi) - mean(expYtels)
     totCtrdPhi2TW <- 
-      sum(phi[maskTel] * 
-            (trueWeights[maskTel] * Yobs[maskTel] - mean(Ytels))) /
+      sum(phi[maskTel] * trueWeights[maskTel] * (Yobs[maskTel] - mean(Ytels))) /
       sum(phi[maskTel] * trueWeights[maskTel])
     
     apprVarCtrdPhi2TW <-
@@ -1571,10 +1573,12 @@ simulation_tphi <- function(Z,
                               phi,
                               correcEstimWeights = FALSE)
     
-    totCtrdPhi2EW <- 
-      sum(phi[maskTel] * 
-            (estimWeights[maskTel] * Yobs[maskTel] - mean(Ytels))) /
-      sum(phi[maskTel] * trueWeights[maskTel])
+    # totCtrdPhi2EW <- 
+    #   sum(phi[maskTel] * 
+    #         (estimWeights[maskTel] * Yobs[maskTel] - mean(Ytels))) /
+    #   sum(phi[maskTel] * trueWeights[maskTel])
+    
+    totCtrdPhi2EW <- NA_real_
     
     # apprVarCtrdPhi2EW <- 
     #   estim_var_centered_phi1(Yobs,
@@ -1625,7 +1629,7 @@ simulation_tphi <- function(Z,
 ### TEMP
 
 ```{r}
-Kbis <- 2000L
+Kbis <- 10000L
 ```
 
 ```{r}
@@ -1716,19 +1720,20 @@ Then for each measure bias we try the recognition of an eventual measure bias, w
 
 For centered it is not really an estimation because it uses the empiracal mean on U
 ```{r}
-Kbis <- 10000L
+Kbis <- 20000L
 sdDiffPhiVec <- NULL
 
-resSuperpositions <- data.frame(ratio = ratioDeltas, 
-                                delta = deltas, 
-                                percSuperposition = 0.0,
-                                percPresenceMean2 = 0.0)
+# resSuperpositions <- data.frame(ratio = ratioDeltas, 
+#                                 delta = deltas, 
+#                                 percSuperposition = 0.0,
+#                                 percPresenceMean2 = 0.0)
 
 resSimulations <- NULL
 
-for (delta in deltas)
+for (k in seq_along(ratioDeltas))
 {
-  
+  glue("{k} / {length(ratioDeltas)}")
+  delta <- deltas[k]
   betaIntTemp <- betaTel
   betaIntTemp[1L] <- betaIntTemp[1L] + delta
   
@@ -1748,41 +1753,49 @@ for (delta in deltas)
                              seed = 200L)
   
   resSimulations <- resTemp %>% 
-    mutate(delta = delta, .before = 1L) %>% 
+    mutate(ratioDelta = ratioDeltas[k],
+           delta = delta, .before = 1L) %>% 
     rbind(resSimulations)
 }
+
+rm(resTemp)
 ```
 
 ```{r}
 count_superposition <- function(data1, data2, alpha1 = 0.05, alpha2 = 0.05)
 {
+  ratioDelta <- data1$ratioDelta[1L]
+  
   K <- nrow(data1)
   
   subsetCalcVar <- seq_len(K / 2L)
   
   # Estimated standard deviation of the two results
   # based on the first half results
-  sd1 <- sd(data1[subsetCalcVar, "estimation"])
-  sd2 <- sd(data2[subsetCalcVar, "estimation"])
+  sd1 <- sd(data1$estimation[subsetCalcVar])
+  sd2 <- sd(data2$estimation[subsetCalcVar])
   
-  # We only keep the second half of the results for
-  # other estimations.
+  # We only keep the second half of the results for estimations that will
+  # use sd1 or sd2 in one way or another
   
-  # Estimation of the approximate variance
-  AV1 <- mean(data1[-subsetCalcVar, "apprVar"])
-  AV2 <- mean(data2[-subsetCalcVar, "apprVar"])
+  mean1 <- mean(data1$estimation[-subsetCalcVar])
+  mean2 <- mean(data2$estimation[-subsetCalcVar])
+  
+  # average of the approximate variance estimators
+  AV1 <- mean(data1$apprVar[-subsetCalcVar])
+  AV2 <- mean(data2$apprVar[-subsetCalcVar])
   
   # Confidence intervals with unbiased estimator for the variance
   #   first mode
-  CI1lowerUV <- data1[-subsetCalcVar, "estimation"] - 
+  CI1lowerUV <- data1$estimation[-subsetCalcVar] - 
     qnorm(1.0 - alpha1 / 2.0) * sd1
-  CI1upperUV <- data1[-subsetCalcVar, "estimation"] + 
+  CI1upperUV <- data1$estimation[-subsetCalcVar] + 
     qnorm(1.0 - alpha1 / 2.0) * sd1
   
   #   second mode
-  CI2lowerUV <- data2[-subsetCalcVar, "estimation"] - 
+  CI2lowerUV <- data2$estimation[-subsetCalcVar] - 
     qnorm(1.0 - alpha2 / 2.0) * sd2
-  CI2upperUV <- data2[-subsetCalcVar, "estimation"] + 
+  CI2upperUV <- data2$estimation[-subsetCalcVar] + 
     qnorm(1.0 - alpha2 / 2.0) * sd2
   
   #   Check if there is a superposition of the two confidence intervals
@@ -1793,18 +1806,19 @@ count_superposition <- function(data1, data2, alpha1 = 0.05, alpha2 = 0.05)
     (CI2lowerUV <= CI1upperUV & CI1upperUV <= CI2upperUV)
   percSuperpositionsUV <- mean(superpositionUV)
   
-  # Confidence intervals with approximate variance for each iteration
+  # Confidence intervals with approximate variance of each iteration
+  # , for all iterations
   #   first mode
   CI1lowerAV <- data1$estimation - 
-    qnorm(1.0 - alpha1 / 2.0) * data1$apprVar
+    qnorm(1.0 - alpha1 / 2.0) * sqrt(data1$apprVar)
   CI1upperAV <- data1$estimation + 
-    qnorm(1.0 - alpha1 / 2.0) * data1$apprVar
+    qnorm(1.0 - alpha1 / 2.0) * sqrt(data1$apprVar)
   
   #   second mode
   CI2lowerAV <- data2$estimation - 
-    qnorm(1.0 - alpha2 / 2.0) * data2$apprVar
+    qnorm(1.0 - alpha2 / 2.0) * sqrt(data2$apprVar)
   CI2upperAV <- data2$estimation + 
-    qnorm(1.0 - alpha2 / 2.0) * data2$apprVar
+    qnorm(1.0 - alpha2 / 2.0) * sqrt(data2$apprVar)
   
   #   Check if there is a superposition of the two confidence intervals
   superpositionAV <- 
@@ -1814,13 +1828,60 @@ count_superposition <- function(data1, data2, alpha1 = 0.05, alpha2 = 0.05)
     (CI2lowerAV <= CI1upperAV & CI1upperAV <= CI2upperAV)
   percSuperpositionsAV <- mean(superpositionAV)
   
-  c(K = K,
-    var1 = sd1^2L, var2 = sd2^2L, 
-    AV1 = AV1, AV2 = AV2,
+  c(ratioDelta = ratioDelta,
+    K = K,
+    mean1 = mean1,
+    AV1 = AV1, var1 = sd1^2L,
+    mean2 = mean2,
+    AV2 = AV2, var2 = sd2^2L,
     percSuperpositionsUV = percSuperpositionsUV, 
     percSuperpositionsAV = percSuperpositionsAV)
 }
 ```
+
+```{r}
+absRes <- NULL
+for (delt in deltas)
+{
+  data1 <- resSimulations %>% filter(delta == delt, 
+                                     estimand == "phi1", 
+                                     weights == "true")
+  
+  data2 <- resSimulations %>% filter(delta == delt, 
+                                     estimand == "phi2", 
+                                     weights == "true")
+  
+  absRes <- rbind(absRes, count_superposition(data1, data2))
+}
+
+rm(data1, data2, delt)
+
+absRes <- absRes %>% 
+  as_tibble(absRes) %>% 
+  mutate(ratioVar1 = AV1 / var1, .after = "var1") %>% 
+  mutate(ratioVar2 = AV2 / var2, .after = "var2")
+
+absRes
+```
+
+```{r}
+centeredRes <- NULL
+for (delt in deltas)
+{
+  data1 <- resSimulations %>% filter(delta == delt, 
+                                     estimand == "centered phi1", 
+                                     weights == "true")
+  
+  data2 <- resSimulations %>% filter(delta == delt, 
+                                     estimand == "centered phi2", 
+                                     weights == "true")
+  
+  centeredRes <- rbind(centeredRes, count_superposition(data1, data2))
+}
+
+rm(data1, data2, delt)
+```
+
 
 #### With the outcomes
 
@@ -2007,6 +2068,10 @@ CIupper <- estimBias + qnorm(1.0 - alpha / 2.0) * empSD
 coverage <- mean(CIlower <= 1.0 & 1.0 <= CIupper)
 
 glue("coverage: {coverage} (expected: {1 - alpha})")
+```
+
+```{r}
+rm(deltas, ratioDeltas)
 ```
 
 

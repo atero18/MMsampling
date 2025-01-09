@@ -9,7 +9,7 @@ estim_var_centered_phi1 <- function(Yobs,
   maskInt <- modes == "int"
   weightsWeb <- (diag(piMat)[maskInt] * diag(pq1Mat)[maskInt])^-1L
 
-  # Estimator of the mean of phi * y1 on the finite population U
+  # Estimator of the mean of y1 on the finite population U
   HajekWeb <- sum(Yobs[maskInt] * weightsWeb) / sum(weightsWeb)
 
 
@@ -41,7 +41,7 @@ estim_var_centered_phi2 <- function(Yobs,
                    (1.0 - diag(pq1Mat)[maskSmr]) *
                    diag(pq2Mat)[maskSmr])^-1L
 
-  # Estimator of the mean of phi * y2 on the finite population U
+  # Estimator of the mean of y2 on the finite population U
   HajekTel <- sum(Yobs[maskSmr] * weightsTel) / sum(weightsTel)
 
   errTerms <- rep(NA_real_, length(Yobs))

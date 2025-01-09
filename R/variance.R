@@ -281,7 +281,6 @@ estim_appr_var_seq_phi2 <- function(Yobs,
 
   # Sampling variability (S)
   # There is no correction needed for probabilities estimation
-
   covarpSmr <- pi2_to_covarInc(piMatSmr)
   varSEst <-
     t(weightedY2Smr / piSmr) %*%
@@ -309,7 +308,7 @@ estim_appr_var_seq_phi2 <- function(Yobs,
 
   # q2 variability (R2)
   correctedY2Smrq2 <- weightedY2Smr / p2[maskSmr]
-  covarq1Smr <- pi2_to_covarInc(pq1MatSmr)
+  covarq2Smr <- pi2_to_covarInc(pq2MatSmr)
 
   #   If the probabilities p_1k are estimations we add a term
   #   that uses the covariates used by the regression estimators of
@@ -321,7 +320,7 @@ estim_appr_var_seq_phi2 <- function(Yobs,
   }
 
   varq2Est <- t(correctedY2Smrq2 / (piSmr * (1.0 - p1[maskSmr]))) %*%
-    (covarq1Smr / (pq1BarMatSmr * pq2MatSmr)) %*%
+    (covarq2Smr / pq2MatSmr) %*%
     (correctedY2Smrq2 / (piSmr * (1.0 - p1[maskSmr]))) %>%
     as.numeric()
 
