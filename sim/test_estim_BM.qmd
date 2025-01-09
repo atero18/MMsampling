@@ -8,6 +8,10 @@ format:
 ---
 
 ```{r}
+# knitr::purl("./sim/test_estim.qmd")
+```
+
+```{r}
 #| message: false
 #| warning: false
 library(dplyr)
@@ -1505,8 +1509,8 @@ simulation_tphi <- function(Z,
     # Estimations with Y2
     
       # Estimation of the internet design covariance matrix
-    # estimpq2 <-  estimProbsData$conditional[, "tel"]
-    # estimpq2Mat <- pi_to_pi2(estimpq2)
+    estimpq2 <-  estimProbsData$conditional[, "tel"]
+    estimpq2Mat <- pi_to_pi2(estimpq2)
 
     
       # Total of phi_k y_2k with true probabilities
@@ -1514,21 +1518,19 @@ simulation_tphi <- function(Z,
     
     
         # Estimation of the approximate variance of the total estimator
-        # the variance of Y1 is assumed known and homoscedastic for simplicity
-    # apprVarPhi2TW <-
-    #   estim_appr_var_seq_phi2(Yobs,
-    #                           modes,
-    #                           I,
-    #                           piMat,
-    #                           pq1Mat,
-    #                           pq2Mat,
-    #                           Z,
-    #                           phi,
-    #                           sd2 = sdTel,
-    #                           correcEstimWeights = FALSE)
+        # the variance of Y2 is assumed known and homoscedastic for simplicity
+    apprVarPhi2TW <-
+      estim_appr_var_seq_phi2(Yobs,
+                              modes,
+                              I,
+                              piMat,
+                              pq1Mat,
+                              pq2Mat,
+                              Z,
+                              phi,
+                              sd2 = sdTel,
+                              correcEstimWeights = FALSE)
 
-    apprVarPhi2TW <- NA_real_
-    
       # Total of phi_k y_2k with estimated probabilities
     expPhi2 <- sum(phi * expYtels)
     totPhi2EW <- sum(phi[maskTel] * estimWeights[maskTel] * Yobs[maskTel])
@@ -1558,18 +1560,16 @@ simulation_tphi <- function(Z,
             (trueWeights[maskTel] * Yobs[maskTel] - mean(Ytels))) /
       sum(phi[maskTel] * trueWeights[maskTel])
     
-    # apprVarCtrdPhi2TW <- 
-    #   estim_var_centered_phitel(Yobs,
-    #                             modes, 
-    #                             I,
-    #                             piMat,
-    #                             pq1Mat,
-    #                             pq2Mat,
-    #                             Z,
-    #                             phi, 
-    #                             correcEstimWeights = FALSE)
-    
-    apprVarCtrdPhi2TW <- NA_real_
+    apprVarCtrdPhi2TW <-
+      estim_var_centered_phi2(Yobs,
+                              modes,
+                              I,
+                              piMat,
+                              pq1Mat,
+                              pq2Mat,
+                              Z,
+                              phi,
+                              correcEstimWeights = FALSE)
     
     totCtrdPhi2EW <- 
       sum(phi[maskTel] * 
@@ -1625,7 +1625,7 @@ simulation_tphi <- function(Z,
 ### TEMP
 
 ```{r}
-Kbis <- 500L
+Kbis <- 2000L
 ```
 
 ```{r}
@@ -1634,7 +1634,7 @@ betaIntTemp <- betaTel
 betaIntTemp[1L] <- betaIntTemp[1L] + 1.0
 
 tic()
-pv <- profvis::profvis({
+#pv <- profvis::profvis({
 compareTphi <- simulation_tphi(K = Kbis,
                                Z = Z,
                                sampling = "SRS",
@@ -1648,7 +1648,7 @@ compareTphi <- simulation_tphi(K = Kbis,
                                sdInt = 1.0,
                                sdTel = 1.0,
                                seed = 200L)
-})
+#})
 glue("{toc()}")
 ```
 
@@ -1656,7 +1656,7 @@ glue("{toc()}")
 ```{r}
 compareTphi %>% 
   group_by(estimand, weights) %>% 
-  summarize(expEstimad = mean(expEstimand),
+  summarize(expEstimand = mean(expEstimand),
             mean = mean(estimation), 
             avg_AV = mean(apprVar),
             var = var(estimation)) %>% 
@@ -1714,12 +1714,9 @@ deltas <- ratioDeltas * abs(expMean2)
 
 Then for each measure bias we try the recognition of an eventual measure bias, with confidence intervals with errors $\alpha_1 = \alpha_2 = 0.05$.
 
-
+For centered it is not really an estimation because it uses the empiracal mean on U
 ```{r}
 Kbis <- 10000L
-
-alpha1 <- alpha2 <- .05
-
 sdDiffPhiVec <- NULL
 
 resSuperpositions <- data.frame(ratio = ratioDeltas, 
@@ -1727,25 +1724,134 @@ resSuperpositions <- data.frame(ratio = ratioDeltas,
                                 percSuperposition = 0.0,
                                 percPresenceMean2 = 0.0)
 
+resSimulations <- NULL
+
 for (delta in deltas)
 {
   
   betaIntTemp <- betaTel
   betaIntTemp[1L] <- betaIntTemp[1L] + delta
   
-  compareTphi <- simulation_tphi(K = Kbis,
-                                 Z = Z,
-                                 sampling = "SRS",
-                                 alphaInt = alphaInt,
-                                 alphaTel = alphaTel,
-                                 betaInt = betaIntTemp,
-                                 betaTel = betaTel,
-                                 YtelLaw = "gaussian",
-                                 YintLaw = "gaussian",
-                                 phi = "eq",
-                                 sdInt = 1.0,
-                                 sdTel = 1.0,
-                                 seed = 200L)
+  
+  resTemp <- simulation_tphi(K = Kbis,
+                             Z = Z,
+                             sampling = "SRS",
+                             alphaInt = alphaInt,
+                             alphaTel = alphaTel,
+                             betaInt = betaIntTemp,
+                             betaTel = betaTel,
+                             YintLaw = "gaussian",
+                             YtelLaw = "gaussian",
+                             phi = "eq",
+                             sdInt = 1.0,
+                             sdTel = 1.0,
+                             seed = 200L)
+  
+  resSimulations <- resTemp %>% 
+    mutate(delta = delta, .before = 1L) %>% 
+    rbind(resSimulations)
+}
+```
+
+```{r}
+count_superposition <- function(data1, data2, alpha1 = 0.05, alpha2 = 0.05)
+{
+  K <- nrow(data1)
+  
+  subsetCalcVar <- seq_len(K / 2L)
+  
+  # Estimated standard deviation of the two results
+  # based on the first half results
+  sd1 <- sd(data1[subsetCalcVar, "estimation"])
+  sd2 <- sd(data2[subsetCalcVar, "estimation"])
+  
+  # We only keep the second half of the results for
+  # other estimations.
+  
+  # Estimation of the approximate variance
+  AV1 <- mean(data1[-subsetCalcVar, "apprVar"])
+  AV2 <- mean(data2[-subsetCalcVar, "apprVar"])
+  
+  # Confidence intervals with unbiased estimator for the variance
+  #   first mode
+  CI1lowerUV <- data1[-subsetCalcVar, "estimation"] - 
+    qnorm(1.0 - alpha1 / 2.0) * sd1
+  CI1upperUV <- data1[-subsetCalcVar, "estimation"] + 
+    qnorm(1.0 - alpha1 / 2.0) * sd1
+  
+  #   second mode
+  CI2lowerUV <- data2[-subsetCalcVar, "estimation"] - 
+    qnorm(1.0 - alpha2 / 2.0) * sd2
+  CI2upperUV <- data2[-subsetCalcVar, "estimation"] + 
+    qnorm(1.0 - alpha2 / 2.0) * sd2
+  
+  #   Check if there is a superposition of the two confidence intervals
+  superpositionUV <- 
+    (CI1lowerUV <= CI2lowerUV & CI2lowerUV <= CI1upperUV) | 
+    (CI1lowerUV <= CI2upperUV & CI2upperUV <= CI1upperUV) |
+    (CI2lowerUV <= CI1lowerUV & CI1lowerUV <= CI2upperUV) | 
+    (CI2lowerUV <= CI1upperUV & CI1upperUV <= CI2upperUV)
+  percSuperpositionsUV <- mean(superpositionUV)
+  
+  # Confidence intervals with approximate variance for each iteration
+  #   first mode
+  CI1lowerAV <- data1$estimation - 
+    qnorm(1.0 - alpha1 / 2.0) * data1$apprVar
+  CI1upperAV <- data1$estimation + 
+    qnorm(1.0 - alpha1 / 2.0) * data1$apprVar
+  
+  #   second mode
+  CI2lowerAV <- data2$estimation - 
+    qnorm(1.0 - alpha2 / 2.0) * data2$apprVar
+  CI2upperAV <- data2$estimation + 
+    qnorm(1.0 - alpha2 / 2.0) * data2$apprVar
+  
+  #   Check if there is a superposition of the two confidence intervals
+  superpositionAV <- 
+    (CI1lowerAV <= CI2lowerAV & CI2lowerAV <= CI1upperAV) | 
+    (CI1lowerAV <= CI2upperAV & CI2upperAV <= CI1upperAV) |
+    (CI2lowerAV <= CI1lowerAV & CI1lowerAV <= CI2upperAV) | 
+    (CI2lowerAV <= CI1upperAV & CI1upperAV <= CI2upperAV)
+  percSuperpositionsAV <- mean(superpositionAV)
+  
+  c(K = K,
+    var1 = sd1^2L, var2 = sd2^2L, 
+    AV1 = AV1, AV2 = AV2,
+    percSuperpositionsUV = percSuperpositionsUV, 
+    percSuperpositionsAV = percSuperpositionsAV)
+}
+```
+
+#### With the outcomes
+
+```{r}
+resSimulations <- NULL
+
+for (delta in deltas)
+{
+  
+  betaIntTemp <- betaTel
+  betaIntTemp[1L] <- betaIntTemp[1L] + delta
+  
+  
+  resTemp <- simulation_tphi(K = Kbis,
+                             Z = Z,
+                             sampling = "SRS",
+                             alphaInt = alphaInt,
+                             alphaTel = alphaTel,
+                             betaInt = betaIntTemp,
+                             betaTel = betaTel,
+                             YintLaw = "gaussian",
+                             YtelLaw = "gaussian",
+                             phi = "eq",
+                             sdInt = 1.0,
+                             sdTel = 1.0,
+                             seed = 200L)
+  
+  resSimulations <- resTemp %>% 
+    mutate(delta = delta, .before = 1L) %>% 
+    rbind(resSimulations)
+  
 
   subsetVar <- seq_len(Kbis / 2.0)
   estimatorsPhi1 <- compareTphi[, "totPhi1EW"]
@@ -1786,7 +1892,10 @@ for (delta in deltas)
   resSuperpositions[resSuperpositions$delta == delta, 
                     c("percSuperposition", "percPresenceMean2")] <-
     c(percSuperposition, percPresenceMean2)
+  
 }
+
+rm(resTemp)
 
 resSuperpositions
 ```
@@ -1797,6 +1906,13 @@ $$\max \{\alpha_1,\alpha_2\}\leq\alpha_{12}\leq\alpha_1 + \min\{\alpha_1,\alpha_
 with $1-\alpha_{12}$ the probability of having a superposition on the supposed total $t_{\phi2}$ of the two confidence intervals. 
 
 Using the superposition implies a lot of false negative non-measure bias detection. The percentage of superposition becomes zero only after a ratio of $1.0$.
+
+#### With the centered oucomes
+
+```{r}
+
+```
+
 
 ### HT-difference
 

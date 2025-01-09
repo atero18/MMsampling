@@ -249,60 +249,88 @@ estim_appr_var_seq_phi2 <- function(Yobs,
                                     modes,
                                     I, piMat,
                                     pq1Mat,
+                                    pq2Mat,
                                     Z,
                                     phi = rep(1.0, length(Yobs)),
-                                    sd1 = 0.0,
+                                    sd2 = 0.0,
                                     correcEstimWeights = FALSE)
 {
   if (all(phi == 0.0))
     return(0.0)
 
-  maskSr <- modes == "int"
+  maskSmr <- modes == "tel"
+  nSmr <- sum(maskSmr)
 
   pi <- diag(piMat)
-  piSr <- pi[maskSr]
-  piMatSr <- piMat[maskSr, maskSr]
+  piSmr <- pi[maskSmr]
+  piMatSmr <- piMat[maskSmr, maskSmr]
 
   p1 <- diag(pq1Mat)
-  pq1MatSr <- pq1Mat[maskSr, maskSr]
+  p1Smr <- p1[maskSmr]
+  pq1MatSmr <- pq1Mat[maskSmr, maskSmr]
+  pq1BarMatSmr <- 1.0 -
+    matrix(p1Smr, nrow = nSmr, ncol = nSmr, byrow = TRUE) -
+    matrix(p1Smr, nrow = nSmr, ncol = nSmr, byrow = FALSE) +
+    pq1MatSmr
 
-  # The y_1k are weighted with the phi_k
-  weightedY1Sr <- phi[maskSr] * Yobs[maskSr]
+  p2 <- diag(pq2Mat)
+  pq2MatSmr <- pq2Mat[maskSmr, maskSmr]
+
+  # The y_2k are weighted with the phi_k
+  weightedY2Smr <- phi[maskSmr] * Yobs[maskSmr]
 
   # Sampling variability (S)
   # There is no correction needed for probabilities estimation
 
-  covarpSr <- pi2_to_covarInc(piMatSr)
+  covarpSmr <- pi2_to_covarInc(piMatSmr)
   varSEst <-
-    t(weightedY1Sr / piSr) %*%
-    (covarpSr / (piMatSr * pq1MatSr)) %*%
-    (weightedY1Sr / piSr) %>%
+    t(weightedY2Smr / piSmr) %*%
+    (covarpSmr / (piMatSmr * pq1BarMatSmr * pq2MatSmr)) %*%
+    (weightedY2Smr / piSmr) %>%
     as.numeric()
 
   # q1 variability (R1)
-  # If we use estimated p_1k weights we have to make a correction
-  correctedY1Sr <- weightedY1Sr / p1[maskSr]
-  covarq1Sr <- pi2_to_covarInc(pq1MatSr)
+  correctedY2Smrq1 <- weightedY2Smr / (1.0 - p1[maskSmr])
+  covarq1Smr <- pi2_to_covarInc(pq1MatSmr)
 
   #   If the probabilities p_1k are estimations we add a term
-  #   that uses the covariates used by the regression estimators
+  #   that uses the covariates used by the regression estimators of
+  #   alpha1 (the parameter of the logistic model for the mode-1 response)
   if (correcEstimWeights)
   {
-    bPhi11 <- .bPhi11(Yobs, I, pi, p1, maskSr, Z, phi)
-    correctedY1Sr <- correctedY1Sr - Z[maskSr, ] %*% bPhi11
+    bPhi21 <- .bPhi21(Yobs, I, pi, p1, p2, maskSmr, Z, phi)
+    correctedY2Smrq1 <- correctedY2Smrq1 - Z[maskSmr, ] %*% bPhi21
   }
 
-  varq1Est <- t(correctedY1Sr / piSr) %*%
-    (covarq1Sr / pq1MatSr) %*%
-    (correctedY1Sr / piSr) %>%
+  varq1Est <- t(correctedY2Smrq1 / piSmr) %*%
+    (covarq1Smr / (pq1BarMatSmr * pq2MatSmr)) %*%
+    (correctedY2Smrq1 / piSmr) %>%
     as.numeric()
 
-  # Y1 variability
-  # We suppose we have an estimator of the variance
-  # of the Y1
-  varY1Est <- sum(phi^2L) * sd1^2L
+  # q2 variability (R2)
+  correctedY2Smrq2 <- weightedY2Smr / p2[maskSmr]
+  covarq1Smr <- pi2_to_covarInc(pq1MatSmr)
 
-  varSEst + varq1Est + varY1Est
+  #   If the probabilities p_1k are estimations we add a term
+  #   that uses the covariates used by the regression estimators of
+  #   alpha2 (the parameter of the logistic model for the mode-2 response)
+  if (correcEstimWeights)
+  {
+    bPhi22 <- .bPhi22(Yobs, pi, p1, p2, I & modes != "int", maskSmr, Z, phi)
+    correctedY2Smrq2 <- correctedY2Smrq2 - Z[maskSr, ] %*% bPhi21
+  }
+
+  varq2Est <- t(correctedY2Smrq2 / (piSmr * (1.0 - p1[maskSmr]))) %*%
+    (covarq1Smr / (pq1BarMatSmr * pq2MatSmr)) %*%
+    (correctedY2Smrq2 / (piSmr * (1.0 - p1[maskSmr]))) %>%
+    as.numeric()
+
+  # Y2 variability
+  # We suppose we have an estimator of the variance
+  # of the Y2
+  varY1Est <- sum(phi^2L) * sd2^2L
+
+  varSEst + varq1Est + varq2Est + varY1Est
 }
 
 #' Calculate the true variance of the HT estimator of t_phi2
