@@ -39,7 +39,6 @@ devtools::load_all()
 load(file = "../results.RData")
 ```
 
-
 Linear models on both modes
 
 # Building constants
@@ -95,7 +94,6 @@ betaTel <- c(1.0, -0.1, 4.0)
 print(betaTel)
 delta <- c(1.0, -2.0 * mean(Z[, "age"])^-1L, 2.0 * N / sum(Z[, "sex"]))
 betaInt <- betaTel + delta
-  
 
 print(betaInt)
 ```
@@ -1048,7 +1046,6 @@ simulationUncounf <-
 -   `sdTWBenchmark` : standard deviation of the benchmark
 -   `calculTotal` : `population` if we calculate $\hat{t}_{\phi \hat{\Delta y}}$ (imputation on the entire population), `sample` if it is $t_{\phi \hat{\Delta y}}$ (on $S_{r\bullet}$)
 
-
 ```{r}
 #| echo: false
 loop_simulation <- function(parameters, K = 2000L)
@@ -1228,7 +1225,6 @@ The relative error `relError` is close to zero for each estimator. It is clear t
 
 Our different estimators are all approximately unbiased, so we focus on the RMSE appearing when we estimate the total $t_2$ with each estimator:
 
-
 ```{r}
 temp %>% 
   summarise(K = n(),
@@ -1300,7 +1296,6 @@ ks.test(x = (estimatorsPhi1 - empMean1) / empSD1, y = "pnorm")
 ```
 
 ### $\hat{t}_{pq\bar{\phi}2}$
-
 
 With $\phi \equiv \frac{1}{2}$
 
@@ -1471,33 +1466,31 @@ simulation_tphi <- function(Z,
      
     apprVarPhi1EW <- NA_real_
       # parameter equal to
-      #  phi_k (y_1k - average on U of the y_1l) / sum of the phi_k on U,
-      #  equal to phi_k y_1k / sum of the phi_k on U - average on U of the y_1l
-      #  (the last term is not a statistic)
-    expCtrdPhi1 <- expPhi1 / sum(phi) - mean(expYints)
-    totCtrdPhi1TW <- 
-      sum(phi[maskInt] * trueWeights[maskInt] * (Yobs[maskInt] - mean(Yints))) /
+      #  phi_k y_1k / sum of the phi_k on U
+    expMeanPhi1 <- expPhi1 / sum(phi)
+    meanPhi1TW <- 
+      sum(phi[maskInt] * trueWeights[maskInt] * Yobs[maskInt]) /
       sum(phi[maskInt] * trueWeights[maskInt])
     
-    apprVarCtrdPhi1TW <- 
-      estim_var_centered_phi1(Yobs,
-                                modes, 
-                                I,
-                                piMat,
-                                pq1Mat,
-                                Z,
-                                phi, 
-                                correcEstimWeights = FALSE)
+    apprVarMeanPhi1TW <- 
+      estim_var_mean_phi1(Yobs,
+                          modes, 
+                          I,
+                          piMat,
+                          pq1Mat,
+                          Z,
+                          phi, 
+                          correcEstimWeights = FALSE)
     
-    # totCtrdPhi1EW <- 
+    # meanPhi1EW <- 
     #   sum(phi[maskInt] * 
     #         (estimWeights[maskInt] * Yobs[maskInt] - mean(Yints))) /
     #   sum(phi[maskInt] * estimWeights[maskInt])
     
-    totCtrdPhi1EW <- NA_real_
+    meanPhi1EW <- NA_real_
     
-    # apprVarCtrdPhi1EW <- 
-    #   estim_var_centered_phi1(Yobs,
+    # apprVarMeanPhi1EW <- 
+    #   estim_var_mean_phi1(Yobs,
     #                             modes, 
     #                             I,
     #                             piMat,
@@ -1506,7 +1499,7 @@ simulation_tphi <- function(Z,
     #                             phi, 
     #                             correcEstimWeights = TRUE)
     
-    apprVarCtrdPhi1EW <- NA_real_
+    apprVarMeanPhi1EW <- NA_real_
     
     # Estimations with Y2
     
@@ -1554,16 +1547,14 @@ simulation_tphi <- function(Z,
     apprVarPhi2EW <- NA_real_
     
       # parameter equal to
-      #  phi_k (y_2k - average on U of the y_2l) / sum of the phi_k on U,
-      #  equal to phi_k y_2k / sum of the phi_k on U - average on U of the y_2l
-      #  (the last term is not a statistic)
-    expCtrdPhi2 <- expPhi2 / sum(phi) - mean(expYtels)
-    totCtrdPhi2TW <- 
-      sum(phi[maskTel] * trueWeights[maskTel] * (Yobs[maskTel] - mean(Ytels))) /
+      #  phi_k y_2k / sum of the phi_k on U,
+    expMeanPhi2 <- expPhi2 / sum(phi)
+    meanPhi2TW <- 
+      sum(phi[maskTel] * trueWeights[maskTel] * Yobs[maskTel]) /
       sum(phi[maskTel] * trueWeights[maskTel])
     
-    apprVarCtrdPhi2TW <-
-      estim_var_centered_phi2(Yobs,
+    apprVarMeanPhi2TW <-
+      estim_var_mean_phi2(Yobs,
                               modes,
                               I,
                               piMat,
@@ -1573,15 +1564,15 @@ simulation_tphi <- function(Z,
                               phi,
                               correcEstimWeights = FALSE)
     
-    # totCtrdPhi2EW <- 
+    # meanPhi2EW <- 
     #   sum(phi[maskTel] * 
     #         (estimWeights[maskTel] * Yobs[maskTel] - mean(Ytels))) /
     #   sum(phi[maskTel] * trueWeights[maskTel])
     
-    totCtrdPhi2EW <- NA_real_
+    meanPhi2EW <- NA_real_
     
-    # apprVarCtrdPhi2EW <- 
-    #   estim_var_centered_phi1(Yobs,
+    # apprVarMeanPhi2EW <- 
+    #   estim_var_mean_phi1(Yobs,
     #                             modes, 
     #                             I,
     #                             piMat,
@@ -1591,25 +1582,25 @@ simulation_tphi <- function(Z,
     #                             phi, 
     #                             correcEstimWeights = TRUE)
     
-    apprVarCtrdPhi2EW <- NA_real_
+    apprVarMeanPhi2EW <- NA_real_
     ## NOTE : Attention calcul probas estimées ici, précédemment pris sans
     ## conditionnement
-    tibble(estimand = rep(c("phi1", "centered phi1", 
-                            "phi2", "centered phi2"), each = 2L), 
-           expEstimand = rep(c(expPhi1, expCtrdPhi1, expPhi2, expCtrdPhi2), 
+    tibble(estimand = rep(c("phi1", "mean phi1", 
+                            "phi2", "mean phi2"), each = 2L), 
+           expEstimand = rep(c(expPhi1, expMeanPhi1, expPhi2, expMeanPhi2), 
                              each = 2L),
            estimator = c("totPhi1TW", "totPhi1EW", 
-                         "totCtrdPhi1TW", "totCtrdPhi1EW", 
+                         "meanPhi1TW", "meanPhi1EW", 
                          "totPhi2TW", "totPhi2EW",
-                         "totCtrdPhi2TW", "totCtrdPhi2EW"), 
+                         "meanPhi2TW", "meanPhi2EW"), 
            estimation = c(totPhi1TW, totPhi1EW, 
-                          totCtrdPhi1TW, totCtrdPhi1EW, 
+                          meanPhi1TW, meanPhi1EW, 
                           totPhi2TW, totPhi2EW,
-                          totCtrdPhi2TW, totCtrdPhi2EW), 
+                          meanPhi2TW, meanPhi2EW), 
            apprVar = c(apprVarPhi1TW, apprVarPhi1EW, 
-                       apprVarCtrdPhi1TW, apprVarCtrdPhi1EW,
+                       apprVarMeanPhi1TW, apprVarMeanPhi1EW,
                        apprVarPhi2TW, apprVarPhi2EW,
-                       apprVarCtrdPhi2TW, apprVarCtrdPhi2EW)) %>% 
+                       apprVarMeanPhi2TW, apprVarMeanPhi2EW)) %>% 
       mutate(weights = rep_len(c("true", "estimated"), length.out = n()),
              .after = "estimator")
   }
@@ -1625,8 +1616,6 @@ simulation_tphi <- function(Z,
   do.call("rbind", res)
 }
 ```
-
-### TEMP
 
 ```{r}
 Kbis <- 10000L
@@ -1656,7 +1645,6 @@ compareTphi <- simulation_tphi(K = Kbis,
 glue("{toc()}")
 ```
 
-
 ```{r}
 compareTphi %>% 
   group_by(estimand, weights) %>% 
@@ -1682,12 +1670,13 @@ varDiffPhi <-
 ```{r}
 mean(compareTphi$estimApprVarPhi1[-seq_len(Kbis / 2.0)])
 ```
+
 ```{r}
 mean(compareTphi$estimApprVarPhi1[-seq_len(Kbis / 2.0)]) / varPhi1
 ```
 
 ```{r}
-var(compareTphi$totCtrdPhi1EW[seq_len(Kbis / 2.0)])
+var(compareTphi$meanPhi1EW[seq_len(Kbis / 2.0)])
 ```
 
 ```{r}
@@ -1695,14 +1684,12 @@ mean(compareTphi$estimApprVarCenteredInt[-seq_len(Kbis / 2.0)])
 ```
 
 ```{r}
-mean(compareTphi$estimApprVarCenteredInt[-seq_len(Kbis / 2.0)]) / var(compareTphi$totCtrdPhi1EW[seq_len(Kbis / 2.0)])
+mean(compareTphi$estimApprVarCenteredInt[-seq_len(Kbis / 2.0)]) / var(compareTphi$meanPhi1EW[seq_len(Kbis / 2.0)])
 ```
-
 
 ```{r}
 rm(varPhi1, varPhi2, varDiffPhi, compareTphi)
 ```
-
 
 ### Superposition
 
@@ -1719,9 +1706,10 @@ deltas <- ratioDeltas * abs(expMean2)
 Then for each measure bias we try the recognition of an eventual measure bias, with confidence intervals with errors $\alpha_1 = \alpha_2 = 0.05$.
 
 For centered it is not really an estimation because it uses the empiracal mean on U
+
 ```{r}
 Kbis <- 20000L
-sdDiffPhiVec <- NULL
+# sdDiffPhiVec <- NULL
 
 # resSuperpositions <- data.frame(ratio = ratioDeltas, 
 #                                 delta = deltas, 
@@ -1761,10 +1749,23 @@ for (k in seq_along(ratioDeltas))
 rm(resTemp)
 ```
 
+`count_superposition` gives a few results on the different iterations and the estimators:
+
+-   mean of the estimator (for web and telephone)
+
+-   standard deviation of the estimator based on the first half iterations (for web and telephone)
+
+-   average of the approximate variance estimator (for web and telephone)
+
+-   \% of superposition of the confidence intervals with unbiased variance estimator for the second half part of the iterations
+
+-   \% of superposition of the confidence intervals with approximate variance estimator
+
 ```{r}
 count_superposition <- function(data1, data2, alpha1 = 0.05, alpha2 = 0.05)
 {
   ratioDelta <- data1$ratioDelta[1L]
+  delta <- data1$delta[1L]
   
   K <- nrow(data1)
   
@@ -1829,6 +1830,7 @@ count_superposition <- function(data1, data2, alpha1 = 0.05, alpha2 = 0.05)
   percSuperpositionsAV <- mean(superpositionAV)
   
   c(ratioDelta = ratioDelta,
+    delta = delta,
     K = K,
     mean1 = mean1,
     AV1 = AV1, var1 = sd1^2L,
@@ -1838,6 +1840,8 @@ count_superposition <- function(data1, data2, alpha1 = 0.05, alpha2 = 0.05)
     percSuperpositionsAV = percSuperpositionsAV)
 }
 ```
+
+#### With the outcomes
 
 ```{r}
 absRes <- NULL
@@ -1856,124 +1860,48 @@ for (delt in deltas)
 
 rm(data1, data2, delt)
 
-absRes <- absRes %>% 
-  as_tibble(absRes) %>% 
+absRes <- as_tibble(absRes) %>% 
   mutate(ratioVar1 = AV1 / var1, .after = "var1") %>% 
   mutate(ratioVar2 = AV2 / var2, .after = "var2")
 
 absRes
 ```
 
+The columns with with respect to the telephone outcomes are constant because the `seed` is the same for each `ratioDelta`.
+
+Superposition on the true total is not great. In fact we have that
+
+$$\max \{\alpha_1,\alpha_2\}\leq\alpha_{12}\leq\alpha_1 + \min\{\alpha_1,\alpha_2\} + \alpha_2$$ with $1-\alpha_{12}$ the probability of having a superposition on the supposed total $t_{\phi2}$ of the two confidence intervals.
+
+Using the superposition implies a lot of false negative non-measure bias detection. The percentage of superposition becomes zero only after a ratio of $1.0$.
+
+#### With the oucome means
+
 ```{r}
 centeredRes <- NULL
 for (delt in deltas)
 {
   data1 <- resSimulations %>% filter(delta == delt, 
-                                     estimand == "centered phi1", 
+                                     estimand == "mean phi1", 
                                      weights == "true")
   
   data2 <- resSimulations %>% filter(delta == delt, 
-                                     estimand == "centered phi2", 
+                                     estimand == "mean phi2", 
                                      weights == "true")
   
   centeredRes <- rbind(centeredRes, count_superposition(data1, data2))
 }
 
 rm(data1, data2, delt)
+
+centeredRes <- as_tibble(centeredRes) %>% 
+  mutate(ratioVar1 = AV1 / var1, .after = "var1") %>% 
+  mutate(ratioVar2 = AV2 / var2, .after = "var2")
+
+centeredRes
 ```
 
-
-#### With the outcomes
-
-```{r}
-resSimulations <- NULL
-
-for (delta in deltas)
-{
-  
-  betaIntTemp <- betaTel
-  betaIntTemp[1L] <- betaIntTemp[1L] + delta
-  
-  
-  resTemp <- simulation_tphi(K = Kbis,
-                             Z = Z,
-                             sampling = "SRS",
-                             alphaInt = alphaInt,
-                             alphaTel = alphaTel,
-                             betaInt = betaIntTemp,
-                             betaTel = betaTel,
-                             YintLaw = "gaussian",
-                             YtelLaw = "gaussian",
-                             phi = "eq",
-                             sdInt = 1.0,
-                             sdTel = 1.0,
-                             seed = 200L)
-  
-  resSimulations <- resTemp %>% 
-    mutate(delta = delta, .before = 1L) %>% 
-    rbind(resSimulations)
-  
-
-  subsetVar <- seq_len(Kbis / 2.0)
-  estimatorsPhi1 <- compareTphi[, "totPhi1EW"]
-  estimatorsPhi1ForVar <- estimatorsPhi1[subsetVar]
-  sdPhi1 <- sd(estimatorsPhi1ForVar)
-  estimatorsPhi1ForCI <- estimatorsPhi1[-subsetVar]
-  
-  estimatorsPhi2 <- compareTphi[, "totPhi2EW"]
-  estimatorsPhi2ForVar <- estimatorsPhi2[subsetVar]
-  sdPhi2 <- sd(estimatorsPhi2ForVar)
-  estimatorsPhi2ForCI <- estimatorsPhi2[-subsetVar]
-  
-  
-  sdDiffPhi <- sd(estimatorsPhi1ForVar - estimatorsPhi2ForVar)
-  
-  sdDiffPhiVec <- c(sdDiffPhiVec, sdDiffPhi)
-  
-  CI1lowerBis <- estimatorsPhi1ForCI - qnorm(1.0 - alpha1 / 2.0) * sdPhi1
-  CI1upperBis <- estimatorsPhi1ForCI + qnorm(1.0 - alpha1 / 2.0) * sdPhi1
-  
-  CI2lower <- estimatorsPhi2ForCI - qnorm(1.0 - alpha2 / 2.0) * sdPhi2
-  CI2upper <- estimatorsPhi2ForCI + qnorm(1.0 - alpha2 / 2.0) * sdPhi2
-
-  superposition <- 
-    (CI1lowerBis <= CI2lower & CI2lower <= CI1upperBis) | 
-    (CI1lowerBis <= CI2upper & CI2upper <= CI1upperBis) |
-    (CI2lower <= CI1lowerBis & CI1lowerBis <= CI2upper) | 
-    (CI2lower <= CI1upperBis & CI1upperBis <= CI2upper)
-  
-  # Mean weighted by 1/2 because we took \phi_k = 0.5
-  presenceExpMean2 <- 
-    (CI1lowerBis <= 0.5 * expMean2 & 0.5 * expMean2 <= CI1upperBis) & 
-    (CI2lower <= 0.5 * expMean2 & 0.5 * expMean2 <= CI2upper)
-  
-  percSuperposition <- 100.0 * mean(superposition)
-  percPresenceMean2 <- 100.0 * mean(presenceExpMean2)
-  
-  resSuperpositions[resSuperpositions$delta == delta, 
-                    c("percSuperposition", "percPresenceMean2")] <-
-    c(percSuperposition, percPresenceMean2)
-  
-}
-
-rm(resTemp)
-
-resSuperpositions
-```
-
-Superposition on the true total is not great. In fact we have that
-
-$$\max \{\alpha_1,\alpha_2\}\leq\alpha_{12}\leq\alpha_1 + \min\{\alpha_1,\alpha_2\} + \alpha_2$$
-with $1-\alpha_{12}$ the probability of having a superposition on the supposed total $t_{\phi2}$ of the two confidence intervals. 
-
-Using the superposition implies a lot of false negative non-measure bias detection. The percentage of superposition becomes zero only after a ratio of $1.0$.
-
-#### With the centered oucomes
-
-```{r}
-
-```
-
+The columns with with respect to the web outcomes are constant because the `seed` is the same for each `ratioDelta` and adding a constant measure effect does not impact the value of the estimator.
 
 ### HT-difference
 
@@ -1983,7 +1911,7 @@ $$\frac{1}{||\phi||_1}(\hat{t}_{pq\phi1}-\hat{t}_{pq\phi2})$$
 
 detects the bias, in the sense of its expected value is equal to the constant bias $\delta$. Moreover, we would like to be sure that this estimator tends to a normal law. Of course this estimator shouldn't be used to estimate the total of the bias in the global estimator, because it would directly erase the information coming from $S_{r\bullet}$.
 
-Here we use the empirical standard deviation based on our $K$ observations. 
+Here we use the empirical standard deviation based on our $K$ observations.
 
 #### $\delta = 1$
 
@@ -2017,7 +1945,6 @@ With an important p-value the Kolmogorov-Smirnov test ensure that our estimator 
 #### Coverage depending on $\delta$
 
 Then we evaluate the coverage of our confidence intervals. For $\alpha = 0.05$, we have
-
 
 ```{r}
 alpha <- .05
@@ -2073,7 +2000,6 @@ glue("coverage: {coverage} (expected: {1 - alpha})")
 ```{r}
 rm(deltas, ratioDeltas)
 ```
-
 
 # Ex : Gaussian variable measure bias
 
@@ -2154,7 +2080,6 @@ temp %>%
 rm(temp)
 ```
 
-
 ## Impact of the standard deviation
 
 We focus on the impact of the standard deviation. Is there estimators that give better RMSE than the benchmark, independently of $\sigma$? The bias is is considered as variable.
@@ -2197,6 +2122,7 @@ temp %>%
   mutate(percRMSE = 100.0 * relRMSEParam / relEstRMSEBenchmark, .after = relEstRMSEBenchmark) %>% 
   arrange(percRMSE, .by_group = TRUE)
 ```
+
 We can observe there is always estimators that are better than the benchmark (but sometimes not that much), for any couple (`signAge`, `sd`). In particular, the estimator `HT-samples-sample` is always present. Our estimators are still approximately unbiased but their variance increase with $\sigma$.
 
 For each couple (signAge, sd), we draw the best estimator:
@@ -2226,7 +2152,7 @@ temp %>%
 
 The greatness of an estimator does not depend on `signAge` (if it is the best for `signAge = minus`, it is the best for `signAge = plus`).
 
-The RMSE ratio increases with $\sigma$. For any value of `signAge` and for $\sigma \in \{0,1,2\}$ we have really interesting ratios, while for higher values the ratio is always right under one, which means that in those conditions there are estimators that are better than the benchmark but not that much (if we follows blindly  the empirical results).
+The RMSE ratio increases with $\sigma$. For any value of `signAge` and for $\sigma \in \{0,1,2\}$ we have really interesting ratios, while for higher values the ratio is always right under one, which means that in those conditions there are estimators that are better than the benchmark but not that much (if we follows blindly the empirical results).
 
 The estimator needs to be chosen rightfully, specifically pour low values of $\sigma$ : the RMSE can be about 45% higher than the benchmark in the worst case.
 
@@ -2236,6 +2162,7 @@ temp %>%
   summarize(minRatioRMSE = min(relRMSEParam / relEstRMSEBenchmark),
             maxRatioRMSE = max(relRMSEParam / relEstRMSEBenchmark))
 ```
+
 If we focus on `HT-samples-sample`, we have the following results:
 
 ```{r}
@@ -2246,6 +2173,7 @@ temp %>%
   geom_hline(yintercept = 1.0, color = "red") +
   ggtitle("Ratio of the RMSE depending on the standard deviation (HT-samples-sample)")
 ```
+
 And if we draw the best result we have with all estimators:
 
 ```{r}
@@ -2297,6 +2225,7 @@ temp <- resultsPhi %>%
 ```
 
 List of the estimators and their RMSE ratio depending on signAge, sigma and phi :
+
 ```{r}
 temp %>% 
   filter(relRMSEParam <= relEstRMSEBenchmark) %>% 
@@ -2308,7 +2237,7 @@ temp %>%
   arrange(ratioRMSE, .by_group = TRUE)
 ```
 
-We remove the linear, var and split3 options because they give bad results. 
+We remove the linear, var and split3 options because they give bad results.
 
 Here we print the minimum and maximum RMSE ratios obtained with each situation and each estimator that gives at least one result with an RMSE better than the benchmark:
 
@@ -2330,6 +2259,7 @@ temp %>%
 ```
 
 List of the best(s) estimator(s) (for the RMSE) for each couple (`signAge`, `sd`):
+
 ```{r}
 temp %>% 
   filter(relRMSEParam <= relEstRMSEBenchmark) %>% 
@@ -2342,7 +2272,6 @@ temp %>%
 ```
 
 For any situation the best estimator is `(HT-population-sample)`, with $\phi_k \equiv \frac{2}{3}$. Like previously the RMSE ratio increases with $\sigma$.
-
 
 Evolution of the RMSE ratio depending on $\sigma$, $\phi$ and `signAge`, for the estimator `(HT-population-sample)`:
 
@@ -2357,6 +2286,7 @@ temp %>%
 ```
 
 Evolution of the RMSE ratio depending on $\sigma$, $\phi$ and `signAge`, for the estimator `(HT-samples-sample)`:
+
 ```{r}
 temp %>% 
   filter(parameter == "HT", invMatrices == "samples", calculTotal == "sample") %>% 
@@ -2366,6 +2296,7 @@ temp %>%
   geom_hline(yintercept = 1.0, color = "red") +
   ggtitle("Ratio of the RMSE depending on the standard deviation and phi (HT-samples-sample)")
 ```
+
 `var` (i.e. a random choice for $\phi_k$) and `split3` gives really bad results. So we will remove it from now on.
 
 ```{r}
@@ -2379,13 +2310,11 @@ temp %>%
   ggtitle("Ratio of the RMSE depending on the standard deviation and phi")
 ```
 
-The "linear" possibility gives bad results (with ratio stricly superior to 1). 
-The choice of the constant depends of the situation. However, the difference between the ratios is not extremely important.
+The "linear" possibility gives bad results (with ratio stricly superior to 1). The choice of the constant depends of the situation. However, the difference between the ratios is not extremely important.
 
 Note: There is a superposition of "eq", 1/3 and 2/3 for any $\sigma$ with `signAge=plus`.
 
 ## Bias detection
-
 
 We would like to check if, in the case of a constant bias, the estimator
 
@@ -2393,7 +2322,7 @@ $$\frac{1}{||\phi||_1}(\hat{t}_{pq\phi1}-\hat{t}_{pq\phi2})$$
 
 detects the bias, in the sense of its expected value is equal to the constant bias $\delta$. Moreover, we would like to be sure that this estimator tends to a normal law.
 
-Here we use the empirical standard deviation based on our $K$ observations. 
+Here we use the empirical standard deviation based on our $K$ observations.
 
 ```{r}
 temp <- resultsGaussian %>% 
@@ -2410,7 +2339,7 @@ temp <- resultsGaussian %>%
 estimBias <- temp$normEstPhiBiasDiffHT
 ```
 
-The expected value is equal to 
+The expected value is equal to
 
 $$\frac{1}{||\phi||_1}(||\phi||_1\delta_0 + \sum_{k \in U} \phi_k. age_k. \delta_{age} + \sum_{k \in U} \phi_k .sexe_k. \delta_{sexe})$$
 
@@ -2439,7 +2368,6 @@ glue("coverage: {coverage} (expected: {1 - alpha})")
 
 the coverage is very close to the target.
 
-
 We check the normality of our estimator:
 
 ```{r}
@@ -2457,7 +2385,6 @@ ks.test(x = (estimBias - 1.0) / empSD, y = "pnorm")
 
 With an important p-value the Kolmogorov-Smirnov test ensure that our estimator is normal.
 
-
 # More general cases
 
 Percentage of values for $z_k^T\beta_{tel}$ that are $< 0$ with `signAge=minus`:
@@ -2465,7 +2392,6 @@ Percentage of values for $z_k^T\beta_{tel}$ that are $< 0$ with `signAge=minus`:
 ```{r}
 glue("{sum(Z %*% betaTel < 0.0) * 100.0 / N} %")
 ```
-
 
 ```{r}
 #| eval: false
@@ -2486,7 +2412,6 @@ parameters <- expand_grid(constBias = c(TRUE, FALSE),
 
 resultsGeneral <- loop_simulation(parameters)
 ```
-
 
 ## Telephone total estimation
 
@@ -2576,7 +2501,6 @@ temp %>%
   distinct(YtelLaw, sd, YintLaw, sampling, signAge, MBtype)
 ```
 
-
 ```{r}
 rm(temp)
 ```
@@ -2619,7 +2543,6 @@ Before comparison, we can observe on the Gaussian case (variable measure bias, p
 # rm(tempBis, RMSEs)
 ```
 
-
 ```{r}
 temp %>% 
   group_by(sampling, YintLaw, YtelLaw, sd, MBtype, signAge, phi) %>% 
@@ -2643,6 +2566,3 @@ temp %>%
 ```{r}
 rm(temp)
 ```
-
-
-

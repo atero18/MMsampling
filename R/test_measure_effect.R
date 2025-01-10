@@ -1,4 +1,4 @@
-estim_var_centered_phi1 <- function(Yobs,
+estim_var_mean_phi1 <- function(Yobs,
                                     modes, I,
                                     piMat,
                                     pq1Mat, Z,
@@ -28,7 +28,7 @@ estim_var_centered_phi1 <- function(Yobs,
                           correcEstimWeights) / sumPhi^2L
 }
 
-estim_var_centered_phi2 <- function(Yobs,
+estim_var_mean_phi2 <- function(Yobs,
                                     modes, I,
                                     piMat,
                                     pq1Mat,
