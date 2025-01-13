@@ -1280,6 +1280,7 @@ expMean1 <- as.numeric(0.5 * temp[1L, "expYint"])
 glue("empirical mean: {empMean1} (expected: {expMean1})")
 ```
 
+Modifier, utilisation d'un écart-type estimé sur toute la population... :
 ```{r}
 
 empSD1 <- sd(estimatorsPhi1)
@@ -1323,7 +1324,7 @@ ggplot() +
 ks.test(x = (estimatorsPhi2 - empMean2) / empSD2, y = "pnorm")
 ```
 
-## Bias detection
+## Variance estimators for the totals
 
 ```{r}
 simulation_tphi <- function(Z,
@@ -1403,15 +1404,15 @@ simulation_tphi <- function(Z,
     trueWeights <- (pi * trueProbsSelect)^-1L
   
     # Estimation of mode selection probabilities
-    # estimProbsData <- 
-    #   MMsampling::estim_response_prob_sequential(I, pi, Z,
-    #                                              modes, 
-    #                                              c("int", "tel"),
-    #                                              chosenOnly = FALSE)
-    # 
-    # estimProbsSelect <- 
-    #    MMsampling::get_value_by_mode(estimProbsData$unconditional, modes)
-    # estimWeights <- (pi * estimProbsSelect)^-1L
+    estimProbsData <-
+      MMsampling::estim_response_prob_sequential(I, pi, Z,
+                                                 modes,
+                                                 c("int", "tel"),
+                                                 chosenOnly = FALSE)
+
+    estimProbsSelect <-
+       MMsampling::get_value_by_mode(estimProbsData$unconditional, modes)
+    estimWeights <- (pi * estimProbsSelect)^-1L
     
     # Generating values for Y_int and Y_tel
     dataY <- gen_Y(Z, 
@@ -1429,8 +1430,8 @@ simulation_tphi <- function(Z,
     
     # Estimations with Y1
       # Estimation of the internet design covariance matrix
-    # estimpq1 <-  estimProbsData$conditional[, "int"]
-    # estimpq1Mat <- pi_to_pi2(estimpq1)
+    estimpq1 <-  estimProbsData$conditional[, "int"]
+    estimpq1Mat <- pi_to_pi2(estimpq1)
     
      # Total of phi_k y_1k with true probabilities
     expPhi1 <- sum(phi * expYints)
@@ -1450,21 +1451,21 @@ simulation_tphi <- function(Z,
                               correcEstimWeights = FALSE)
     
       # Total of phi_k y_1k with estimated probabilities
-    # totPhi1EW <- sum(phi[maskInt] * estimWeights[maskInt] * Yobs[maskInt])
-    totPhi1EW <- NA_real_
+    totPhi1EW <- sum(phi[maskInt] * estimWeights[maskInt] * Yobs[maskInt])
+    # totPhi1EW <- NA_real_
     
-    # apprVarPhi1EW <- 
-    #   estim_appr_var_seq_phi1(Yobs,
-    #                           modes, 
-    #                           I,
-    #                           piMat,
-    #                           estimpq1Mat, 
-    #                           Z,
-    #                           phi, 
-    #                           sd1 = sdInt,
-    #                           correcEstimWeights = TRUE)
+    apprVarPhi1EW <-
+      estim_appr_var_seq_phi1(Yobs,
+                              modes,
+                              I,
+                              piMat,
+                              estimpq1Mat,
+                              Z,
+                              phi,
+                              sd1 = sdInt,
+                              correcEstimWeights = TRUE)
      
-    apprVarPhi1EW <- NA_real_
+    # apprVarPhi1EW <- NA_real_
       # parameter equal to
       #  phi_k y_1k / sum of the phi_k on U
     expMeanPhi1 <- expPhi1 / sum(phi)
@@ -1482,30 +1483,30 @@ simulation_tphi <- function(Z,
                           phi, 
                           correcEstimWeights = FALSE)
     
-    # meanPhi1EW <- 
-    #   sum(phi[maskInt] * 
-    #         (estimWeights[maskInt] * Yobs[maskInt] - mean(Yints))) /
-    #   sum(phi[maskInt] * estimWeights[maskInt])
+    meanPhi1EW <-
+      sum(phi[maskInt] *
+            (estimWeights[maskInt] * Yobs[maskInt] - mean(Yints))) /
+      sum(phi[maskInt] * estimWeights[maskInt])
     
-    meanPhi1EW <- NA_real_
+    # meanPhi1EW <- NA_real_
     
-    # apprVarMeanPhi1EW <- 
-    #   estim_var_mean_phi1(Yobs,
-    #                             modes, 
-    #                             I,
-    #                             piMat,
-    #                             estimpq1Mat, 
-    #                             Z,
-    #                             phi, 
-    #                             correcEstimWeights = TRUE)
+    apprVarMeanPhi1EW <-
+      estim_var_mean_phi1(Yobs,
+                                modes,
+                                I,
+                                piMat,
+                                estimpq1Mat,
+                                Z,
+                                phi,
+                                correcEstimWeights = TRUE)
     
-    apprVarMeanPhi1EW <- NA_real_
+    # apprVarMeanPhi1EW <- NA_real_
     
     # Estimations with Y2
     
       # Estimation of the internet design covariance matrix
-    # estimpq2 <-  estimProbsData$conditional[, "tel"]
-    # estimpq2Mat <- pi_to_pi2(estimpq2)
+    estimpq2 <-  estimProbsData$conditional[, "tel"]
+    estimpq2Mat <- pi_to_pi2(estimpq2)
 
     
       # Total of phi_k y_2k with true probabilities
@@ -1528,23 +1529,23 @@ simulation_tphi <- function(Z,
 
       # Total of phi_k y_2k with estimated probabilities
     expPhi2 <- sum(phi * expYtels)
-    # totPhi2EW <- sum(phi[maskTel] * estimWeights[maskTel] * Yobs[maskTel])
-    totPhi2EW <- NA_real_
+    totPhi2EW <- sum(phi[maskTel] * estimWeights[maskTel] * Yobs[maskTel])
+    # totPhi2EW <- NA_real_
     
     
-    # apprVarPhi2EW <- 
-    #   estim_appr_var_seq_phi2(Yobs,
-    #                           modes, 
-    #                           I,
-    #                           piMat,
-    #                           estimpq1Mat,
-    #                           estimpq2Mat,
-    #                           Z,
-    #                           phi, 
-    #                           sd2 = sdTel,
-    #                           correcEstimWeights = TRUE)
+    apprVarPhi2EW <-
+      estim_appr_var_seq_phi2(Yobs,
+                              modes,
+                              I,
+                              piMat,
+                              estimpq1Mat,
+                              estimpq2Mat,
+                              Z,
+                              phi,
+                              sd2 = sdTel,
+                              correcEstimWeights = TRUE)
     
-    apprVarPhi2EW <- NA_real_
+    # apprVarPhi2EW <- NA_real_
     
       # parameter equal to
       #  phi_k y_2k / sum of the phi_k on U,
@@ -1564,25 +1565,25 @@ simulation_tphi <- function(Z,
                               phi,
                               correcEstimWeights = FALSE)
     
-    # meanPhi2EW <- 
-    #   sum(phi[maskTel] * 
-    #         (estimWeights[maskTel] * Yobs[maskTel] - mean(Ytels))) /
-    #   sum(phi[maskTel] * trueWeights[maskTel])
+    meanPhi2EW <-
+      sum(phi[maskTel] *
+            (estimWeights[maskTel] * Yobs[maskTel] - mean(Ytels))) /
+      sum(phi[maskTel] * trueWeights[maskTel])
     
-    meanPhi2EW <- NA_real_
+    # meanPhi2EW <- NA_real_
     
-    # apprVarMeanPhi2EW <- 
-    #   estim_var_mean_phi1(Yobs,
-    #                             modes, 
-    #                             I,
-    #                             piMat,
-    #                             estimpq1Mat, 
-    #                             estimpq2Mat,
-    #                             Z,
-    #                             phi, 
-    #                             correcEstimWeights = TRUE)
+    apprVarMeanPhi2EW <-
+      estim_var_mean_phi1(Yobs,
+                                modes,
+                                I,
+                                piMat,
+                                estimpq1Mat,
+                                estimpq2Mat,
+                                Z,
+                                phi,
+                                correcEstimWeights = TRUE)
     
-    apprVarMeanPhi2EW <- NA_real_
+    # apprVarMeanPhi2EW <- NA_real_
     ## NOTE : Attention calcul probas estimées ici, précédemment pris sans
     ## conditionnement
     tibble(estimand = rep(c("phi1", "mean phi1", 
@@ -1621,32 +1622,29 @@ simulation_tphi <- function(Z,
 Kbis <- 10000L
 ```
 
+Simulation with no measure effect:
 ```{r}
-# handlers(global = TRUE)
-betaIntTemp <- betaTel
-betaIntTemp[1L] <- betaIntTemp[1L] + 1.0
-
 tic()
 #pv <- profvis::profvis({
-compareTphi <- simulation_tphi(K = Kbis,
-                               Z = Z,
-                               sampling = "SRS",
-                               alphaInt = alphaInt,
-                               alphaTel = alphaTel,
-                               betaInt = betaIntTemp,
-                               betaTel = betaTel,
-                               YintLaw = "gaussian",
-                               YtelLaw = "gaussian",
-                               phi = "eq",
-                               sdInt = 1.0,
-                               sdTel = 1.0,
-                               seed = 200L)
+resSimTotals <- simulation_tphi(K = Kbis,
+                                Z = Z,
+                                sampling = "SRS",
+                                alphaInt = alphaInt,
+                                alphaTel = alphaTel,
+                                betaInt = betaTel,
+                                betaTel = betaTel,
+                                YintLaw = "gaussian",
+                                YtelLaw = "gaussian",
+                                phi = "eq",
+                                sdInt = 1.0,
+                                sdTel = 1.0,
+                                seed = 200L)
 #})
 glue("{toc()}")
 ```
 
 ```{r}
-compareTphi %>% 
+resSimTotals %>% 
   group_by(estimand, weights) %>% 
   summarize(expEstimand = mean(expEstimand),
             mean = mean(estimation), 
@@ -1656,41 +1654,42 @@ compareTphi %>%
 ```
 
 ```{r}
-compareTphi$differenceEW <- compareTphi$totPhi1EW - compareTphi$totPhi2EW
+resSimTotals$differenceEW <- compareTphi$totPhi1EW - compareTphi$totPhi2EW
 ```
 
 ```{r}
-varPhi1 <- var(compareTphi[seq_len(Kbis / 2.0), "totPhi1EW"])
-varPhi2 <- var(compareTphi[seq_len(Kbis / 2.0), "totPhi2EW"])
+varPhi1 <- var(resSimTotals[seq_len(Kbis / 2.0), "totPhi1EW"])
+varPhi2 <- var(resSimTotals[seq_len(Kbis / 2.0), "totPhi2EW"])
 varDiffPhi <- 
-  var(compareTphi[seq_len(Kbis / 2.0), "totPhi1EW"] - 
-        compareTphi[seq_len(Kbis / 2.0), "totPhi2EW"])
+  var(resSimTotals[seq_len(Kbis / 2.0), "totPhi1EW"] - 
+        resSimTotals[seq_len(Kbis / 2.0), "totPhi2EW"])
 ```
 
 ```{r}
-mean(compareTphi$estimApprVarPhi1[-seq_len(Kbis / 2.0)])
+mean(resSimTotals$estimApprVarPhi1[-seq_len(Kbis / 2.0)])
 ```
 
 ```{r}
-mean(compareTphi$estimApprVarPhi1[-seq_len(Kbis / 2.0)]) / varPhi1
+mean(resSimTotals$estimApprVarPhi1[-seq_len(Kbis / 2.0)]) / varPhi1
 ```
 
 ```{r}
-var(compareTphi$meanPhi1EW[seq_len(Kbis / 2.0)])
+var(resSimTotals$meanPhi1EW[seq_len(Kbis / 2.0)])
 ```
 
 ```{r}
-mean(compareTphi$estimApprVarCenteredInt[-seq_len(Kbis / 2.0)])
+mean(resSimTotals$estimApprVarCenteredInt[-seq_len(Kbis / 2.0)])
 ```
 
 ```{r}
-mean(compareTphi$estimApprVarCenteredInt[-seq_len(Kbis / 2.0)]) / var(compareTphi$meanPhi1EW[seq_len(Kbis / 2.0)])
+mean(resSimTotals$estimApprVarCenteredInt[-seq_len(Kbis / 2.0)]) / var(compareTphi$meanPhi1EW[seq_len(Kbis / 2.0)])
 ```
 
 ```{r}
-rm(varPhi1, varPhi2, varDiffPhi, compareTphi)
+rm(varPhi1, varPhi2, varDiffPhi, resSimTotals)
 ```
 
+## Bias detection
 ### Superposition
 
 We would like to test our ability to detect the presence or absence of a constant measure bias with the superposition of confidence intervals of $\hat{t}_{pq\phi1}$ and $\hat{t}_{pq\phi2}$. If there is no measure bias then we can assume there will be superposition of the confidence intervals.
@@ -1708,7 +1707,7 @@ Then for each measure bias we try the recognition of an eventual measure bias, w
 For centered it is not really an estimation because it uses the empiracal mean on U
 
 ```{r}
-Kbis <- 20000L
+Kbis <- 1000L
 # sdDiffPhiVec <- NULL
 
 # resSuperpositions <- data.frame(ratio = ratioDeltas, 

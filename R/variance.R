@@ -3,47 +3,52 @@
 {
   p1Sr <- p1[maskSr]
 
-  # Estimation of the expected value of the derivative of the total estimator
-  muPhi11 <- 2.0 * crossprod(Z[maskSr, , drop = FALSE],
-                       phi[maskSr] * Yobs[maskSr] *
-                         (1.0 - p1Sr) / (pi[maskSr] * p1Sr^2L))
+  # Signs of muPhi11 and partialW1 are not considered because
+  #  they have the same
 
+  # Estimation of the expected value of the derivative of the total estimator
+  muPhi11 <- crossprod(Z[maskSr, , drop = FALSE],
+                       phi[maskSr] * Yobs[maskSr] *
+                         (1.0 - p1Sr) / (pi[maskSr] * p1Sr))
 
 
   # Estimation of the partial derivative expectation of the logistic score
   # function for alpha1
   p1S <- p1[I]
   lambda1S <- p1S * (1.0 - p1S) / pi[I]
-  minusPartialW1 <-
+  partialW1 <-
     crossprod(Z[I, , drop = FALSE], lambda1S * Z[I, , drop = FALSE])
 
 
-  - solve(minusPartialW1) %*% muPhi11
+  solve(partialW1) %*% muPhi11
 }
 
 
 .bPhi21 <- function(Yobs, I, pi, p1, p2, maskSmr, Z,
                     phi = rep(1.0, length(expY1)))
 {
+
   # muPhi21 (expected value of the derivative of the total
   # with alpha_1 = alpha_1^*) depends on Y2
   p1Smr <- p1[maskSmr]
   p2Smr <- p2[maskSmr]
 
-  muPhi21 <- 2.0 * crossprod(Z[R2, , drop = FALSE],
-                             phi[maskSmr] * Yobs[maskSmr] *
-                               p1Smr / (piSmr * (1.0 - p1Smr)^2L * p2Smr))
+  muPhi21 <- crossprod(Z[maskSmr, , drop = FALSE],
+                       phi[maskSmr] * Yobs[maskSmr] *
+                         p1Smr / (pi[maskSmr] * (1.0 - p1Smr) * p2Smr))
 
 
   # Estimation of the partial derivative expectation of the logistic score
   # function for alpha1
+  # The sign on partialW1 is considered after in the order of
+  # reducing computation cost
   p1S <- p1[I]
   lambda1S <- p1S * (1.0 - p1S) / pi[I]
   minusPartialW1 <-
     crossprod(Z[I, , drop = FALSE], lambda1S * Z[I, , drop = FALSE])
 
 
-  - solve(minusPartialW1) %*% muPhi21
+  solve(minusPartialW1) %*% (-muPhi21)
 
 }
 
@@ -53,25 +58,28 @@
 
 {
 
+  # Signs of muPhi22 and partialW2 are not considered because
+  #  they have the same
+
   # muPhi22 (expected value of the derivative of the total
   # with alpha_2 = alpha_2^*) depends on Y2
   p1Smr <- p1[maskSmr]
-  p1BarSmr <- 1.0 - p1Bar[maskSmr]
   p2Smr <- p2[maskSmr]
 
-  muPhi22 <- 2.0 * crossprod(Z[R2, , drop = FALSE],
-                             phi[maskSmr] * Yobs[maskSmr] * (1.0 - p2Smr)
-                             / (piSmr * (1.0 - p1Smr) * p2Smr^2L))
+  # minus sign of muPhi22 and partialW2 are removed because they
+  muPhi22 <- crossprod(Z[maskSmr, , drop = FALSE],
+                       phi[maskSmr] * Yobs[maskSmr] * (1.0 - p2Smr)
+                       / (pi[maskSmr] * (1.0 - p1Smr) * p2Smr))
 
 
   # Estimation of the partial derivative expectation of the logistic score
   # function for alpha2
   lambda2Sm <- p2[maskSm] * (1.0 - p2[maskSm]) /
     (pi[maskSm] * (1.0 - p1[maskSm]))
-  minusPartialW2 <-
+  partialW2 <-
     crossprod(Z[maskSm, , drop = FALSE], lambda2Sm * Z[maskSm, , drop = FALSE])
 
-  - solve(minusPartialW2) %*% muPhi22
+  solve(partialW2) %*% muPhi22
 
 }
 
@@ -95,6 +103,7 @@ estim_appr_var_seq_phi1 <- function(Yobs,
   pi <- diag(piMat)
   piSr <- pi[maskSr]
   piMatSr <- piMat[maskSr, maskSr]
+
 
   p1 <- diag(pq1Mat)
   pq1MatSr <- pq1Mat[maskSr, maskSr]
@@ -122,7 +131,7 @@ estim_appr_var_seq_phi1 <- function(Yobs,
   if (correcEstimWeights)
   {
     bPhi11 <- .bPhi11(Yobs, I, pi, p1, maskSr, Z, phi)
-    correctedY1Sr <- correctedY1Sr - Z[maskSr, ] %*% bPhi11
+    correctedY1Sr <- correctedY1Sr - Z[maskSr, , drop = FALSE] %*% bPhi11
   }
 
   varq1Est <- t(correctedY1Sr / piSr) %*%
@@ -288,6 +297,8 @@ estim_appr_var_seq_phi2 <- function(Yobs,
     (weightedY2Smr / piSmr) %>%
     as.numeric()
 
+
+
   # q1 variability (R1)
   correctedY2Smrq1 <- weightedY2Smr / (1.0 - p1[maskSmr])
   covarq1Smr <- pi2_to_covarInc(pq1MatSmr)
@@ -298,7 +309,7 @@ estim_appr_var_seq_phi2 <- function(Yobs,
   if (correcEstimWeights)
   {
     bPhi21 <- .bPhi21(Yobs, I, pi, p1, p2, maskSmr, Z, phi)
-    correctedY2Smrq1 <- correctedY2Smrq1 - Z[maskSmr, ] %*% bPhi21
+    correctedY2Smrq1 <- -correctedY2Smrq1 - Z[maskSmr, ] %*% bPhi21
   }
 
   varq1Est <- t(correctedY2Smrq1 / piSmr) %*%
@@ -316,7 +327,7 @@ estim_appr_var_seq_phi2 <- function(Yobs,
   if (correcEstimWeights)
   {
     bPhi22 <- .bPhi22(Yobs, pi, p1, p2, I & modes != "int", maskSmr, Z, phi)
-    correctedY2Smrq2 <- correctedY2Smrq2 - Z[maskSr, ] %*% bPhi21
+    correctedY2Smrq2 <- correctedY2Smrq2 - Z[maskSmr, ] %*% bPhi22
   }
 
   varq2Est <- t(correctedY2Smrq2 / (piSmr * (1.0 - p1[maskSmr]))) %*%
@@ -327,9 +338,9 @@ estim_appr_var_seq_phi2 <- function(Yobs,
   # Y2 variability
   # We suppose we have an estimator of the variance
   # of the Y2
-  varY1Est <- sum(phi^2L) * sd2^2L
+  varY2Est <- sum(phi^2L) * sd2^2L
 
-  varSEst + varq1Est + varq2Est + varY1Est
+  varSEst + varq1Est + varq2Est + varY2Est
 }
 
 #' Calculate the true variance of the HT estimator of t_phi2
