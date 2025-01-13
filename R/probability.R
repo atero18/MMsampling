@@ -62,7 +62,7 @@ pi_to_pi2 <- function(pi)
   pi2 <- pi %*% t(pi)
   diag(pi2) <- pi
 
-  pi
+  pi2
 }
 
 #' @importFrom tibble add_column
