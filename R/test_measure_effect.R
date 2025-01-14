@@ -1,9 +1,9 @@
 estim_var_mean_phi1 <- function(Yobs,
-                                    modes, I,
-                                    piMat,
-                                    pq1Mat, Z,
-                                    phi = rep(1.0, length(Yobs)),
-                                    correcEstimWeights = TRUE)
+                                modes, I,
+                                piMat,
+                                pq1Mat, Z,
+                                phi = rep(1.0, length(Yobs)),
+                                correcEstimWeights = TRUE)
 {
 
   maskInt <- modes == "int"
@@ -29,17 +29,17 @@ estim_var_mean_phi1 <- function(Yobs,
 }
 
 estim_var_mean_phi2 <- function(Yobs,
-                                    modes, I,
-                                    piMat,
-                                    pq1Mat,
-                                    pq2Mat, Z,
-                                    phi = rep(1.0, length(Yobs)),
-                                    correcEstimWeights = TRUE)
+                                modes, I,
+                                piMat,
+                                pq1Mat,
+                                pq2Mat, Z,
+                                phi = rep(1.0, length(Yobs)),
+                                correcEstimWeights = TRUE)
 {
   maskSmr <- modes == "tel"
-  weightsTel <- (diag(piMat)[maskSmr] *
-                   (1.0 - diag(pq1Mat)[maskSmr]) *
-                   diag(pq2Mat)[maskSmr])^-1L
+  weightsTel <-
+    (diag(piMat)[maskSmr] * (1.0 - diag(pq1Mat)[maskSmr]) *
+       diag(pq2Mat)[maskSmr])^-1L
 
   # Estimator of the mean of y2 on the finite population U
   HajekTel <- sum(Yobs[maskSmr] * weightsTel) / sum(weightsTel)
