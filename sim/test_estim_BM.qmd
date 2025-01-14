@@ -71,7 +71,7 @@ levels(sex) <- c("Woman", "Man")
 ```
 
 ```{r}
-summary(Z)
+summary(Z[, -1L])
 ```
 
 ```{r}
@@ -79,7 +79,9 @@ data <- Z[, c("sex", "age")]
 data$sex <- sex
 ggplot(data) + 
   geom_density(aes(x = age, colour = sex)) +
-  ggtitle("Age ~ sex")
+  ggtitle("Age density conditionally to the sex")
+
+data %>% group_by(sex) %>% summarize(meanAge = mean(age))
 rm(data)
 ```
 
@@ -133,11 +135,34 @@ pTel <- expit(Z %*% alphaTel) %>% as.vector()
 Here are some details about the $p_{int}$ and $p_{tel}$:
 
 ```{r}
-data.frame(mode = factor(rep(c("int", "tel"), each = N)), 
+summary(pInt)
+summary(pTel)
+```
+```{r}
+summary((1.0 - pInt) * pTel)
+```
+
+About $S_{r\bullet}$ (case of SRS with $f = \frac{1}{10}$):
+
+```{r}
+f <- 1.0 / 10.0
+n <- f * N
+expSizeSr <- f * sum(pInt)
+
+pi <- rep(n / N, N)
+  piMat <- matrix(n * (n - 1L) / (N * (N - 1L)), nrow = N, ncol = N)
+  diag(piMat) <- n / N
+expVarSr <- f * sum(pInt * (1.0 - pInt)) + t(pInt) %*%  %*% pInt
+```
+
+
+```{r}
+data.frame(mode = factor(rep(c("web", "telephone"), each = N)), 
            prob = c(pInt, pTel)) %>% 
   ggplot() + 
   geom_density(aes(x = prob, color = mode)) +
-  ggtitle("Distribution of p_int and p_tel")
+  ggtitle("Distribution of p1 and p2") +
+  xlab("mode selection probability")
 ```
 
 ```{r}
