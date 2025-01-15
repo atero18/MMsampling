@@ -1627,8 +1627,9 @@ simulation_tphi <- function(Z,
                           correcEstimWeights = TRUE)
     
     # apprVarMeanPhi2EW <- NA_real_
-    ## NOTE : Attention calcul probas estimées ici, précédemment pris sans
-    ## conditionnement
+    
+    rm(estimpq1Mat, estimpq2Mat)
+    
     tibble(estimand = rep(c("phi1", "mean phi1", 
                             "phi2", "mean phi2"), each = 2L), 
            expEstimand = rep(c(expPhi1, expMeanPhi1, expPhi2, expMeanPhi2), 
@@ -1694,42 +1695,6 @@ resSimTotals %>%
             avg_AV = mean(apprVar),
             var = var(estimation)) %>% 
   mutate(ratioVar = avg_AV / var)
-```
-
-```{r}
-resSimTotals$differenceEW <- compareTphi$totPhi1EW - compareTphi$totPhi2EW
-```
-
-```{r}
-varPhi1 <- var(resSimTotals[seq_len(Kbis / 2.0), "totPhi1EW"])
-varPhi2 <- var(resSimTotals[seq_len(Kbis / 2.0), "totPhi2EW"])
-varDiffPhi <- 
-  var(resSimTotals[seq_len(Kbis / 2.0), "totPhi1EW"] - 
-        resSimTotals[seq_len(Kbis / 2.0), "totPhi2EW"])
-```
-
-```{r}
-mean(resSimTotals$estimApprVarPhi1[-seq_len(Kbis / 2.0)])
-```
-
-```{r}
-mean(resSimTotals$estimApprVarPhi1[-seq_len(Kbis / 2.0)]) / varPhi1
-```
-
-```{r}
-var(resSimTotals$meanPhi1EW[seq_len(Kbis / 2.0)])
-```
-
-```{r}
-mean(resSimTotals$estimApprVarCenteredInt[-seq_len(Kbis / 2.0)])
-```
-
-```{r}
-mean(resSimTotals$estimApprVarCenteredInt[-seq_len(Kbis / 2.0)]) / var(compareTphi$meanPhi1EW[seq_len(Kbis / 2.0)])
-```
-
-```{r}
-rm(varPhi1, varPhi2, varDiffPhi, resSimTotals)
 ```
 
 ## Bias detection
