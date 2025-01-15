@@ -44,6 +44,7 @@ Linear models on both modes
 # Building constants
 
 ```{r}
+RNGkind(kind = "L'Ecuyer-CMRG")
 set.seed(145L)
 ```
 
