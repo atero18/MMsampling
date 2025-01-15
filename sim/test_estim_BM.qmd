@@ -1,5 +1,5 @@
 ---
-title: "Measure bias correction (linear case)"
+title: "measure bias correction (linear case)"
 format:
   html:
     toc: true
@@ -26,7 +26,7 @@ library(ggplot2)
 library(Matrix)
 library(progress)
 library(marginaleffects)
-library(progressr)
+library(progress)
 ```
 
 ```{r}
@@ -89,7 +89,7 @@ rm(data)
 Z <- as.matrix(Z)
 ```
 
-Creating parameters for two modes : "int" and "tel". `delta` is defined such that the average measure bias is equal to 1. It depends on `Z`.
+Creating parameters for two modes : "int" and "tel". `delta` is defined such that the average measure effect is equal to 1. It depends on `Z`.
 
 ```{r}
 betaTel <- c(1.0, -0.1, 4.0)
@@ -728,7 +728,7 @@ simulationUncounf <-
       trueYtel <- sum(Ytels)
       deltas <- Yints - Ytels
       
-      # Evaluating the measure bias total (random value)
+      # Evaluating the measure effect total (random value)
       truePhiBias <- crossprod(phi, deltas) %>% as.vector()
       expPhiBias <- crossprod(phi, expYints - expYtels) %>% as.vector()
       
@@ -774,7 +774,7 @@ simulationUncounf <-
       
 
       # Estimation on a unique MCO for Y1 and Y2, with beta X and only a constant
-      # delta for the estimation of the measure bias
+      # delta for the estimation of the measure effect
       deltaEval <- 
         estim_delta_MCO_unique_model_const(Z, Yobs, modes, "int", "tel")
       resEvalFull <- sum(phi) * deltaEval
@@ -1198,7 +1198,7 @@ loop_simulation <- function(parameters, K = 2000L)
 }
 ```
 
-# Measure bias evaluation
+# measure effect evaluation
 
 Evaluation of $K$ experiments:
 
@@ -1233,11 +1233,11 @@ parameters <- expand_grid(constBias = c(TRUE, FALSE),
 resultsGaussian <- loop_simulation(parameters, K = K)
 ```
 
-# Ex : Gaussian constant measure bias
+# Ex : Gaussian constant measure effect
 
-Results of each parameter for the case of SRS with **constant** measure bias, $\beta_{tel,age} > 0$ and Gaussian laws (with $\sigma =1$).
+Results of each parameter for the case of SRS with **constant** measure effect, $\beta_{tel,age} > 0$ and Gaussian laws (with $\sigma =1$).
 
-## Measure bias total
+## measure effect total
 
 $$\text{relError} = \frac{1}{K}\sum_{k=1}^K \frac{\hat{t}_{\phi\Delta y,k}-t_{\phi\Delta y,k}}{\mathbb{E}[t_{\phi\Delta y}]}$$
 
@@ -1610,7 +1610,7 @@ simulation_tphi <- function(Z,
     meanPhi2EW <-
       sum(phi[maskTel] *
             (estimWeights[maskTel] * Yobs[maskTel] - mean(Ytels))) /
-      sum(phi[maskTel] * trueWeights[maskTel])
+      sum(phi[maskTel] * estimWeights[maskTel])
     
     # meanPhi2EW <- NA_real_
     
@@ -1734,14 +1734,16 @@ rm(varPhi1, varPhi2, varDiffPhi, resSimTotals)
 ## Bias detection
 ### Superposition
 
-We would like to test our ability to detect the presence or absence of a constant measure bias with the superposition of confidence intervals of $\hat{t}_{pq\phi1}$ and $\hat{t}_{pq\phi2}$. If there is no measure bias then we can assume there will be superposition of the confidence intervals.
+We would like to test our ability to detect the presence or absence of a constant measure effect with the superposition of confidence intervals of $\hat{t}_{pq\phi1}$ and $\hat{t}_{pq\phi2}$. If there is no measure effect then we can assume there will be superposition of the confidence intervals.
 
-We will change the value of the constants and test the coverage of our test. We consider the ratio between the measure bias and the expected mean of the telephone answers.
+We will change the value of the constant measure effect $\delta$ and test the coverage of our test. We consider the ratio between the measure bias and the expected mean of the telephone answers.
 
 ```{r}
-ratioDeltas <- c(0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 1.0, 2.0)
+ratioDeltas <- c(0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.75, 1.0, 2.0)
 expMean2 <- mean(Z %*% betaTel)
 deltas <- ratioDeltas * abs(expMean2)
+
+deltas
 ```
 
 Then for each measure bias we try the recognition of an eventual measure bias, with confidence intervals with errors $\alpha_1 = \alpha_2 = 0.05$.
@@ -1750,18 +1752,15 @@ For centered it is not really an estimation because it uses the empiracal mean o
 
 ```{r}
 Kbis <- 1000L
-# sdDiffPhiVec <- NULL
-
-# resSuperpositions <- data.frame(ratio = ratioDeltas, 
-#                                 delta = deltas, 
-#                                 percSuperposition = 0.0,
-#                                 percPresenceMean2 = 0.0)
 
 resSimulations <- NULL
 
+pb <- progress::progress_bar$new(format = "[:bar] :percent eta: :eta",
+                                 total = length(ratioDeltas))
 for (k in seq_along(ratioDeltas))
 {
-  glue("{k} / {length(ratioDeltas)}")
+  pb$tick(0L)
+
   delta <- deltas[k]
   betaIntTemp <- betaTel
   betaIntTemp[1L] <- betaIntTemp[1L] + delta
@@ -1785,6 +1784,8 @@ for (k in seq_along(ratioDeltas))
     mutate(ratioDelta = ratioDeltas[k],
            delta = delta, .before = 1L) %>% 
     rbind(resSimulations)
+  
+  pb$tick()
 }
 
 rm(resTemp)
@@ -1885,7 +1886,7 @@ count_superposition <- function(data1, data2, alpha1 = 0.05, alpha2 = 0.05)
 #### With the outcomes
 
 ```{r}
-absRes <- NULL
+absResTW <- NULL
 for (delt in deltas)
 {
   data1 <- resSimulations %>% filter(delta == delt, 
@@ -1896,17 +1897,49 @@ for (delt in deltas)
                                      estimand == "phi2", 
                                      weights == "true")
   
-  absRes <- rbind(absRes, count_superposition(data1, data2))
+  absResTW <- rbind(absResTW, count_superposition(data1, data2))
 }
 
 rm(data1, data2, delt)
 
-absRes <- as_tibble(absRes) %>% 
+absResTW <- as_tibble(absResTW) %>% 
+  mutate(weights = "true", .before = 1L) %>% 
+  mutate(ratioVar1 = AV1 / var1, .after = "var1") %>% 
+  mutate(ratioVar2 = AV2 / var2, .after = "var2")
+```
+
+```{r}
+absResEW <- NULL
+for (delt in deltas)
+{
+  data1 <- resSimulations %>% filter(delta == delt, 
+                                     estimand == "phi1", 
+                                     weights == "estimated")
+  
+  data2 <- resSimulations %>% filter(delta == delt, 
+                                     estimand == "phi2", 
+                                     weights == "estimated")
+  
+  absResEW <- rbind(absResEW, count_superposition(data1, data2))
+}
+
+rm(data1, data2, delt)
+
+absResEW <- as_tibble(absResEW) %>% 
+  mutate(weights = "estimated", .before = 1L) %>% 
   mutate(ratioVar1 = AV1 / var1, .after = "var1") %>% 
   mutate(ratioVar2 = AV2 / var2, .after = "var2")
 
-absRes
+absRes <- rbind(absResTW, absResEW)
+
+rm(absResTW, absResEW)
 ```
+
+```{r}
+absRes %>% 
+  group_by(weights)
+```
+
 
 The columns with with respect to the telephone outcomes are constant because the `seed` is the same for each `ratioDelta`.
 
@@ -1919,7 +1952,7 @@ Using the superposition implies a lot of false negative non-measure bias detecti
 #### With the oucome means
 
 ```{r}
-centeredRes <- NULL
+centeredResTW <- NULL
 for (delt in deltas)
 {
   data1 <- resSimulations %>% filter(delta == delt, 
@@ -1930,17 +1963,49 @@ for (delt in deltas)
                                      estimand == "mean phi2", 
                                      weights == "true")
   
-  centeredRes <- rbind(centeredRes, count_superposition(data1, data2))
+  centeredResTW <- rbind(centeredResTW, count_superposition(data1, data2))
 }
 
 rm(data1, data2, delt)
 
-centeredRes <- as_tibble(centeredRes) %>% 
+centeredResTW <- as_tibble(centeredResTW) %>% 
+  mutate(weights = "true", .before = 1L) %>% 
+  mutate(ratioVar1 = AV1 / var1, .after = "var1") %>% 
+  mutate(ratioVar2 = AV2 / var2, .after = "var2")
+```
+
+```{r}
+centeredResEW <- NULL
+for (delt in deltas)
+{
+  data1 <- resSimulations %>% filter(delta == delt, 
+                                     estimand == "mean phi1", 
+                                     weights == "estimated")
+  
+  data2 <- resSimulations %>% filter(delta == delt, 
+                                     estimand == "mean phi2", 
+                                     weights == "estimated")
+  
+  centeredResEW <- rbind(centeredResEW, count_superposition(data1, data2))
+}
+
+rm(data1, data2, delt)
+
+centeredResEW <- as_tibble(centeredResEW) %>% 
+  mutate(weights = "estimated", .before = 1L) %>% 
   mutate(ratioVar1 = AV1 / var1, .after = "var1") %>% 
   mutate(ratioVar2 = AV2 / var2, .after = "var2")
 
-centeredRes
+centeredRes <- rbind(centeredResTW, centeredResEW)
+
+rm(centeredResTW, centeredResEW)
 ```
+
+```{r}
+centeredRes %>% 
+  group_by(weights)
+```
+
 
 The columns with with respect to the web outcomes are constant because the `seed` is the same for each `ratioDelta` and adding a constant measure effect does not impact the value of the estimator.
 
@@ -2042,9 +2107,9 @@ glue("coverage: {coverage} (expected: {1 - alpha})")
 rm(deltas, ratioDeltas)
 ```
 
-# Ex : Gaussian variable measure bias
+# Ex : Gaussian variable measure effect
 
-Results of each parameter for the case of SRS with **variable** measure bias and Gaussian laws and $\sigma = 1$. First we focus on the bias:
+Results of each parameter for the case of SRS with **variable** measure effect and Gaussian laws and $\sigma = 1$. First we focus on the bias:
 
 ```{r}
 temp <- resultsGaussian %>% 
@@ -2070,7 +2135,7 @@ temp %>%
 
 We can observe that the relative estimated bias is close to zero.
 
-Even with a variable measure bias, the G-COMP model with only a constant for the bias is approximately unbiased. It is due to the fact that we chose here a centered measure bias, respectively to the couple (age, sex).
+Even with a variable measure effect, the G-COMP model with only a constant for the bias is approximately unbiased. It is due to the fact that we chose here a centered measure effect, respectively to the couple (age, sex).
 
 And now the RMSE:
 
@@ -2382,9 +2447,9 @@ estimBias <- temp$normEstPhiBiasDiffHT
 
 The expected value is equal to
 
-$$\frac{1}{||\phi||_1}(||\phi||_1\delta_0 + \sum_{k \in U} \phi_k. age_k. \delta_{age} + \sum_{k \in U} \phi_k .sexe_k. \delta_{sexe})$$
+$$\frac{1}{||\phi||_1}(||\phi||_1\delta_0 + \sum_{k \in U} \phi_k. age_k. \delta_{age} + \sum_{k \in U} \phi_k .sexe_k. \delta_{sex})$$
 
-In our situation we have that $\sum_{k \in U} age_k. \delta_{age} + \sum_{k \in U}.sexe_k. \delta_{sexe} = 0$, by construction. So if the $\phi_k$ are constant (which is the case here), the expected value simply becomes $\delta_0$, which is equal to $1$.
+In our situation we have that $\sum_{k \in U} age_k. \delta_{age} + \sum_{k \in U}.sexe_k. \delta_{sex} = 0$, by construction. So if the $\phi_k$ are constant (which is the case here), the expected value simply becomes $\delta_0$, which is equal to $1$.
 
 ```{r}
 empMean <- mean(estimBias)
@@ -2527,7 +2592,7 @@ temp %>%
   distinct(YtelLaw, sd, YintLaw, sampling, signAge, MBtype)
 ```
 
-This estimator seems to be optimal only is the measure bias is conditionally constant.
+This estimator seems to be optimal only is the measure effect is conditionally constant.
 
 Case when HT-population-population is the best:
 
@@ -2563,7 +2628,7 @@ temp <- resultsGeneral %>%
 #          signAge == "plus")
 ```
 
-Before comparison, we can observe on the Gaussian case (variable measure bias, positive coefficient for age on telephone, $\phi_k \equiv \frac{1}{2}$) with $\sigma =1$ that the variance do not stabilize completely:
+Before comparison, we can observe on the Gaussian case (variable measure effect, positive coefficient for age on telephone, $\phi_k \equiv \frac{1}{2}$) with $\sigma =1$ that the variance do not stabilize completely:
 
 ```{r}
 # sumSqErrors <- cumsum(tempBis[, c("diffPhiBias", "diffYtelEstMP")]^2L)
