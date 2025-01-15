@@ -1655,8 +1655,8 @@ simulation_tphi <- function(Z,
   # pv <- microbenchmark::microbenchmark(monoSim(), times = 10L)
   # return(pv)
   
-  res <- lapply(seq_len(K), FUN = monoSim)
-  # res <- mclapply(seq_len(K), FUN = monoSim, mc.cores = detectCores() - 1L)
+  # res <- lapply(seq_len(K), FUN = monoSim)
+  res <- mclapply(seq_len(K), FUN = monoSim, mc.cores = 20L)
   do.call("rbind", res)
 }
 ```
