@@ -1534,13 +1534,13 @@ simulation_tphi <- function(Z,
     
     apprVarMeanPhi1EW <-
       estim_var_mean_phi1(Yobs,
-                                modes,
-                                I,
-                                piMat,
-                                estimpq1Mat,
-                                Z,
-                                phi,
-                                correcEstimWeights = TRUE)
+                          modes,
+                          I,
+                          piMat,
+                          estimpq1Mat,
+                          Z,
+                          phi,
+                          correcEstimWeights = TRUE)
     
     # apprVarMeanPhi1EW <- NA_real_
     
@@ -1615,15 +1615,15 @@ simulation_tphi <- function(Z,
     # meanPhi2EW <- NA_real_
     
     apprVarMeanPhi2EW <-
-      estim_var_mean_phi1(Yobs,
-                                modes,
-                                I,
-                                piMat,
-                                estimpq1Mat,
-                                estimpq2Mat,
-                                Z,
-                                phi,
-                                correcEstimWeights = TRUE)
+      estim_var_mean_phi2(Yobs,
+                          modes,
+                          I,
+                          piMat,
+                          estimpq1Mat,
+                          estimpq2Mat,
+                          Z,
+                          phi,
+                          correcEstimWeights = TRUE)
     
     # apprVarMeanPhi2EW <- NA_real_
     ## NOTE : Attention calcul probas estimées ici, précédemment pris sans
@@ -1654,7 +1654,7 @@ simulation_tphi <- function(Z,
   # pv <- microbenchmark::microbenchmark(monoSim(), times = 10L)
   # return(pv)
   
-  with_progress({res <- lapply(seq_len(K), FUN = monoSim)})
+  res <- lapply(seq_len(K), FUN = monoSim)
   # res <- mclapply(seq_len(K), FUN = monoSim, mc.cores = detectCores() - 1L)
   do.call("rbind", res)
 }
