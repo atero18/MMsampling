@@ -1599,14 +1599,14 @@ simulation_tphi <- function(Z,
     
     apprVarMeanPhi2TW <-
       estim_var_mean_phi2(Yobs,
-                              modes,
-                              I,
-                              piMat,
-                              pq1Mat,
-                              pq2Mat,
-                              Z,
-                              phi,
-                              correcEstimWeights = FALSE)
+                          modes,
+                          I,
+                          piMat,
+                          pq1Mat,
+                          pq2Mat,
+                          Z,
+                          phi,
+                          correcEstimWeights = FALSE)
     
     meanPhi2EW <-
       sum(phi[maskTel] *
