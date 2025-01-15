@@ -121,6 +121,16 @@ estim_appr_var_seq_phi1 <- function(Yobs,
     (weightedY1Sr / piSr) %>%
     as.numeric()
 
+  # N <- length(Yobs)
+  # weightedY1 <- numeric(N)
+  # weightedY1[maskSr] <- phi[maskSr] * Yobs[maskSr]
+  # covarp <- pi2_to_covarInc(piMat)
+  # varSEst <-
+  #   t(weightedY1 / pi) %*%
+  #   (covarp / (piMat * pq1Mat)) %*%
+  #   (weightedY1 / pi) %>%
+  #   as.numeric()
+
   # q1 variability (R1)
   # If we use estimated p_1k weights we have to make a correction
   correctedY1Sr <- weightedY1Sr / p1[maskSr]

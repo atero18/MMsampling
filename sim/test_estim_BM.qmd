@@ -424,7 +424,7 @@ simulationUncounf <-
     }
     
     
-    # Making clusters random-independants
+    # Making clusters random-independents
     clusterSetRNGStream(cl = cluster, iseed = seed)
     
     clusterEvalQ(cluster, library(dplyr))
@@ -1613,7 +1613,7 @@ simulation_tphi <- function(Z,
   # pv <- microbenchmark::microbenchmark(monoSim(), times = 10L)
   # return(pv)
   
-  with_progress({res <- lapply(seq_len(K), FUN = monoSim)})
+  res <- lapply(seq_len(K), FUN = monoSim)
   # res <- mclapply(seq_len(K), FUN = monoSim, mc.cores = detectCores() - 1L)
   do.call("rbind", res)
 }
@@ -1626,7 +1626,7 @@ Kbis <- 10000L
 Simulation with no measure effect:
 ```{r}
 tic()
-#pv <- profvis::profvis({
+pv <- profvis::profvis({
 resSimTotals <- simulation_tphi(K = Kbis,
                                 Z = Z,
                                 sampling = "SRS",
@@ -1640,7 +1640,7 @@ resSimTotals <- simulation_tphi(K = Kbis,
                                 sdInt = 1.0,
                                 sdTel = 1.0,
                                 seed = 200L)
-#})
+})
 glue("{toc()}")
 ```
 
