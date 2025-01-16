@@ -1717,8 +1717,6 @@ Then for each measure bias we try the recognition of an eventual measure bias, w
 For centered it is not really an estimation because it uses the empiracal mean on U
 
 ```{r}
-Kbis <- 1000L
-
 resSimulations <- NULL
 
 pb <- progress::progress_bar$new(format = "[:bar] :percent eta: :eta",
