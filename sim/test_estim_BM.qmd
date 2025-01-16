@@ -136,9 +136,13 @@ pTel <- expit(Z %*% alphaTel) %>% as.vector()
 Here are some details about the $p_{int}$ and $p_{tel}$:
 
 ```{r}
-summary(pInt)
-summary(pTel)
+glue("internet probabilities:\n")
+summary(pInt) %>% print()
+glue("telephone probabilities:\n")
+summary(pTel) %>% print()
 ```
+
+
 ```{r}
 pRepTel <- (1.0 - pInt) * pTel
 summary(pRepTel)
@@ -155,7 +159,9 @@ pi <- rep(f, N)
 piMat <- matrix(n * (n - 1L) / (N * (N - 1L)), nrow = N, ncol = N)
 diag(piMat) <- f
 pCov <- pi2_to_covarInc(piMat)
-expVarSr <- f * sum(pInt * (1.0 - pInt)) + t(pInt) %*% pCov %*% pInt
+expVarSr <- f * sum(pInt * (1.0 - pInt)) + 
+  t(pInt) %*% pCov %*% pInt %>% 
+  as.numeric()
 
 expSizeSr
 expVarSr
@@ -167,10 +173,31 @@ expSizeSmr <- f * sum(pRepTel)
 
 expVarSmr <- f * sum(pRepTel * (1.0 - pTel)) + 
   f * sum(pRepTel * (1.0 - pInt)) +
-  t(pRepTel) %*% pCov %*% pRepTel
+  t(pRepTel) %*% pCov %*% pRepTel %>% 
+  as.numeric()
 
 expSizeSmr
 expVarSmr
+```
+
+About $S_a$ (case of SRS with $f = \frac{1}{10}$):
+
+```{r}
+expSizeSa <- expSizeSr + expSizeSmr
+
+expVarSa <- f * sum(pRepTel * (1.0 - pTel)) + 
+  f * sum(pInt * (1.0 - pInt) * (1.0 - pTel)) +
+  t(pInt + pRepTel) %*% pCov %*% (pInt + pRepTel) %>% 
+  as.numeric()
+
+expSizeSa
+expVarSa
+```
+
+```{r}
+rm(expSizeSr, expVarSr, 
+   expSizeSmr, expVarSmr, 
+   expSizeSa, expVarSa)
 ```
 
 
@@ -186,13 +213,6 @@ data.frame(mode = factor(rep(c("web", "telephone"), each = N)),
 ```{r}
 pInt[sex == "Man"] %>% summary()
 pInt[sex == "Woman"] %>% summary()
-```
-
-```{r}
-cat("internet probabilities:\n")
-summary(pInt) %>% print()
-cat("telephone probabilities:\n")
-summary(pTel) %>% print()
 ```
 
 # Simulation functions
@@ -238,8 +258,8 @@ gen_choice_bimode <- function(I, p1, p2, checkRank = FALSE, Z = NULL)
 
 ```{r}
 gen_expY <- function(Z, 
-                    betaInt, YintLaw = "gaussian", sdInt,
-                    betaTel, YtelLaw = "gaussian", sdTel)
+                     betaInt, YintLaw = "gaussian", sdInt,
+                     betaTel, YtelLaw = "gaussian", sdTel)
 {
   if (YtelLaw == "gaussian")
   {
@@ -426,6 +446,25 @@ set_phi <- function(phi = "eq", N)
 }
 ```
 
+```{r}
+piMat_SRS <- function(n, N)
+{
+  piMat <- matrix(n * (n - 1L) / (N * (N - 1L)), nrow = N, ncol = N)
+  diag(piMat) <- n / N
+  
+  piMat
+}
+```
+
+```{r}
+covar_SRS <- function(n, N)
+{
+  piMat_SRS(n, N) %>% pi2_to_covarInc()
+}
+```
+
+
+
 Parameters:
 
 -   `meanZ` and `varZ` if `Z` is variable (i.e. `fixZ == FALSE`). constant Z can be given with `Z`
@@ -501,8 +540,7 @@ simulationUncounf <-
     if (sampling == "SRS")
     {
       pi <- rep(n / N, N)
-      piMat <- matrix(n * (n - 1L) / (N * (N - 1L)), nrow = N, ncol = N)
-      diag(piMat) <- n / N
+      piMat <- piMat_SRS(n, N)
       
       clusterExport(cluster, 
                     varlist = c("pi", "piMat"),
@@ -1370,6 +1408,47 @@ ks.test(x = (estimatorsPhi2 - empMean2) / empSD2, y = "pnorm")
 ## Variance estimators for the totals
 
 ```{r}
+true_variance_tephi1 <- function(Y1exp, pi, covpMat, p1, phi, sd1 = 1.0)
+{
+  Y1expMat <- Y1exp %*% t(Y1exp)
+  diag(Y1expMat) <- sd1^2L + Y1exp^2L
+  
+  # q1 variability
+  sum((1.0 - p1) * phi^2L / (pi * p1) * (sd1^2L + Y1exp^2L)) +
+  # S variability
+    t(Y1exp * phi / pi) %*% (covpMat * Y1expMat) %*% (Y1exp * phi / pi) +
+  # Y1 variability
+    sum(phi^2L) * sd1^2L
+}
+```
+
+```{r}
+true_variance_tephi2 <- function(Y2exp, pi, covpMat, p1, p2, phi, sd2 = 1.0)
+{
+  p1Bar <- 1.0 - p1
+  Y2expMat <- Y2exp %*% t(Y2exp)
+  diag(Y2expMat) <- sd2^2L + Y2exp^2L
+  # q2 variability
+    sum((1.0 - p2) * phi^2L / (pi * p1Bar * p2) * (sd2^2L + Y2exp^2L)) +
+  # q1 variability
+    sum(p1 * phi^2L / (pi * p1Bar) * (sd2^2L + Y2exp^2L)) +
+  # S variability
+    t(Y2exp * phi / pi) %*% (covpMat * Y2expMat) %*% (Y2exp * phi / pi) +
+  # Y2 variability
+    sum(phi^2L) * sd2^2L
+}
+```
+
+
+```{r}
+expData <- gen_expY(Z, betaInt, sdInt = 1.0, betaTel = betaTel, sdTel = 1.0)
+## Attention : expYtels ici
+true_variance_tephi1(expData$expYtels, pi, covar_SRS(n, N), pInt, phi, sd1 = 1.0)
+true_variance_tephi2(expData$expYtels, pi, covar_SRS(n, N), pInt, pTel, phi, sd2 = 1.0)
+rm(expData)
+```
+
+```{r}
 simulation_tphi <- function(Z,
                             sampling = "SRS",
                             alphaInt, alphaTel, 
@@ -1397,8 +1476,7 @@ simulation_tphi <- function(Z,
   if (sampling == "SRS")
   {
     pi <- rep(n / N, N)
-    piMat <- matrix(n * (n - 1L) / (N * (N - 1L)), nrow = N, ncol = N)
-    diag(piMat) <- n / N
+    piMat <- piMat_SRS(n, N)
   }
   
   
