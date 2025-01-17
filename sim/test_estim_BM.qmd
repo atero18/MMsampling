@@ -23,6 +23,7 @@ library(tibble)
 library(parallel)
 library(tictoc)
 library(ggplot2)
+theme_set(theme_light())
 library(Matrix)
 library(progress)
 library(marginaleffects)
@@ -30,6 +31,8 @@ library(progress)
 ```
 
 ```{r}
+#| message: false
+#| warning: false
 devtools::load_all()
 ```
 
@@ -80,7 +83,8 @@ data <- Z[, c("sex", "age")]
 data$sex <- sex
 ggplot(data) + 
   geom_density(aes(x = age, colour = sex)) +
-  ggtitle("Age density conditionally to the sex")
+  ggtitle("Age density conditionally to the sex") +
+  theme(test())
 
 data %>% group_by(sex) %>% summarize(meanAge = mean(age))
 rm(data)
@@ -106,10 +110,27 @@ $Y_{int}$ and $Y_{tel}$ expectations depending on `Z`:
 ```{r}
 data.frame(tel = Z %*% betaTel, int = Z %*% betaInt) %>% 
   pivot_longer(cols = c("tel", "int"), names_to = "mode", values_to = "value") %>% 
-  ggplot() + geom_density(aes(x = value, colour = mode))
+  ggplot() + 
+  geom_density(aes(x = value, colour = mode)) +
+  ggtitle("Distribution of the counterfactuals expected values")
 
 glue("average value for telephone: {mean(Z %*% betaTel)}")
 glue("average value for internet: {mean(Z %*% betaInt)}")
+```
+
+With telephone counterfactuals only:
+```{r}
+data.frame(tel = Z %*% betaTel) %>% 
+  ggplot() + 
+  geom_density(aes(x = tel)) +
+  # ggtitle("Distribution of the expected value of telephone outcomes") +
+  ggtitle("Distribution of the expected value of telephone outcomes") +
+  xlab("expected value")
+```
+
+
+```{r}
+as.numeric(Z %*% betaTel) %>% summary()
 ```
 
 ```{r}
@@ -1405,48 +1426,38 @@ ggplot() +
 ks.test(x = (estimatorsPhi2 - empMean2) / empSD2, y = "pnorm")
 ```
 
-## Variance estimators for the totals
 
-```{r}
-true_variance_tephi1 <- function(Y1exp, pi, covpMat, p1, phi, sd1 = 1.0)
-{
-  Y1expMat <- Y1exp %*% t(Y1exp)
-  diag(Y1expMat) <- sd1^2L + Y1exp^2L
-  
-  # q1 variability
-  sum((1.0 - p1) * phi^2L / (pi * p1) * (sd1^2L + Y1exp^2L)) +
-  # S variability
-    t(Y1exp * phi / pi) %*% (covpMat * Y1expMat) %*% (Y1exp * phi / pi) +
-  # Y1 variability
-    sum(phi^2L) * sd1^2L
-}
-```
 
-```{r}
-true_variance_tephi2 <- function(Y2exp, pi, covpMat, p1, p2, phi, sd2 = 1.0)
-{
-  p1Bar <- 1.0 - p1
-  Y2expMat <- Y2exp %*% t(Y2exp)
-  diag(Y2expMat) <- sd2^2L + Y2exp^2L
-  # q2 variability
-    sum((1.0 - p2) * phi^2L / (pi * p1Bar * p2) * (sd2^2L + Y2exp^2L)) +
-  # q1 variability
-    sum(p1 * phi^2L / (pi * p1Bar) * (sd2^2L + Y2exp^2L)) +
-  # S variability
-    t(Y2exp * phi / pi) %*% (covpMat * Y2expMat) %*% (Y2exp * phi / pi) +
-  # Y2 variability
-    sum(phi^2L) * sd2^2L
-}
-```
 
 
 ```{r}
-expData <- gen_expY(Z, betaInt, sdInt = 1.0, betaTel = betaTel, sdTel = 1.0)
-## Attention : expYtels ici
-true_variance_tephi1(expData$expYtels, pi, covar_SRS(n, N), pInt, phi, sd1 = 1.0)
-true_variance_tephi2(expData$expYtels, pi, covar_SRS(n, N), pInt, pTel, phi, sd2 = 1.0)
-rm(expData)
+Kbis <- 10000L
 ```
+
+Simulation with no measure effect:
+```{r}
+tic()
+pv <- profvis::profvis({
+resSimTotals <- simulation_tphi(K = Kbis,
+                                Z = Z,
+                                sampling = "SRS",
+                                alphaInt = alphaInt,
+                                alphaTel = alphaTel,
+                                betaInt = betaTel,
+                                betaTel = betaTel,
+                                YintLaw = "gaussian",
+                                YtelLaw = "gaussian",
+                                phi = "eq",
+                                sdInt = 1.0,
+                                sdTel = 1.0,
+                                seed = 200L)
+})
+glue("{toc()}")
+```
+
+
+
+## Bias detection
 
 ```{r}
 simulation_tphi <- function(Z,
@@ -1740,44 +1751,6 @@ simulation_tphi <- function(Z,
 }
 ```
 
-```{r}
-Kbis <- 10000L
-```
-
-Simulation with no measure effect:
-```{r}
-tic()
-pv <- profvis::profvis({
-resSimTotals <- simulation_tphi(K = Kbis,
-                                Z = Z,
-                                sampling = "SRS",
-                                alphaInt = alphaInt,
-                                alphaTel = alphaTel,
-                                betaInt = betaTel,
-                                betaTel = betaTel,
-                                YintLaw = "gaussian",
-                                YtelLaw = "gaussian",
-                                phi = "eq",
-                                sdInt = 1.0,
-                                sdTel = 1.0,
-                                seed = 200L)
-})
-glue("{toc()}")
-```
-
-```{r}
-resSimTotals %>% 
-  group_by(estimand, weights) %>% 
-  summarize(expEstimand = mean(expEstimand),
-            mean = mean(estimation), 
-            avg_AV = mean(apprVar),
-            var = var(estimation)) %>% 
-  mutate(ratioVar = avg_AV / var)
-```
-
-## Bias detection
-### Superposition
-
 We would like to test our ability to detect the presence or absence of a constant measure effect with the superposition of confidence intervals of $\hat{t}_{pq\phi1}$ and $\hat{t}_{pq\phi2}$. If there is no measure effect then we can assume there will be superposition of the confidence intervals.
 
 We will change the value of the constant measure effect $\delta$ and test the coverage of our test. We consider the ratio between the measure bias and the expected mean of the telephone answers.
@@ -1793,6 +1766,9 @@ deltas
 Then for each measure bias we try the recognition of an eventual measure bias, with confidence intervals with errors $\alpha_1 = \alpha_2 = 0.05$.
 
 For centered it is not really an estimation because it uses the empiracal mean on U
+```{r}
+Ksim <- 20000L
+```
 
 ```{r}
 resSimulations <- NULL
@@ -1808,7 +1784,7 @@ for (k in seq_along(ratioDeltas))
   betaIntTemp[1L] <- betaIntTemp[1L] + delta
   
   
-  resTemp <- simulation_tphi(K = Kbis,
+  resTemp <- simulation_tphi(K = Ksim,
                              Z = Z,
                              sampling = "SRS",
                              alphaInt = alphaInt,
@@ -1832,6 +1808,95 @@ for (k in seq_along(ratioDeltas))
 
 rm(resTemp)
 ```
+
+### Variance estimators for the totals
+
+We use the results to test the validity of our approximate variance estimators, that will be use for the bias detection.
+
+Here are the true variance $\hat{t}_{e\phi1}$, in the case of independency for both mode selections (intra & inter)
+```{r}
+true_variance_tephi1 <- function(Y1exp, pi, covpMat, p1, phi, sd1 = 1.0)
+{
+  Y1expMat <- Y1exp %*% t(Y1exp)
+  diag(Y1expMat) <- sd1^2L + Y1exp^2L
+  
+  # q1 variability
+  sum((1.0 - p1) * phi^2L / (pi * p1) * (sd1^2L + Y1exp^2L)) +
+  # S variability
+    t(phi / pi) %*% (covpMat * Y1expMat) %*% (phi / pi) +
+  # Y1 variability
+    sum(phi^2L) * sd1^2L
+}
+```
+
+And for $\hat{t}_{e\phi2}$ :
+```{r}
+true_variance_tephi2 <- function(Y2exp, pi, covpMat, p1, p2, phi, sd2 = 1.0)
+{
+  p1Bar <- 1.0 - p1
+  Y2expMat <- Y2exp %*% t(Y2exp)
+  diag(Y2expMat) <- sd2^2L + Y2exp^2L
+  # q2 variability
+    sum((1.0 - p2) * phi^2L / (pi * p1Bar * p2) * (sd2^2L + Y2exp^2L)) +
+  # q1 variability
+    sum(p1 * phi^2L / (pi * p1Bar) * (sd2^2L + Y2exp^2L)) +
+  # S variability
+    t(phi / pi) %*% (covpMat * Y2expMat) %*% (phi / pi) +
+  # Y2 variability
+    sum(phi^2L) * sd2^2L
+}
+```
+
+Those values can be used as comparison. 
+
+
+Here we show average approximate variance and variance of different estimators for the first half of the iterations, with no measure effect.
+```{r}
+temp <- resSimulations %>% 
+  filter(ratioDelta == 0.0)
+
+temp <- temp %>% 
+  slice_head(n = nrow(temp) / 2L) %>% 
+  group_by(estimand, weights) %>% 
+  summarize(expEstimand = mean(expEstimand),
+            mean = mean(estimation), 
+            avg_AV = mean(apprVar),
+            var = var(estimation)) %>% 
+  mutate(ratioVar = avg_AV / var)
+
+temp
+```
+
+The following table is restricted to the estimators $\hat{t}_{pq\phi1}$ and $\hat{t}_{pq\phi2}$. We have a new column that indicates the true variance of $\hat{t}_{e\phi1}$ and $\hat{t}_{e\phi2}$.
+
+
+```{r}
+expData <- gen_expY(Z, betaInt = betaInt, sdInt = 1.0, betaTel = betaTel, sdTel = 1.0)
+## Attention : expYtels ici
+vartotphi1TW <- true_variance_tephi1(expData$expYtels, 
+                                     pi, covar_SRS(n, N), 
+                                     pInt,
+                                     phi, 
+                                     sd1 = 1.0)
+vartotphi2TW <- true_variance_tephi2(expData$expYtels,
+                                     pi, covar_SRS(n, N), 
+                                     pInt, pTel, 
+                                     phi, 
+                                     sd2 = 1.0)
+rm(expData)
+
+
+temp %>% 
+  filter(weights == "estimated", estimand %in% c("phi1", "phi2")) %>% 
+  select(-weights) %>% 
+  add_column(varTW = c(vartotphi1TW, vartotphi2TW)) %>% 
+  conversion_latex(nom = "simulation_estim_var_approx", caption = "Variance estimation")
+
+rm(temp)
+```
+
+
+### Superposition
 
 `count_superposition` gives a few results on the different iterations and the estimators:
 
