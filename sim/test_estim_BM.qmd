@@ -83,8 +83,7 @@ data <- Z[, c("sex", "age")]
 data$sex <- sex
 ggplot(data) + 
   geom_density(aes(x = age, colour = sex)) +
-  ggtitle("Age density conditionally to the sex") +
-  theme(test())
+  ggtitle("Age density conditionally to the sex")
 
 data %>% group_by(sex) %>% summarize(meanAge = mean(age))
 rm(data)
@@ -1468,7 +1467,8 @@ simulation_tphi <- function(Z,
                             sdInt = 1.0, sdTel = 1.0, 
                             phi = rep(0.5, N), K = 10000L,
                             n = ceiling(N / 10L),
-                            seed = 123L)
+                            seed = 123L,
+                            nCores = detectCores() - 1L)
 {
   set.seed(seed)
   
@@ -1746,7 +1746,7 @@ simulation_tphi <- function(Z,
   # return(pv)
   
   # res <- lapply(seq_len(K), FUN = monoSim)
-  res <- mclapply(seq_len(K), FUN = monoSim, mc.cores = 20L)
+  res <- mclapply(seq_len(K), FUN = monoSim, mc.cores = nCores)
   do.call("rbind", res)
 }
 ```
@@ -1775,6 +1775,8 @@ resSimulations <- NULL
 
 pb <- progress::progress_bar$new(format = "[:bar] :percent eta: :eta",
                                  total = length(ratioDeltas))
+
+set.seed(200L)
 for (k in seq_along(ratioDeltas))
 {
   pb$tick(0L)
@@ -1796,7 +1798,8 @@ for (k in seq_along(ratioDeltas))
                              phi = "eq",
                              sdInt = 1.0,
                              sdTel = 1.0,
-                             seed = 200L)
+                             seed = NULL,
+                             nCores = 25L)
   
   resSimulations <- resTemp %>% 
     mutate(ratioDelta = ratioDeltas[k],
