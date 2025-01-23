@@ -1799,7 +1799,7 @@ for (k in seq_along(ratioDeltas))
                              sdInt = 1.0,
                              sdTel = 1.0,
                              seed = NULL,
-                             nCores = 25L)
+                             nCores = 20L)
   
   resSimulations <- resTemp %>% 
     mutate(ratioDelta = ratioDeltas[k],
