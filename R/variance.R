@@ -287,6 +287,7 @@ estim_appr_var_seq_phi2 <- function(Yobs,
   p1 <- diag(pq1Mat)
   p1Smr <- p1[maskSmr]
   pq1MatSmr <- pq1Mat[maskSmr, maskSmr]
+
   pq1BarMatSmr <- 1.0 -
     matrix(p1Smr, nrow = nSmr, ncol = nSmr, byrow = TRUE) -
     matrix(p1Smr, nrow = nSmr, ncol = nSmr, byrow = FALSE) +

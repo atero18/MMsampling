@@ -17,6 +17,7 @@ estim_var_mean_phi1 <- function(Yobs,
   errTerms <- rep(NA_real_, length(Yobs))
   errTerms[maskInt] <- Yobs[maskInt] - HajekWeb
 
+
   sumPhi <- sum(phi)
 
   # Returns the variance of Horvitz-Thompson total

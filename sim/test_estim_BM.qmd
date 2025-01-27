@@ -33,7 +33,7 @@ library(progress)
 ```{r}
 #| message: false
 #| warning: false
-devtools::load_all()
+# devtools::load_all()
 ```
 
 ```{r}
@@ -1572,7 +1572,7 @@ simulation_tphi <- function(Z,
         # Estimation of the approximate variance of the total estimator
         # the variance of Y1 is assumed known and homoscedastic for simplicity
     apprVarPhi1TW <- 
-      estim_appr_var_seq_phi1(Yobs,
+      MMsampling::estim_appr_var_seq_phi1(Yobs,
                               modes, 
                               I,
                               piMat,
@@ -1587,7 +1587,7 @@ simulation_tphi <- function(Z,
     # totPhi1EW <- NA_real_
     
     apprVarPhi1EW <-
-      estim_appr_var_seq_phi1(Yobs,
+      MMsampling::estim_appr_var_seq_phi1(Yobs,
                               modes,
                               I,
                               piMat,
@@ -1606,7 +1606,7 @@ simulation_tphi <- function(Z,
       sum(phi[maskInt] * trueWeights[maskInt])
     
     apprVarMeanPhi1TW <- 
-      estim_var_mean_phi1(Yobs,
+      MMsampling::estim_var_mean_phi1(Yobs,
                           modes, 
                           I,
                           piMat,
@@ -1623,7 +1623,7 @@ simulation_tphi <- function(Z,
     # meanPhi1EW <- NA_real_
     
     apprVarMeanPhi1EW <-
-      estim_var_mean_phi1(Yobs,
+      MMsampling::estim_var_mean_phi1(Yobs,
                           modes,
                           I,
                           piMat,
@@ -1648,7 +1648,7 @@ simulation_tphi <- function(Z,
         # Estimation of the approximate variance of the total estimator
         # the variance of Y2 is assumed known and homoscedastic for simplicity
     apprVarPhi2TW <-
-      estim_appr_var_seq_phi2(Yobs,
+      MMsampling::estim_appr_var_seq_phi2(Yobs,
                               modes,
                               I,
                               piMat,
@@ -1666,7 +1666,7 @@ simulation_tphi <- function(Z,
     
     
     apprVarPhi2EW <-
-      estim_appr_var_seq_phi2(Yobs,
+      MMsampling::estim_appr_var_seq_phi2(Yobs,
                               modes,
                               I,
                               piMat,
@@ -1687,7 +1687,7 @@ simulation_tphi <- function(Z,
       sum(phi[maskTel] * trueWeights[maskTel])
     
     apprVarMeanPhi2TW <-
-      estim_var_mean_phi2(Yobs,
+      MMsampling::estim_var_mean_phi2(Yobs,
                           modes,
                           I,
                           piMat,
@@ -1705,7 +1705,7 @@ simulation_tphi <- function(Z,
     # meanPhi2EW <- NA_real_
     
     apprVarMeanPhi2EW <-
-      estim_var_mean_phi2(Yobs,
+      MMsampling::estim_var_mean_phi2(Yobs,
                           modes,
                           I,
                           piMat,
@@ -1741,9 +1741,9 @@ simulation_tphi <- function(Z,
   
   # pv <- profr::profr(expr = monoSim(), interval = 0.001)
   # return(profvis::profvis(lapply(seq_len(10L), FUN = monoSim))) #prof_output = "test.res"))
-  # pv <- profvis::profvis(monoSim())
+  # pv <- profvis::profvis(lapply(seq_len(10L), FUN = monoSim))
   # pv <- microbenchmark::microbenchmark(monoSim(), times = 10L)
-  # return(pv)
+  return(pv)
   
   # res <- lapply(seq_len(K), FUN = monoSim)
   res <- mclapply(seq_len(K), FUN = monoSim, mc.cores = nCores)
@@ -1756,7 +1756,7 @@ We would like to test our ability to detect the presence or absence of a constan
 We will change the value of the constant measure effect $\delta$ and test the coverage of our test. We consider the ratio between the measure bias and the expected mean of the telephone answers.
 
 ```{r}
-ratioDeltas <- c(0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.75, 1.0, 2.0)
+ratioDeltas <- c(0.0, 0.1, 0.25, 0.5, 0.75, 1.0)
 expMean2 <- mean(Z %*% betaTel)
 deltas <- ratioDeltas * abs(expMean2)
 
@@ -1767,21 +1767,37 @@ Then for each measure bias we try the recognition of an eventual measure bias, w
 
 For centered it is not really an estimation because it uses the empiracal mean on U
 ```{r}
-Ksim <- 20000L
+Ksim <- 10000L
 ```
 
 ```{r}
-resSimulations <- NULL
+nvec <- 1600L
+sigmavec <- c(1.0, 2.0, 5.0)
+parameters <- 
+  rbind(expand.grid(ratioDelta = ratioDeltas, n = nvec, sigma = sigmavec[1L]),
+        expand.grid(ratioDelta = ratioDeltas, n = nvec[1L], sigma = sigmavec[-1L]))
+
+parameters <- parameters %>% 
+  filter(sigma == 1.0 | !ratioDelta %in% c(0.1, 0.75)) %>% 
+  mutate(delta = ratioDelta * expMean2, .after = "ratioDelta")
+
+parameters
+```
+
+```{r}
+resSimBiasDetection <- NULL
+
+
 
 pb <- progress::progress_bar$new(format = "[:bar] :percent eta: :eta",
-                                 total = length(ratioDeltas))
+                                 total = nrow(parameters))
 
 set.seed(200L)
-for (k in seq_along(ratioDeltas))
+for (k in nrow(parameters))
 {
   pb$tick(0L)
 
-  delta <- deltas[k]
+  delta <- parameters[k, "delta"]
   betaIntTemp <- betaTel
   betaIntTemp[1L] <- betaIntTemp[1L] + delta
   
@@ -1796,21 +1812,26 @@ for (k in seq_along(ratioDeltas))
                              YintLaw = "gaussian",
                              YtelLaw = "gaussian",
                              phi = "eq",
-                             sdInt = 1.0,
-                             sdTel = 1.0,
+                             sdInt = parameters[k, "sigma"],
+                             sdTel = parameters[k, "sigma"],
+                             n = parameters[k, "n"],
                              seed = NULL,
                              nCores = 20L)
   
-  resSimulations <- resTemp %>% 
-    mutate(ratioDelta = ratioDeltas[k],
-           delta = delta, .before = 1L) %>% 
-    rbind(resSimulations)
-  
-  pb$tick()
-}
+  resSimBiasDetection <-
+    cbind(parameters[k, ], resTemp) %>%
+    rbind(resSimBiasDetection)
 
+  pb$tick()
+  seed <- .Random.seed
+}
 rm(resTemp)
 ```
+
+```{r}
+rm(seed)
+```
+
 
 ### Variance estimators for the totals
 
@@ -1855,12 +1876,12 @@ Those values can be used as comparison.
 
 Here we show average approximate variance and variance of different estimators for the first half of the iterations, with no measure effect.
 ```{r}
-temp <- resSimulations %>% 
+temp <- resSimBiasDetection %>% 
   filter(ratioDelta == 0.0)
 
 temp <- temp %>% 
   slice_head(n = nrow(temp) / 2L) %>% 
-  group_by(estimand, weights) %>% 
+  group_by(estimand, weights, n, sigma) %>% 
   summarize(expEstimand = mean(expEstimand),
             mean = mean(estimation), 
             avg_AV = mean(apprVar),
@@ -1874,28 +1895,49 @@ The following table is restricted to the estimators $\hat{t}_{pq\phi1}$ and $\ha
 
 
 ```{r}
-expData <- gen_expY(Z, betaInt = betaInt, sdInt = 1.0, betaTel = betaTel, sdTel = 1.0)
-## Attention : expYtels ici
-vartotphi1TW <- true_variance_tephi1(expData$expYtels, 
-                                     pi, covar_SRS(n, N), 
-                                     pInt,
-                                     phi, 
-                                     sd1 = 1.0)
-vartotphi2TW <- true_variance_tephi2(expData$expYtels,
-                                     pi, covar_SRS(n, N), 
-                                     pInt, pTel, 
-                                     phi, 
-                                     sd2 = 1.0)
+temp <- 
+resSimBiasDetection %>% 
+  # filter(ratioDelta == 0.0) %>% 
+  filter(weights == "estimated", estimand %in% c("phi1", "phi2")) %>% 
+  select(-weights)
+
+varsTW <- NULL
+for (k in seq.int(from = 1L, to = nrow(temp), by = 2L))
+{
+  delta <- temp[k, "delta"]
+  betaIntTemp <- betaTel
+  betaIntTemp[1L] <- betaIntTemp[1L] + delta
+
+  sigma <- delta[k, "sigma"]
+  expData <- gen_expY(Z, 
+          betaInt = betaInt, sdInt = sigma, 
+          betaTel = betaTel, sdTel = sigma)
+
+  n <- temp[k, "n"]
+  vartotphi1TW <- true_variance_tephi1(expData$expYints, 
+                                       pi, covar_SRS(n, N), 
+                                       pInt,
+                                       phi, 
+                                       sd1 = sigma)
+
+  vartotphi2TW <- true_variance_tephi2(expData$expYtels,
+                                       pi, covar_SRS(n, N), 
+                                       pInt, pTel, 
+                                       phi, 
+                                       sd2 = sigma)
+
+  varsTW <- c(varsTW, vartotphi1EW, vartotphi2EW)
+}
+
+
 rm(expData)
 
 
 temp %>% 
-  filter(weights == "estimated", estimand %in% c("phi1", "phi2")) %>% 
-  select(-weights) %>% 
-  add_column(varTW = c(vartotphi1TW, vartotphi2TW)) %>% 
-  conversion_latex(nom = "simulation_estim_var_approx", caption = "Variance estimation")
+  add_column(varTW = varsTW)
+  # conversion_latex(nom = "simulation_estim_var_approx", caption = "Variance estimation")
 
-rm(temp)
+rm(delta, sigma, n, temp, vartotphi1TW, vartotphi2TW, varsTW)
 ```
 
 
@@ -1957,7 +1999,7 @@ count_superposition <- function(data1, data2, alpha1 = 0.05, alpha2 = 0.05)
     (CI1lowerUV <= CI2upperUV & CI2upperUV <= CI1upperUV) |
     (CI2lowerUV <= CI1lowerUV & CI1lowerUV <= CI2upperUV) | 
     (CI2lowerUV <= CI1upperUV & CI1upperUV <= CI2upperUV)
-  percSuperpositionsUV <- mean(superpositionUV)
+  percSuperpositionsUV <- 100.0 * mean(superpositionUV)
   
   # Confidence intervals with approximate variance of each iteration
   # , for all iterations
@@ -1979,7 +2021,7 @@ count_superposition <- function(data1, data2, alpha1 = 0.05, alpha2 = 0.05)
     (CI1lowerAV <= CI2upperAV & CI2upperAV <= CI1upperAV) |
     (CI2lowerAV <= CI1lowerAV & CI1lowerAV <= CI2upperAV) | 
     (CI2lowerAV <= CI1upperAV & CI1upperAV <= CI2upperAV)
-  percSuperpositionsAV <- mean(superpositionAV)
+  percSuperpositionsAV <- 100.0 * mean(superpositionAV)
   
   c(ratioDelta = ratioDelta,
     delta = delta,
@@ -1999,11 +2041,11 @@ count_superposition <- function(data1, data2, alpha1 = 0.05, alpha2 = 0.05)
 absResTW <- NULL
 for (delt in deltas)
 {
-  data1 <- resSimulations %>% filter(delta == delt, 
+  data1 <- resSimBiasDetection %>% filter(delta == delt, 
                                      estimand == "phi1", 
                                      weights == "true")
   
-  data2 <- resSimulations %>% filter(delta == delt, 
+  data2 <- resSimBiasDetection %>% filter(delta == delt, 
                                      estimand == "phi2", 
                                      weights == "true")
   
@@ -2022,11 +2064,11 @@ absResTW <- as_tibble(absResTW) %>%
 absResEW <- NULL
 for (delt in deltas)
 {
-  data1 <- resSimulations %>% filter(delta == delt, 
+  data1 <- resSimBiasDetection %>% filter(delta == delt, 
                                      estimand == "phi1", 
                                      weights == "estimated")
   
-  data2 <- resSimulations %>% filter(delta == delt, 
+  data2 <- resSimBiasDetection %>% filter(delta == delt, 
                                      estimand == "phi2", 
                                      weights == "estimated")
   
@@ -2065,11 +2107,11 @@ Using the superposition implies a lot of false negative non-measure bias detecti
 centeredResTW <- NULL
 for (delt in deltas)
 {
-  data1 <- resSimulations %>% filter(delta == delt, 
+  data1 <- resSimBiasDetection %>% filter(delta == delt, 
                                      estimand == "mean phi1", 
                                      weights == "true")
   
-  data2 <- resSimulations %>% filter(delta == delt, 
+  data2 <- resSimBiasDetection %>% filter(delta == delt, 
                                      estimand == "mean phi2", 
                                      weights == "true")
   
@@ -2088,11 +2130,11 @@ centeredResTW <- as_tibble(centeredResTW) %>%
 centeredResEW <- NULL
 for (delt in deltas)
 {
-  data1 <- resSimulations %>% filter(delta == delt, 
+  data1 <- resSimBiasDetection %>% filter(delta == delt, 
                                      estimand == "mean phi1", 
                                      weights == "estimated")
   
-  data2 <- resSimulations %>% filter(delta == delt, 
+  data2 <- resSimBiasDetection %>% filter(delta == delt, 
                                      estimand == "mean phi2", 
                                      weights == "estimated")
   

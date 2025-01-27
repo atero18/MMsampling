@@ -50,7 +50,7 @@ pi2_to_covarInc <- function(pi2)
 {
   pi <- diag(pi2)
 
-  pi2 - pi %*% t(pi)
+  pi2 - outer(pi, pi)
 }
 
 #' @describeIn mats_interaction Calcul of the second order probability matrix
@@ -59,8 +59,15 @@ pi2_to_covarInc <- function(pi2)
 #' @export
 pi_to_pi2 <- function(pi)
 {
-  pi2 <- pi %*% t(pi)
-  diag(pi2) <- pi
+  # pi2 <- pi %*% t(pi)
+  pi2 <- outer(pi, pi)
+  N <- length(pi)
+
+  # Replacement of the diagonal of pi2 by pi
+  # (this affection seems faster than diag<-)
+  idx <- 1L + seq(from = 0, to = N - 1L) * (N + 1L)  # Linear indices for diagonal elements
+  pi2[idx] <- pi
+  # diag(pi2) <- pi
 
   pi2
 }
