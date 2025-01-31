@@ -1791,7 +1791,7 @@ pb <- progress::progress_bar$new(format = "[:bar] :percent eta: :eta",
                                  total = nrow(parameters))
 
 set.seed(200L)
-for (k in nrow(parameters))
+for (k in seq_len(nrow(parameters)))
 {
   pb$tick(0L)
 
