@@ -1743,7 +1743,7 @@ simulation_tphi <- function(Z,
   # return(profvis::profvis(lapply(seq_len(10L), FUN = monoSim))) #prof_output = "test.res"))
   # pv <- profvis::profvis(lapply(seq_len(10L), FUN = monoSim))
   # pv <- microbenchmark::microbenchmark(monoSim(), times = 10L)
-  return(pv)
+  # return(pv)
   
   # res <- lapply(seq_len(K), FUN = monoSim)
   res <- mclapply(seq_len(K), FUN = monoSim, mc.cores = nCores)
@@ -1786,8 +1786,6 @@ parameters
 
 ```{r}
 resSimBiasDetection <- NULL
-
-
 
 pb <- progress::progress_bar$new(format = "[:bar] :percent eta: :eta",
                                  total = nrow(parameters))
