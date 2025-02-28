@@ -1475,12 +1475,10 @@ simulation_tphi <- function(Z,
   expit <- function(x) 1.0 / (1.0 + exp(-x))
 
   pInt <- expit(Z %*% alphaInt) %>% as.numeric()
-  pq1Mat <- tcrossprod(pInt)
-  diag(pq1Mat) <- pInt
+  pq1Mat <- pi_to_pi2(pInt)
   
   pTel <- expit(Z %*% alphaTel) %>% as.numeric()
-  pq2Mat <- tcrossprod(pTel)
-  diag(pq2Mat) <- pTel
+  pq2Mat <- pi_to_pi2(pTel)
 
   if (sampling == "SRS")
   {
@@ -1560,7 +1558,7 @@ simulation_tphi <- function(Z,
     
     # Estimations with Y1
       # Estimation of the internet design covariance matrix
-    estimpq1 <-  estimProbsData$conditional[, "int"]
+    estimpq1 <- estimProbsData$conditional[, "int"]
     estimpq1Mat <- pi_to_pi2(estimpq1)
     
      # Total of phi_k y_1k with true probabilities
@@ -1769,15 +1767,17 @@ Msim <- 10000L
 ```
 
 ```{r}
-nvec <- c(1600L, 2500L, 4000L)
+ratiosn <- c(0.16, 0.25, 0.4)
+nvec <- ratiosn * N
 sigmavec <- c(1.0, 2.0, 5.0)
 parameters <- 
-  rbind(expand.grid(ratioDelta = ratioDeltas, n = nvec, sigma = sigmavec[1L]),
-        expand.grid(ratioDelta = ratioDeltas, n = nvec[1L], sigma = sigmavec[-1L]))
+  rbind(expand.grid(ratio_delta = ratioDeltas, ratio_n = ratiosn, sigma = sigmavec[1L]),
+        expand.grid(ratio_delta = ratioDeltas, ratio_n = ratiosn[1L], sigma = sigmavec[-1L]))
 
 parameters <- parameters %>% 
-  filter(sigma == sigmavec[1L] | !ratioDelta %in% c(0.1, 0.75)) %>% 
-  mutate(delta = ratioDelta * abs(expMean2), .after = "ratioDelta")
+  filter(sigma == sigmavec[1L] | !ratio_delta %in% c(0.1, 0.75)) %>% 
+  mutate(delta = ratio_delta * abs(expMean2), .after = "ratio_delta") %>% 
+  mutate(n = ratio_n * N, .after = "ratio_n")
 
 parameters
 ```
@@ -1825,7 +1825,7 @@ rm(resTemp)
 
 resSimBiasDetection <- 
   resSimBiasDetection %>% 
-  arrange(n, sigma, ratioDelta)
+  arrange(n, sigma, ratio_delta)
 ```
 
 ```{r}
@@ -1880,7 +1880,7 @@ NOTE : Calculation is made on the entire set of iterations, whereas in some next
 
 ```{r}
 temp <- resSimBiasDetection %>% 
-  filter(ratioDelta == 0.0)
+  filter(ratio_delta == 0.0)
 
 temp <- temp %>% 
   # slice_head(n = nrow(temp) / 2L) %>% 
@@ -1901,7 +1901,7 @@ The following table is restricted to the estimators $\hat{t}_{pq\phi1}$ and $\ha
 ```{r}
 temp <- 
 resSimBiasDetection %>% 
-  # filter(ratioDelta == 0.0) %>% 
+  # filter(ratio_delta == 0.0) %>% 
   filter(weights == "estimated", estimand %in% c("phi1", "phi2")) %>% 
   select(-weights)
 
@@ -1978,7 +1978,7 @@ rm(delta, sigma, n, temp, vartotphi1TW, vartotphi2TW, varsTW)
 ```{r}
 count_superposition <- function(data1, data2, alpha1 = 0.05, alpha2 = alpha1)
 {
-  ratioDelta <- data1$ratioDelta[1L]
+  ratio_delta <- data1$ratio_delta[1L]
   delta <- data1$delta[1L]
   sigma <- data1$sigma[1L]
   
@@ -2050,7 +2050,7 @@ count_superposition <- function(data1, data2, alpha1 = 0.05, alpha2 = alpha1)
     (CI2lowerAV <= CI1upperAV & CI1upperAV <= CI2upperAV)
   percSuperpositionsAV <- 100.0 * mean(superpositionAV)
   
-  c(ratioDelta = ratioDelta,
+  c(ratio_delta = ratio_delta,
     sigma = sigma,
     delta = delta,
     Mvar = M - length(subsetCalcVar),
@@ -2130,7 +2130,7 @@ rm(absResTW, absResEW)
 
 ```{r}
 absRes %>% 
-  group_by(weights, sigma, ratioDelta)
+  group_by(weights, sigma, ratio_delta)
 ```
 
 Superposition on the true total is not great. In fact we have that
@@ -2144,10 +2144,10 @@ absRes %>%
   mutate(sigma = as.factor(sigma)) %>% 
   filter(weights == "true") %>% 
   ggplot() +
-  geom_point(aes(x = ratioDelta,
+  geom_point(aes(x = ratio_delta,
                  y = percSuperpositionsAV,
                  colour = sigma)) +
-  # geom_smooth(aes(x = ratioDelta,
+  # geom_smooth(aes(x = ratio_delta,
   #                y = percSuperpositionsAV, colour = sigma, n = 3)) +
   ggtitle("Percentage of superposition with true probabilities")
 ```
@@ -2157,10 +2157,10 @@ absRes %>%
   mutate(sigma = as.factor(sigma)) %>% 
   filter(weights == "estimated") %>% 
   ggplot() +
-  geom_point(aes(x = ratioDelta,
+  geom_point(aes(x = ratio_delta,
                  y = percSuperpositionsAV,
                  colour = sigma)) +
-  # geom_smooth(aes(x = ratioDelta,
+  # geom_smooth(aes(x = ratio_delta,
   #                y = percSuperpositionsAV, colour = sigma, n = 3)) +
   ggtitle("Percentage of superposition with estimated probabilities")
 ```
@@ -2232,11 +2232,11 @@ rm(centeredResTW, centeredResEW)
 
 ```{r}
 centeredRes %>% 
-  group_by(weights, sigma, ratioDelta)
+  group_by(weights, sigma, ratio_delta)
 ```
 
 
-The columns with with respect to the web outcomes are constant because the `seed` is the same for each `ratioDelta` and adding a constant measure effect does not impact the value of the estimator.
+The columns with with respect to the web outcomes are constant because the `seed` is the same for each `ratio_delta` and adding a constant measure effect does not impact the value of the estimator.
 
 
 ```{r}
@@ -2244,10 +2244,10 @@ centeredRes %>%
   mutate(sigma = as.factor(sigma)) %>% 
   filter(weights == "true") %>% 
   ggplot() +
-  geom_point(aes(x = ratioDelta,
+  geom_point(aes(x = ratio_delta,
                  y = percSuperpositionsAV,
                  colour = sigma)) +
-  # geom_smooth(aes(x = ratioDelta,
+  # geom_smooth(aes(x = ratio_delta,
   #                y = percSuperpositionsAV, colour = sigma, n = 3)) +
   ggtitle("Percentage of superposition with mean and true probabilities")
 ```
@@ -2257,10 +2257,10 @@ centeredRes %>%
   mutate(sigma = as.factor(sigma)) %>% 
   filter(weights == "estimated") %>% 
   ggplot() +
-  geom_point(aes(x = ratioDelta,
+  geom_point(aes(x = ratio_delta,
                  y = percSuperpositionsAV,
                  colour = sigma)) +
-  # geom_smooth(aes(x = ratioDelta,
+  # geom_smooth(aes(x = ratio_delta,
   #                y = percSuperpositionsAV, colour = sigma, n = 3)) +
   ggtitle("Percentage of superposition with mean and estimated probabilities")
 ```
