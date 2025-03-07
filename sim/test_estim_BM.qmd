@@ -2045,11 +2045,12 @@ count_superposition <- function(data1, data2, alpha1 = 0.05, alpha2 = alpha1)
     qnorm(1.0 - alpha2 / 2.0) * sqrt(data2$apprVar)
   
     #   Check if there is a superposition of the two confidence intervals
-  superpositionAV <- 
-    (CI1lowerAV <= CI2lowerAV & CI2lowerAV <= CI1upperAV) | 
-    (CI1lowerAV <= CI2upperAV & CI2upperAV <= CI1upperAV) |
-    (CI2lowerAV <= CI1lowerAV & CI1lowerAV <= CI2upperAV) | 
-    (CI2lowerAV <= CI1upperAV & CI1upperAV <= CI2upperAV)
+  superpositionAV <- CI1lowerAV <= CI2upperAV & CI2lowerAV <= CI1upperAV
+  # superpositionAV <- 
+  #   (CI1lowerAV <= CI2lowerAV & CI2lowerAV <= CI1upperAV) | 
+  #   (CI1lowerAV <= CI2upperAV & CI2upperAV <= CI1upperAV) |
+  #   (CI2lowerAV <= CI1lowerAV & CI1lowerAV <= CI2upperAV) | 
+  #   (CI2lowerAV <= CI1upperAV & CI1upperAV <= CI2upperAV)
   percSuperpositionsAV <- 100.0 * mean(superpositionAV)
   
   c(ratio_delta = ratio_delta,
