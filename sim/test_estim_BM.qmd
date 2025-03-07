@@ -1762,9 +1762,7 @@ deltas
 Then for each measure bias we try the recognition of an eventual measure bias, with confidence intervals with errors $\alpha_1 = \alpha_2 = 0.05$.
 
 For centered it is not really an estimation because it uses the empiracal mean on U
-```{r}
-Msim <- 10000L
-```
+
 
 ```{r}
 ratiosn <- c(0.16, 0.25, 0.4)
@@ -1780,6 +1778,9 @@ parameters <- parameters %>%
   mutate(n = ratio_n * N, .after = "ratio_n")
 
 parameters
+```
+```{r}
+Msim <- 10000L
 ```
 
 ```{r}
@@ -2021,11 +2022,12 @@ count_superposition <- function(data1, data2, alpha1 = 0.05, alpha2 = alpha1)
     qnorm(1.0 - alpha2 / 2.0) * sd2
   
     #   Check if there is a superposition of the two confidence intervals
-  superpositionUV <- 
-    (CI1lowerUV <= CI2lowerUV & CI2lowerUV <= CI1upperUV) | 
-    (CI1lowerUV <= CI2upperUV & CI2upperUV <= CI1upperUV) |
-    (CI2lowerUV <= CI1lowerUV & CI1lowerUV <= CI2upperUV) | 
-    (CI2lowerUV <= CI1upperUV & CI1upperUV <= CI2upperUV)
+  superpositionUV <- CI1lowerUV <= CI2upperUV & CI2lowerUV <= CI1upperUV
+  # superpositionUV <- 
+  #   (CI1lowerUV <= CI2lowerUV & CI2lowerUV <= CI1upperUV) | 
+  #   (CI1lowerUV <= CI2upperUV & CI2upperUV <= CI1upperUV) |
+  #   (CI2lowerUV <= CI1lowerUV & CI1lowerUV <= CI2upperUV) | 
+  #   (CI2lowerUV <= CI1upperUV & CI1upperUV <= CI2upperUV)
   percSuperpositionsUV <- 100.0 * mean(superpositionUV)
   
     # Confidence intervals with approximate variance of each iteration
