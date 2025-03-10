@@ -1976,8 +1976,11 @@ rm(delta, sigma, n, temp, vartotphi1TW, vartotphi2TW, varsTW)
 
 -   \% of superposition of the confidence intervals with approximate variance estimator
 
+If `correctAlpha` is true then the size of the intervals are changed in the order to have a first type error equal to $\alpha$.
+
+
 ```{r}
-count_superposition <- function(data1, data2, alpha1 = 0.05, alpha2 = alpha1)
+count_superposition <- function(data1, data2, alpha = 0.05, correctAlpha = TRUE)
 {
   ratio_delta <- data1$ratio_delta[1L]
   delta <- data1$delta[1L]
@@ -1999,6 +2002,16 @@ count_superposition <- function(data1, data2, alpha1 = 0.05, alpha2 = alpha1)
   sd1 <- sd(data1$estimation[subsetCalcVar])
   sd2 <- sd(data2$estimation[subsetCalcVar])
   
+  if (correctAlpha)
+  {
+    KUV <- sd1 / sd2
+    gammaUV <- 2.0 * pnorm(qnorm(alpha / 2.0) * sqrt(1.0 + KUV^2L) / (1.0 + KUV))
+    rm(KUV)
+  }
+  else
+    gammaUV <- alpha
+  
+  
   mean1 <- mean(data1$estimation[subsetCalcVar])
   mean2 <- mean(data2$estimation[subsetCalcVar])
   
@@ -2011,15 +2024,15 @@ count_superposition <- function(data1, data2, alpha1 = 0.05, alpha2 = alpha1)
     # Confidence intervals with unbiased estimator for the variance
     #   first mode
   CI1lowerUV <- data1$estimation[-subsetCalcVar] - 
-    qnorm(1.0 - alpha1 / 2.0) * sd1
+    qnorm(1.0 - gammaUV / 2.0) * sd1
   CI1upperUV <- data1$estimation[-subsetCalcVar] + 
-    qnorm(1.0 - alpha1 / 2.0) * sd1
+    qnorm(1.0 - gammaUV / 2.0) * sd1
   
     #   second mode
   CI2lowerUV <- data2$estimation[-subsetCalcVar] - 
-    qnorm(1.0 - alpha2 / 2.0) * sd2
+    qnorm(1.0 - gammaUV / 2.0) * sd2
   CI2upperUV <- data2$estimation[-subsetCalcVar] + 
-    qnorm(1.0 - alpha2 / 2.0) * sd2
+    qnorm(1.0 - gammaUV / 2.0) * sd2
   
     #   Check if there is a superposition of the two confidence intervals
   superpositionUV <- CI1lowerUV <= CI2upperUV & CI2lowerUV <= CI1upperUV
@@ -2031,18 +2044,29 @@ count_superposition <- function(data1, data2, alpha1 = 0.05, alpha2 = alpha1)
   percSuperpositionsUV <- 100.0 * mean(superpositionUV)
   
     # Confidence intervals with approximate variance of each iteration
+  if (correctAlpha)
+  {
+    KAV <- sqrt(AV1 / AV2)
+    gammasAV <-
+      2.0 * pnorm(qnorm(alpha / 2.0) * sqrt(1.0 + KAV^2L) / (1.0 + KAV))
+    rm(KAV)
+  }
+  else
+    gammasAV <- alpha
+  
+  
     # , for all iterations
     #   first mode
   CI1lowerAV <- data1$estimation - 
-    qnorm(1.0 - alpha1 / 2.0) * sqrt(data1$apprVar)
+    qnorm(1.0 - gammasAV / 2.0) * sqrt(data1$apprVar)
   CI1upperAV <- data1$estimation + 
-    qnorm(1.0 - alpha1 / 2.0) * sqrt(data1$apprVar)
+    qnorm(1.0 - gammasAV / 2.0) * sqrt(data1$apprVar)
   
     #   second mode
   CI2lowerAV <- data2$estimation - 
-    qnorm(1.0 - alpha2 / 2.0) * sqrt(data2$apprVar)
+    qnorm(1.0 - gammasAV / 2.0) * sqrt(data2$apprVar)
   CI2upperAV <- data2$estimation + 
-    qnorm(1.0 - alpha2 / 2.0) * sqrt(data2$apprVar)
+    qnorm(1.0 - gammasAV / 2.0) * sqrt(data2$apprVar)
   
     #   Check if there is a superposition of the two confidence intervals
   superpositionAV <- CI1lowerAV <= CI2upperAV & CI2lowerAV <= CI1upperAV
@@ -2053,17 +2077,21 @@ count_superposition <- function(data1, data2, alpha1 = 0.05, alpha2 = alpha1)
   #   (CI2lowerAV <= CI1upperAV & CI1upperAV <= CI2upperAV)
   percSuperpositionsAV <- 100.0 * mean(superpositionAV)
   
-  c(ratio_delta = ratio_delta,
-    sigma = sigma,
-    delta = delta,
-    Mvar = M - length(subsetCalcVar),
-    MAV = M,
-    mean1 = mean1,
-    AV1 = AV1, var1 = sd1^2L,
-    mean2 = mean2,
-    AV2 = AV2, var2 = sd2^2L,
-    percSuperpositionsUV = percSuperpositionsUV, 
-    percSuperpositionsAV = percSuperpositionsAV)
+  
+  tibble(ratio_delta = ratio_delta,
+        sigma = sigma,
+        delta = delta,
+        correctAlpha = ifelse(correctAlpha, "corrected", "unchanged"),
+        Mvar = M - length(subsetCalcVar),
+        MAV = M,
+        mean1 = mean1,
+        AV1 = AV1, var1 = sd1^2L,
+        mean2 = mean2,
+        AV2 = AV2, var2 = sd2^2L,
+        gammaUV = gammaUV,
+        percSuperpositionsUV = percSuperpositionsUV,
+        gammaAV = gammasAV,
+        percSuperpositionsAV = percSuperpositionsAV)
 }
 ```
 
@@ -2075,6 +2103,7 @@ for (delt in deltas)
 {
   for (sigm in sigmavec)
   {
+    
     data1 <- resSimBiasDetection %>% filter(delta == delt,
                                             sigma == sigm,
                                             estimand == "phi1", 
@@ -2085,8 +2114,13 @@ for (delt in deltas)
                                             estimand == "phi2", 
                                             weights == "true")
     
-    if (nrow(data1) != 0L)
-      absResTW <- rbind(absResTW, count_superposition(data1, data2))
+    for (correctAlpha in c(FALSE, TRUE))
+    {
+      if (nrow(data1) != 0L)
+        absResTW <- 
+            rbind(absResTW, count_superposition(data1, data2, 
+                                                correctAlpha = correctAlpha))
+    }
   }
 }
 
@@ -2114,8 +2148,13 @@ for (delt in deltas)
                                             estimand == "phi2", 
                                             weights == "estimated")
     
-    if (nrow(data1) != 0L)
-      absResEW <- rbind(absResEW, count_superposition(data1, data2))
+    for (correctAlpha in c(FALSE, TRUE))
+    {
+      if (nrow(data1) != 0L)
+        absResEW <- 
+          rbind(absResEW, count_superposition(data1, data2,
+                                              correctAlpha = correctAlpha))
+    }
   }
 }
 
@@ -2133,8 +2172,12 @@ rm(absResTW, absResEW)
 
 ```{r}
 absRes %>% 
-  group_by(weights, sigma, ratio_delta)
+  group_by(weights, correctAlpha, sigma, ratio_delta) %>% 
+  arrange(weights, sigma, ratio_delta, correctAlpha)
 ```
+
+
+
 
 Superposition on the true total is not great. In fact we have that
 
@@ -2145,7 +2188,7 @@ Using the superposition implies a lot of false negative non-measure bias detecti
 ```{r}
 absRes %>% 
   mutate(sigma = as.factor(sigma)) %>% 
-  filter(weights == "true") %>% 
+  filter(weights == "true", correctAlpha == "corrected") %>% 
   ggplot() +
   geom_point(aes(x = ratio_delta,
                  y = percSuperpositionsAV,
@@ -2158,7 +2201,7 @@ absRes %>%
 ```{r}
 absRes %>% 
   mutate(sigma = as.factor(sigma)) %>% 
-  filter(weights == "estimated") %>% 
+  filter(weights == "estimated", correctAlpha == "corrected") %>% 
   ggplot() +
   geom_point(aes(x = ratio_delta,
                  y = percSuperpositionsAV,
@@ -2167,7 +2210,18 @@ absRes %>%
   #                y = percSuperpositionsAV, colour = sigma, n = 3)) +
   ggtitle("Percentage of superposition with estimated probabilities")
 ```
-
+```{r}
+absRes %>% 
+  mutate(sigma = as.factor(sigma)) %>% 
+  filter(weights == "estimated", sigma == 1.0) %>% 
+  ggplot() +
+  geom_point(aes(x = ratio_delta,
+                 y = percSuperpositionsAV,
+                 colour = correctAlpha)) +
+  # geom_smooth(aes(x = ratio_delta,
+  #                y = percSuperpositionsAV, colour = sigma, n = 3)) +
+  ggtitle("Impact of the coverage rate correction")
+```
 
 #### With the oucome means
 
@@ -2187,8 +2241,13 @@ for (delt in deltas)
                                             estimand == "mean phi2", 
                                             weights == "true")
     
-    if (nrow(data1) != 0L)
-      centeredResTW <- rbind(centeredResTW, count_superposition(data1, data2))
+    for (correctAlpha in c(FALSE, TRUE))
+    {
+      if (nrow(data1) != 0L)
+        centeredResTW <- 
+            rbind(centeredResTW, count_superposition(data1, data2, 
+                                                correctAlpha = correctAlpha))
+    }
   }
 }
 
@@ -2216,8 +2275,13 @@ for (delt in deltas)
                                             estimand == "mean phi2", 
                                             weights == "estimated")
     
-    if (nrow(data1) != 0L)
-      centeredResEW <- rbind(centeredResEW, count_superposition(data1, data2))
+    for (correctAlpha in c(FALSE, TRUE))
+    {
+      if (nrow(data1) != 0L)
+        centeredResEW <- 
+            rbind(centeredResEW, count_superposition(data1, data2, 
+                                                correctAlpha = correctAlpha))
+    }
   }
 }
 
@@ -2235,7 +2299,8 @@ rm(centeredResTW, centeredResEW)
 
 ```{r}
 centeredRes %>% 
-  group_by(weights, sigma, ratio_delta)
+  group_by(weights, correctAlpha, sigma, ratio_delta) %>% 
+  arrange(weights, sigma, ratio_delta, correctAlpha)
 ```
 
 
