@@ -28,6 +28,7 @@ library(Matrix)
 library(progress)
 library(marginaleffects)
 library(progress)
+library(mc2d)
 ```
 
 ```{r}
@@ -355,7 +356,8 @@ gen_expY <- function(X,
 gen_Y <- function(X, 
                   betaInt, sigmaInt, YintLaw = "gaussian",
                   betaTel, sigmaTel = sigmaInt, YtelLaw = "gaussian",
-                  expYints = NULL, expYtels = NULL)
+                  expYints = NULL, expYtels = NULL,
+                  rho = 0.0)
 {
   
   N <- nrow(X)
@@ -402,7 +404,16 @@ gen_Y <- function(X,
     Yints <- rexp(n = N, rate = expYints^-1L)
   
   
-  results <- tibble(Yint = Yints, Ytel = Ytels)
+  
+  
+  if (rho != 0.0)
+  {
+    results <- cbind(Yint = Yints, Ytel = Ytels) %>% 
+      mc2d::cornode(target = rho, result = FALSE) %>% 
+      as_tibble()
+  }
+  else
+    results <- tibble(Yint = Yints, Ytel = Ytels)
   
   if (recExpY)
   {
@@ -505,6 +516,7 @@ simulationUncounf <-
            betaInt, betaTel, 
            YintLaw = "gaussian", YtelLaw = "gaussian",
            sdInt = 1.0, sdTel = 1.0, 
+           rho = 0.8,
            phi = rep(0.5, N), M = 1000L,
            X = NULL,
            n = ceiling(N / 10L),
@@ -625,7 +637,7 @@ simulationUncounf <-
     clusterExport(cluster,
                   varlist = c("expYtels", "expTotYtel",
                               "expYints", "expTotYint",
-                              "sdInts", "sdTels"),
+                              "sdInts", "sdTels", "rho"),
                   envir = environment())
     
     clusterExport(cluster, c("gen_choice_bimode", 
@@ -755,7 +767,8 @@ simulationUncounf <-
       dataY <- gen_Y(X, 
                      betaInt, sdInt, YintLaw,
                      betaTel, sdTel, YtelLaw,
-                     expYints = expYints, expYtels = expYtels)
+                     expYints = expYints, expYtels = expYtels,
+                     rho = rho)
       
       Yints <- dataY$Yint
       Ytels <- dataY$Ytel
@@ -1106,7 +1119,8 @@ simulationUncounf <-
       add_column(.after = "YtelLaw", sdTel = sdTel) %>% 
       add_column(.after = "YtelLaw", YintLaw = factor(YintLaw)) %>% 
       add_column(.after = "YintLaw", sdInt = sdInt) %>% 
-      add_column(.after = "YintLaw",
+      add_column(.after = "sdInt", rho = rho) %>% 
+      add_column(.after = "rho",
                  MBtype = factor(MBtype)) %>% 
       add_column(.after = "MBtype", phi = factor(phiType))
     
@@ -1463,6 +1477,7 @@ simulation_tphi <- function(Z,
                             betaInt, betaTel, 
                             YintLaw = "gaussian", YtelLaw = "gaussian",
                             sdInt = 1.0, sdTel = 1.0, 
+                            rho = 0.8,
                             phi = rep(0.5, N), M = 10000L,
                             n = ceiling(N / 10L),
                             seed = 123L,
@@ -1525,6 +1540,9 @@ simulation_tphi <- function(Z,
     maskTel <- modes == "tel"
     nTel <- sum(maskTel)
     
+    piMatSr <- piMat[maskInt, maskInt, drop = FALSE]
+    piMatSmr <- piMat[maskTel, maskTel, drop = FALSE]
+    
     trueProbsSelect <- dataModes$probSelect
     
     rm(dataModes)
@@ -1546,7 +1564,8 @@ simulation_tphi <- function(Z,
     dataY <- gen_Y(Z, 
                    betaInt, sdInt, YintLaw,
                    betaTel, sdTel, YtelLaw,
-                   expYints = expYints, expYtels = expYtels)
+                   expYints = expYints, expYtels = expYtels,
+                   rho = rho)
     
     Yints <- dataY$Yint
     Ytels <- dataY$Ytel
@@ -1559,7 +1578,8 @@ simulation_tphi <- function(Z,
     # Estimations with Y1
       # Estimation of the internet design covariance matrix
     estimpq1 <- estimProbsData$conditional[, "int"]
-    estimpq1Mat <- pi_to_pi2(estimpq1)
+    # estimpq1Mat <- pi_to_pi2(estimpq1)
+    estimpq1MatSr <- pi_to_pi2(estimpq1[maskInt])
     
      # Total of phi_k y_1k with true probabilities
     expPhi1 <- sum(phi * expYints)
@@ -1576,7 +1596,8 @@ simulation_tphi <- function(Z,
                                           Z,
                                           phi, 
                                           sd1 = sdInt,
-                                          correcEstimWeights = FALSE)
+                                          correcEstimWeights = FALSE,
+                                          independenceq1 = TRUE)
     
       # Total of phi_k y_1k with estimated probabilities
     totPhi1EW <- sum(phi[maskInt] * estimWeights[maskInt] * Yobs[maskInt])
@@ -1591,7 +1612,8 @@ simulation_tphi <- function(Z,
                                           Z,
                                           phi,
                                           sd1 = sdInt,
-                                          correcEstimWeights = TRUE)
+                                          correcEstimWeights = TRUE,
+                                          independenceq1 = TRUE)
      
     # apprVarPhi1EW <- NA_real_
       # parameter equal to
@@ -1653,7 +1675,9 @@ simulation_tphi <- function(Z,
                                           Z,
                                           phi,
                                           sd2 = sdTel,
-                                          correcEstimWeights = FALSE)
+                                          correcEstimWeights = FALSE,
+                                          independenceq1 = TRUE,
+                                          independenceq2 = TRUE)
 
       # Total of phi_k y_2k with estimated probabilities
     expPhi2 <- sum(phi * expYtels)
@@ -1671,7 +1695,9 @@ simulation_tphi <- function(Z,
                                           Z,
                                           phi,
                                           sd2 = sdTel,
-                                          correcEstimWeights = TRUE)
+                                          correcEstimWeights = TRUE,
+                                          independenceq1 = TRUE,
+                                          independenceq2 = TRUE)
     
     # apprVarPhi2EW <- NA_real_
     
@@ -1735,14 +1761,14 @@ simulation_tphi <- function(Z,
              .after = "estimator")
   }
   
-  # pv <- profr::profr(expr = monoSim(), interval = 0.001)
+  pv <- profvis::profvis(lapply(seq_len(100L), FUN = monoSim))
   # return(profvis::profvis(lapply(seq_len(10L), FUN = monoSim))) #prof_output = "test.res"))
   # pv <- profvis::profvis(lapply(seq_len(10L), FUN = monoSim))
   # pv <- microbenchmark::microbenchmark(monoSim(), times = 10L)
-  # return(pv)
+  return(pv)
   
-  # res <- lapply(seq_len(M), FUN = monoSim)
-  res <- mclapply(seq_len(M), FUN = monoSim, mc.cores = nCores)
+  res <- lapply(seq_len(M), FUN = monoSim)
+  # res <- mclapply(seq_len(M), FUN = monoSim, mc.cores = nCores)
   do.call("rbind", res)
 }
 ```
@@ -1767,16 +1793,42 @@ For centered it is not really an estimation because it uses the empiracal mean o
 ```{r}
 ratiosn <- c(0.16, 0.25, 0.4)
 nvec <- ratiosn * N
+nMin <- min(nvec)
 sigmavec <- c(1.0, 2.0, 5.0)
+ratiosigmavec <- c(0.25, 0.5, 1.0, 2.0, 4.0)
+rhovec <- c(0.8, 0.9)
+rhoRef <- 0.8
+
+paramVarn <- 
+  expand.grid(ratio_delta = ratioDeltas, 
+              ratio_n = ratiosn, 
+              sigma = sigmavec[1L], rho = rhoRef)
+paramVarRho <- 
+  expand.grid(ratio_delta = ratioDeltas, ratio_n = nMin, sigma = sigmavec[1L], 
+              rho = rhovec)
+paramVarSigma <- 
+  expand.grid(ratio_delta = ratioDeltas, ratio_n = nMin,
+              sigma = sigmavec[-1L], 
+              rho = rhoRef)
+
+paramVarRatioSigma <- expand.grid(ratio_delta = ratioDeltas, ratio_n = nMin,
+                                  sigma1 = sigmavec[1L],
+                                  sigma2 = sigmavec[1L] * ratiosigmavec,
+                                  rho = rhoRef)
+
 parameters <- 
-  rbind(expand.grid(ratio_delta = ratioDeltas, ratio_n = ratiosn, sigma = sigmavec[1L]),
-        expand.grid(ratio_delta = ratioDeltas, ratio_n = ratiosn[1L], sigma = sigmavec[-1L]))
-
-parameters <- parameters %>% 
-  filter(sigma == sigmavec[1L] | !ratio_delta %in% c(0.1, 0.75)) %>% 
+  rbind(paramVarn, paramVarRho, paramVarSigma) %>% 
+  mutate(sigma1 = sigma, sigma2 = sigma) %>% 
+  select(-sigma) %>% 
+  rbind(paramVarRatioSigma) %>% 
+  filter(sigma1 == sigmavec[1L] | !ratio_delta %in% c(0.1, 0.75)) %>% 
   mutate(delta = ratio_delta * abs(expMean2), .after = "ratio_delta") %>% 
-  mutate(n = ratio_n * N, .after = "ratio_n")
+  mutate(n = ratio_n * N, .after = "ratio_n") %>% 
+  distinct()
 
+rm(paramVarn, paramVarRho, paramVarSigma, paramVarRatioSigma)
+
+summary(parameters)
 parameters
 ```
 ```{r}
@@ -1809,12 +1861,16 @@ for (k in seq_len(nrow(parameters)))
                              YintLaw = "gaussian",
                              YtelLaw = "gaussian",
                              phi = "eq",
-                             sdInt = parameters[k, "sigma"],
-                             sdTel = parameters[k, "sigma"],
+                             sdInt = parameters[k, "sigma1"],
+                             sdTel = parameters[k, "sigma2"],
                              n = parameters[k, "n"],
+                             rho = parameters[k, "rho"],
                              seed = NULL,
                              nCores = 20L)
   
+  print("blop")
+  
+  break
   resSimBiasDetection <-
     cbind(parameters[k, ], resTemp) %>%
     rbind(resSimBiasDetection)
@@ -1822,11 +1878,13 @@ for (k in seq_len(nrow(parameters)))
   pb$tick()
   seed <- .Random.seed
 }
-rm(resTemp)
 
-resSimBiasDetection <- 
-  resSimBiasDetection %>% 
-  arrange(n, sigma, ratio_delta)
+resTemp
+# rm(resTemp)
+# 
+# resSimBiasDetection <- 
+#   resSimBiasDetection %>% 
+#   arrange(n, sigma, ratio_delta)
 ```
 
 ```{r}
@@ -1885,7 +1943,7 @@ temp <- resSimBiasDetection %>%
 
 temp <- temp %>% 
   # slice_head(n = nrow(temp) / 2L) %>% 
-  group_by(estimand, weights, n, sigma) %>% 
+  group_by(estimand, weights, n, sigma, rho) %>% 
   summarize(M = n(),
             expEstimand = mean(expEstimand),
             mean = mean(estimation), 
@@ -1972,11 +2030,17 @@ rm(delta, sigma, n, temp, vartotphi1TW, vartotphi2TW, varsTW)
 
 -   average of the approximate variance estimator (for web and telephone)
 
--   \% of superposition of the confidence intervals with unbiased variance estimator for the second half part of the iterations, based on the previous estimation of the standard deviations
+-   \% of confidence intervals overlapped with unbiased variance estimator for the second half part of the iterations, based on the previous estimation of the standard deviations (`percSuperpositionsUV`)
 
--   \% of superposition of the confidence intervals with approximate variance estimator
+-   \% of confidence intervals overlapped with approximate variance estimators (`percSuperpositionsAV`)
 
-If `correctAlpha` is true then the size of the intervals are changed in the order to have a first type error equal to $\alpha$.
+-   \% of situations when at least one confidence interval contains the other total estimator for the second half part of the iterations, based on the previous estimation of the standard deviations (`percIntersectionsUV`)
+
+-   \% of situations when at least one confidence interval contains the other total estimator with approximate variance estimators (`percIntersectionsAV`)
+
+If `correctAlpha` is true then the size of the intervals are changed in the order to have a first type error equal to $\alpha$ (that would be exact if the totals vector is gaussian and there would have no covariance between the totals and if the used variance estimators were the true variances). See [Comparing the overlapping of two independent confidence intervals with a single confidence interval for two normal population parameters](https://doi.org/10.1016/j.jspi.2010.04.057).
+
+The "intersection" method is supposed to be anti-conservative.
 
 
 ```{r}
@@ -1985,6 +2049,7 @@ count_superposition <- function(data1, data2, alpha = 0.05, correctAlpha = TRUE)
   ratio_delta <- data1$ratio_delta[1L]
   delta <- data1$delta[1L]
   sigma <- data1$sigma[1L]
+  n <- data1$n[1L]
   
   M <- nrow(data1)
   
@@ -2036,12 +2101,16 @@ count_superposition <- function(data1, data2, alpha = 0.05, correctAlpha = TRUE)
   
     #   Check if there is a superposition of the two confidence intervals
   superpositionUV <- CI1lowerUV <= CI2upperUV & CI2lowerUV <= CI1upperUV
-  # superpositionUV <- 
-  #   (CI1lowerUV <= CI2lowerUV & CI2lowerUV <= CI1upperUV) | 
-  #   (CI1lowerUV <= CI2upperUV & CI2upperUV <= CI1upperUV) |
-  #   (CI2lowerUV <= CI1lowerUV & CI1lowerUV <= CI2upperUV) | 
-  #   (CI2lowerUV <= CI1upperUV & CI1upperUV <= CI2upperUV)
   percSuperpositionsUV <- 100.0 * mean(superpositionUV)
+  
+    #   Check if there is a superposition that contains both
+    #   estimators
+  intersectionUV <- 
+    (CI1lowerUV <= data2$estimation[-subsetCalcVar] & 
+    data2$estimation[-subsetCalcVar] <= CI1upperUV) |
+    (CI2lowerUV <= data1$estimation[-subsetCalcVar] & 
+    data1$estimation[-subsetCalcVar] <= CI2upperUV)
+  percIntersectionsUV <- 100.0 * mean(intersectionUV)
   
     # Confidence intervals with approximate variance of each iteration
   if (correctAlpha)
@@ -2070,28 +2139,33 @@ count_superposition <- function(data1, data2, alpha = 0.05, correctAlpha = TRUE)
   
     #   Check if there is a superposition of the two confidence intervals
   superpositionAV <- CI1lowerAV <= CI2upperAV & CI2lowerAV <= CI1upperAV
-  # superpositionAV <- 
-  #   (CI1lowerAV <= CI2lowerAV & CI2lowerAV <= CI1upperAV) | 
-  #   (CI1lowerAV <= CI2upperAV & CI2upperAV <= CI1upperAV) |
-  #   (CI2lowerAV <= CI1lowerAV & CI1lowerAV <= CI2upperAV) | 
-  #   (CI2lowerAV <= CI1upperAV & CI1upperAV <= CI2upperAV)
   percSuperpositionsAV <- 100.0 * mean(superpositionAV)
+  
+    #   Check if there is a superposition that contains both
+    #   estimators
+  intersectionAV <- 
+    (CI1lowerAV <= data2$estimation & data2$estimation <= CI1upperAV) |
+    (CI2lowerAV <= data1$estimation & data1$estimation <= CI2upperAV)
+  percIntersectionsAV <- 100.0 * mean(intersectionAV)
   
   
   tibble(ratio_delta = ratio_delta,
-        sigma = sigma,
-        delta = delta,
-        correctAlpha = ifelse(correctAlpha, "corrected", "unchanged"),
-        Mvar = M - length(subsetCalcVar),
-        MAV = M,
-        mean1 = mean1,
-        AV1 = AV1, var1 = sd1^2L,
-        mean2 = mean2,
-        AV2 = AV2, var2 = sd2^2L,
-        gammaUV = gammaUV,
-        percSuperpositionsUV = percSuperpositionsUV,
-        gammaAV = gammasAV,
-        percSuperpositionsAV = percSuperpositionsAV)
+         sigma = sigma,
+         delta = delta,
+         n = n,
+         correctAlpha = ifelse(correctAlpha, "corrected", "unchanged"),
+         Mvar = M - length(subsetCalcVar),
+         MAV = M,
+         mean1 = mean1,
+         AV1 = AV1, var1 = sd1^2L,
+         mean2 = mean2,
+         AV2 = AV2, var2 = sd2^2L,
+         gammaUV = gammaUV,
+         percSuperpositionsUV = percSuperpositionsUV,
+         percIntersectionsUV = percIntersectionsUV,
+         gammaAV = gammasAV,
+         percSuperpositionsAV = percSuperpositionsAV,
+         percIntersectionsAV = percIntersectionsAV)
 }
 ```
 
@@ -2103,24 +2177,30 @@ for (delt in deltas)
 {
   for (sigm in sigmavec)
   {
-    
-    data1 <- resSimBiasDetection %>% filter(delta == delt,
-                                            sigma == sigm,
-                                            estimand == "phi1", 
-                                            weights == "true")
-  
-    data2 <- resSimBiasDetection %>% filter(delta == delt, 
-                                            sigma == sigm,
-                                            estimand == "phi2", 
-                                            weights == "true")
-    
-    for (correctAlpha in c(FALSE, TRUE))
+    for (nb in nvec)
     {
-      if (nrow(data1) != 0L)
-        absResTW <- 
-            rbind(absResTW, count_superposition(data1, data2, 
-                                                correctAlpha = correctAlpha))
+      data1 <- resSimBiasDetection %>% filter(delta == delt,
+                                              sigma == sigm,
+                                              n == nb,
+                                              estimand == "phi1", 
+                                              weights == "true")
+      
+      data2 <- resSimBiasDetection %>% filter(delta == delt, 
+                                              sigma == sigm,
+                                              n == nb,
+                                              estimand == "phi2", 
+                                              weights == "true")
+    
+      for (correctAlpha in c(FALSE, TRUE))
+      {
+        if (nrow(data1) != 0L)
+          absResTW <- 
+              rbind(absResTW, count_superposition(data1, data2, 
+                                                  correctAlpha = correctAlpha))
+      }
     }
+    
+    
   }
 }
 
@@ -2138,23 +2218,29 @@ for (delt in deltas)
 {
   for (sigm in sigmavec)
   {
-    data1 <- resSimBiasDetection %>% filter(delta == delt,
-                                            sigma == sigm,
-                                            estimand == "phi1", 
-                                            weights == "estimated")
-  
-    data2 <- resSimBiasDetection %>% filter(delta == delt, 
-                                            sigma == sigm,
-                                            estimand == "phi2", 
-                                            weights == "estimated")
-    
-    for (correctAlpha in c(FALSE, TRUE))
+    for (nb in nvec)
     {
-      if (nrow(data1) != 0L)
-        absResEW <- 
-          rbind(absResEW, count_superposition(data1, data2,
-                                              correctAlpha = correctAlpha))
+      data1 <- resSimBiasDetection %>% filter(delta == delt,
+                                              sigma == sigm,
+                                              n == nb,
+                                              estimand == "phi1", 
+                                              weights == "estimated")
+  
+      data2 <- resSimBiasDetection %>% filter(delta == delt, 
+                                              sigma == sigm,
+                                              n == nb,
+                                              estimand == "phi2", 
+                                              weights == "estimated")
+      
+      for (correctAlpha in c(FALSE, TRUE))
+      {
+        if (nrow(data1) != 0L)
+          absResEW <- 
+            rbind(absResEW, count_superposition(data1, data2,
+                                                correctAlpha = correctAlpha))
+      }
     }
+    
   }
 }
 
@@ -2172,11 +2258,9 @@ rm(absResTW, absResEW)
 
 ```{r}
 absRes %>% 
-  group_by(weights, correctAlpha, sigma, ratio_delta) %>% 
-  arrange(weights, sigma, ratio_delta, correctAlpha)
+  group_by(weights, n, correctAlpha, sigma, ratio_delta) %>% 
+  arrange(weights, n, sigma, ratio_delta, correctAlpha)
 ```
-
-
 
 
 Superposition on the true total is not great. In fact we have that
@@ -2186,42 +2270,54 @@ $$\max \{\alpha_1,\alpha_2\}\leq\alpha_{12}\leq\alpha_1 + \min\{\alpha_1,\alpha_
 Using the superposition implies a lot of false negative non-measure bias detection. The percentage of superposition becomes zero only after a ratio of $1.0$.
 
 ```{r}
+title <- glue("Superposition - Impact of the coverage rate correction (sigma = 1, n = {nMin})")
 absRes %>% 
   mutate(sigma = as.factor(sigma)) %>% 
-  filter(weights == "true", correctAlpha == "corrected") %>% 
-  ggplot() +
-  geom_point(aes(x = ratio_delta,
-                 y = percSuperpositionsAV,
-                 colour = sigma)) +
-  # geom_smooth(aes(x = ratio_delta,
-  #                y = percSuperpositionsAV, colour = sigma, n = 3)) +
-  ggtitle("Percentage of superposition with true probabilities")
-```
-
-```{r}
-absRes %>% 
-  mutate(sigma = as.factor(sigma)) %>% 
-  filter(weights == "estimated", correctAlpha == "corrected") %>% 
-  ggplot() +
-  geom_point(aes(x = ratio_delta,
-                 y = percSuperpositionsAV,
-                 colour = sigma)) +
-  # geom_smooth(aes(x = ratio_delta,
-  #                y = percSuperpositionsAV, colour = sigma, n = 3)) +
-  ggtitle("Percentage of superposition with estimated probabilities")
-```
-```{r}
-absRes %>% 
-  mutate(sigma = as.factor(sigma)) %>% 
-  filter(weights == "estimated", sigma == 1.0) %>% 
+  filter(weights == "estimated", sigma == 1.0, n == nMin) %>% 
   ggplot() +
   geom_point(aes(x = ratio_delta,
                  y = percSuperpositionsAV,
                  colour = correctAlpha)) +
   # geom_smooth(aes(x = ratio_delta,
   #                y = percSuperpositionsAV, colour = sigma, n = 3)) +
-  ggtitle("Impact of the coverage rate correction")
+  ggtitle(title)
+
+rm(title)
 ```
+
+
+
+```{r}
+title <- glue("Percentage of superposition with true probabilities (n = {nMin})")
+absRes %>% 
+  mutate(sigma = as.factor(sigma)) %>% 
+  filter(weights == "true", correctAlpha == "corrected", n == nMin) %>% 
+  ggplot() +
+  geom_point(aes(x = ratio_delta,
+                 y = percSuperpositionsAV,
+                 colour = sigma)) +
+  # geom_smooth(aes(x = ratio_delta,
+  #                y = percSuperpositionsAV, colour = sigma, n = 3)) +
+  ggtitle(title)
+
+rm(title)
+```
+
+```{r}
+title <- glue("Percentage of superposition with estimated probabilities (n = {nMin})")
+absRes %>% 
+  mutate(sigma = as.factor(sigma)) %>% 
+  filter(weights == "estimated", correctAlpha == "corrected", n == nMin) %>% 
+  ggplot() +
+  geom_point(aes(x = ratio_delta,
+                 y = percSuperpositionsAV,
+                 colour = sigma)) +
+  # geom_smooth(aes(x = ratio_delta,
+  #                y = percSuperpositionsAV, colour = sigma, n = 3)) +
+  ggtitle(title)
+rm(title)
+```
+
 
 #### With the oucome means
 
@@ -2231,23 +2327,29 @@ for (delt in deltas)
 {
   for (sigm in sigmavec)
   {
-    data1 <- resSimBiasDetection %>% filter(delta == delt,
-                                            sigma == sigm,
-                                            estimand == "mean phi1", 
-                                            weights == "true")
-  
-    data2 <- resSimBiasDetection %>% filter(delta == delt, 
-                                            sigma == sigm,
-                                            estimand == "mean phi2", 
-                                            weights == "true")
-    
-    for (correctAlpha in c(FALSE, TRUE))
+    for (nb in nvec)
     {
-      if (nrow(data1) != 0L)
-        centeredResTW <- 
-            rbind(centeredResTW, count_superposition(data1, data2, 
-                                                correctAlpha = correctAlpha))
+      data1 <- resSimBiasDetection %>% filter(delta == delt,
+                                              sigma == sigm,
+                                              n == nb,
+                                              estimand == "mean phi1", 
+                                              weights == "true")
+  
+      data2 <- resSimBiasDetection %>% filter(delta == delt, 
+                                              sigma == sigm,
+                                              n == nb,
+                                              estimand == "mean phi2", 
+                                              weights == "true")
+      
+      for (correctAlpha in c(FALSE, TRUE))
+      {
+        if (nrow(data1) != 0L)
+          centeredResTW <- 
+              rbind(centeredResTW, count_superposition(data1, data2, 
+                                                  correctAlpha = correctAlpha))
+      }
     }
+    
   }
 }
 
@@ -2265,23 +2367,30 @@ for (delt in deltas)
 {
   for (sigm in sigmavec)
   {
-    data1 <- resSimBiasDetection %>% filter(delta == delt,
-                                            sigma == sigm,
-                                            estimand == "mean phi1", 
-                                            weights == "estimated")
-  
-    data2 <- resSimBiasDetection %>% filter(delta == delt, 
-                                            sigma == sigm,
-                                            estimand == "mean phi2", 
-                                            weights == "estimated")
-    
-    for (correctAlpha in c(FALSE, TRUE))
+    for (nb in nvec)
     {
-      if (nrow(data1) != 0L)
-        centeredResEW <- 
-            rbind(centeredResEW, count_superposition(data1, data2, 
-                                                correctAlpha = correctAlpha))
+      data1 <- resSimBiasDetection %>% filter(delta == delt,
+                                              sigma == sigm,
+                                              n == nb,
+                                              estimand == "mean phi1", 
+                                              weights == "estimated")
+  
+      data2 <- resSimBiasDetection %>% filter(delta == delt, 
+                                              sigma == sigm,
+                                              n == nb,
+                                              estimand == "mean phi2", 
+                                              weights == "estimated")
+      
+      for (correctAlpha in c(FALSE, TRUE))
+      {
+        if (nrow(data1) != 0L)
+          centeredResEW <- 
+              rbind(centeredResEW, count_superposition(data1, data2, 
+                                                  correctAlpha = correctAlpha))
+      }
+      
     }
+    
   }
 }
 
@@ -2308,29 +2417,35 @@ The columns with with respect to the web outcomes are constant because the `seed
 
 
 ```{r}
+title <- glue("Percentage of superposition with mean and true probabilities (n = {nMin})")
 centeredRes %>% 
   mutate(sigma = as.factor(sigma)) %>% 
-  filter(weights == "true") %>% 
+  filter(weights == "true", correctAlpha == "corrected", n == nMin) %>% 
   ggplot() +
   geom_point(aes(x = ratio_delta,
                  y = percSuperpositionsAV,
                  colour = sigma)) +
   # geom_smooth(aes(x = ratio_delta,
   #                y = percSuperpositionsAV, colour = sigma, n = 3)) +
-  ggtitle("Percentage of superposition with mean and true probabilities")
+  ggtitle(title)
+rm(title)
 ```
 
 ```{r}
+title <- glue("Percentage of superposition with mean and estimated probabilities (n = {nMin})")
+
 centeredRes %>% 
   mutate(sigma = as.factor(sigma)) %>% 
-  filter(weights == "estimated") %>% 
+  filter(weights == "estimated", correctAlpha == "corrected", n == nMin) %>% 
   ggplot() +
   geom_point(aes(x = ratio_delta,
                  y = percSuperpositionsAV,
                  colour = sigma)) +
   # geom_smooth(aes(x = ratio_delta,
   #                y = percSuperpositionsAV, colour = sigma, n = 3)) +
-  ggtitle("Percentage of superposition with mean and estimated probabilities")
+  ggtitle(title)
+
+rm(title)
 ```
 
 ### HT-difference

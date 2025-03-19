@@ -93,20 +93,40 @@ estim_appr_var_seq_phi1 <- function(Yobs,
                                     Z,
                                     phi = rep(1.0, length(Yobs)),
                                     sd1 = 0.0,
-                                    correcEstimWeights = FALSE)
+                                    correcEstimWeights = FALSE,
+                                    independenceq1 = NULL,
+                                    ...)
 {
   if (all(phi == 0.0))
     return(0.0)
 
+  args <- list(...)
+
   maskSr <- modes == "int"
 
-  pi <- diag(piMat)
+  if ("pi" %in% args)
+    pi <- args[["pi"]]
+  else
+    pi <- diag(piMat)
+
   piSr <- pi[maskSr]
-  piMatSr <- piMat[maskSr, maskSr]
 
+  if ("piMatSr" %in% args)
+    piMatSr <- args[["piMatSr"]]
+  else
+    piMatSr <- piMat[maskSr, maskSr]
 
-  p1 <- diag(pq1Mat)
-  pq1MatSr <- pq1Mat[maskSr, maskSr]
+  if ("p1" %in% args)
+    p1 <- args[["p1"]]
+  else
+    p1 <- diag(pq1Mat)
+
+  p1Sr <- p1[maskSr]
+
+  if ("pq1MatSr" %in% args)
+    pq1MatSr <- args[["pq1MatSr"]]
+  else
+    pq1MatSr <- pq1Mat[maskSr, maskSr]
 
   # The y_1k are weighted with the phi_k
   weightedY1Sr <- phi[maskSr] * Yobs[maskSr]
@@ -114,7 +134,11 @@ estim_appr_var_seq_phi1 <- function(Yobs,
   # Sampling variability (S)
   # There is no correction needed for probabilities estimation
 
-  covarpSr <- pi2_to_covarInc(piMatSr)
+  if ("covarpSr" %in% args)
+    covarpSr <- args[["pq1MatSr"]]
+  else
+    covarpSr <- pi2_to_covarInc(piMatSr)
+
   varSEst <-
     t(weightedY1Sr / piSr) %*%
     (covarpSr / (piMatSr * pq1MatSr)) %*%
@@ -133,8 +157,7 @@ estim_appr_var_seq_phi1 <- function(Yobs,
 
   # q1 variability (R1)
   # If we use estimated p_1k weights we have to make a correction
-  correctedY1Sr <- weightedY1Sr / p1[maskSr]
-  covarq1Sr <- pi2_to_covarInc(pq1MatSr)
+  correctedY1Sr <- weightedY1Sr / p1Sr
 
   #   If the probabilities p_1k are estimations we add a term
   #   that uses the covariates used by the regression estimators
@@ -144,10 +167,22 @@ estim_appr_var_seq_phi1 <- function(Yobs,
     correctedY1Sr <- correctedY1Sr - Z[maskSr, , drop = FALSE] %*% bPhi11
   }
 
-  varq1Est <- t(correctedY1Sr / piSr) %*%
-    (covarq1Sr / pq1MatSr) %*%
-    (correctedY1Sr / piSr) %>%
-    as.numeric()
+  independenceq1 <- isTRUE(independenceq1)
+  if (independenceq1)
+    varq1Est <- sum(correctedY1Sr^2L * (1.0 - p1Sr) / piSr^2L)
+  else
+  {
+    if ("covarq1Sr" %in% args)
+      covarq1Sr <- args[["covarq1Sr"]]
+    else
+      covarq1Sr <- pi2_to_covarInc(pq1MatSr)
+
+    varq1Est <- t(correctedY1Sr / piSr) %*%
+      (covarq1Sr / pq1MatSr) %*%
+      (correctedY1Sr / piSr) %>%
+      as.numeric()
+  }
+
 
   # Y1 variability
   # We suppose we have an estimator of the variance
@@ -272,36 +307,70 @@ estim_appr_var_seq_phi2 <- function(Yobs,
                                     Z,
                                     phi = rep(1.0, length(Yobs)),
                                     sd2 = 0.0,
-                                    correcEstimWeights = FALSE)
+                                    correcEstimWeights = FALSE,
+                                    independenceq1 = NULL,
+                                    independenceq2 = NULL)
 {
   if (all(phi == 0.0))
     return(0.0)
 
+  args <- list(...)
+
   maskSmr <- modes == "tel"
   nSmr <- sum(maskSmr)
 
-  pi <- diag(piMat)
-  piSmr <- pi[maskSmr]
-  piMatSmr <- piMat[maskSmr, maskSmr]
+  if ("pi" %in% args)
+    pi <- args[["pi"]]
+  else
+    pi <- diag(piMat)
 
-  p1 <- diag(pq1Mat)
+  piSmr <- pi[maskSmr]
+
+  if ("piMatSmr" %in% args)
+    piMatSmr <- args[["piMatSmr"]]
+  else
+    piMatSmr <- piMat[maskSmr, maskSmr]
+
+  if ("p1" %in% args)
+    p1 <- args[["p1"]]
+  else
+    p1 <- diag(pq1Mat)
+
   p1Smr <- p1[maskSmr]
-  pq1MatSmr <- pq1Mat[maskSmr, maskSmr]
+  p1Smrbar <- 1.0 - p1Smr
+
+  if ("pq1MatSmr" %in% args)
+    pq1MatSmr <- args[["pq1MatSmr"]]
+  else
+    pq1MatSmr <- pq1Mat[maskSmr, maskSmr]
 
   pq1BarMatSmr <- 1.0 -
     matrix(p1Smr, nrow = nSmr, ncol = nSmr, byrow = TRUE) -
     matrix(p1Smr, nrow = nSmr, ncol = nSmr, byrow = FALSE) +
     pq1MatSmr
 
-  p2 <- diag(pq2Mat)
-  pq2MatSmr <- pq2Mat[maskSmr, maskSmr]
+  if ("p2" %in% args)
+    p2 <- args[["p2"]]
+  else
+    p2 <- diag(pq2Mat)
+
+  p2Smr <- p2[maskSmr]
+
+  if ("pq2MatSmr" %in% args)
+    pq2MatSmr <- args[["pq2MatSmr"]]
+  else
+    pq2MatSmr <- pq2Mat[maskSmr, maskSmr]
 
   # The y_2k are weighted with the phi_k
   weightedY2Smr <- phi[maskSmr] * Yobs[maskSmr]
 
   # Sampling variability (S)
   # There is no correction needed for probabilities estimation
-  covarpSmr <- pi2_to_covarInc(piMatSmr)
+  if ("covarpSmr" %in% args)
+    covarpSmr <- args[["pq1MatSmr"]]
+  else
+    covarpSmr <- pi2_to_covarInc(piMatSmr)
+
   varSEst <-
     t(weightedY2Smr / piSmr) %*%
     (covarpSmr / (piMatSmr * pq1BarMatSmr * pq2MatSmr)) %*%
@@ -311,8 +380,7 @@ estim_appr_var_seq_phi2 <- function(Yobs,
 
 
   # q1 variability (R1)
-  correctedY2Smrq1 <- weightedY2Smr / (1.0 - p1[maskSmr])
-  covarq1Smr <- pi2_to_covarInc(pq1MatSmr)
+  correctedY2Smrq1 <- weightedY2Smr / p1Smrbar
 
   #   If the probabilities p_1k are estimations we add a term
   #   that uses the covariates used by the regression estimators of
@@ -323,14 +391,25 @@ estim_appr_var_seq_phi2 <- function(Yobs,
     correctedY2Smrq1 <- -correctedY2Smrq1 - Z[maskSmr, ] %*% bPhi21
   }
 
-  varq1Est <- t(correctedY2Smrq1 / piSmr) %*%
-    (covarq1Smr / (pq1BarMatSmr * pq2MatSmr)) %*%
-    (correctedY2Smrq1 / piSmr) %>%
-    as.numeric()
+  independenceq1 <- isTRUE(independenceq1)
+
+  if (independenceq1)
+    varq1Est <- sum(correctedY2Smrq1^2L * p1Smr / (piSmr^2L * p2Smr))
+  else
+  {
+    if ("covarq1Smr" %in% args)
+      covarq1Smr <- args[["covarq1Smr"]]
+    else
+      covarq1Smr <- pi2_to_covarInc(covarq1Smr)
+
+    varq1Est <- t(correctedY2Smrq1 / piSmr) %*%
+      (covarq1Smr / (pq1BarMatSmr * pq2MatSmr)) %*%
+      (correctedY2Smrq1 / piSmr) %>%
+      as.numeric()
+  }
 
   # q2 variability (R2)
   correctedY2Smrq2 <- weightedY2Smr / p2[maskSmr]
-  covarq2Smr <- pi2_to_covarInc(pq2MatSmr)
 
   #   If the probabilities p_1k are estimations we add a term
   #   that uses the covariates used by the regression estimators of
@@ -341,10 +420,23 @@ estim_appr_var_seq_phi2 <- function(Yobs,
     correctedY2Smrq2 <- correctedY2Smrq2 - Z[maskSmr, ] %*% bPhi22
   }
 
-  varq2Est <- t(correctedY2Smrq2 / (piSmr * (1.0 - p1[maskSmr]))) %*%
-    (covarq2Smr / pq2MatSmr) %*%
-    (correctedY2Smrq2 / (piSmr * (1.0 - p1[maskSmr]))) %>%
-    as.numeric()
+  independenceq2 <- isTRUE(independenceq2)
+
+  if (independenceq2)
+    varq2Est <- sum(correctedY2Smrq2^2L * (1.0 - p2Smr) / (piSmr * p1Smrbar)^2L)
+  else
+  {
+
+    if ("covarq2Smr" %in% args)
+      covarq2Smr <- args[["covarq2Smr"]]
+    else
+      covarq2Smr <- pi2_to_covarInc(pq2MatSmr)
+
+    varq2Est <- t(correctedY2Smrq2 / (piSmr * p1Smrbar)) %*%
+      (covarq2Smr / pq2MatSmr) %*%
+      (correctedY2Smrq2 / (piSmr * p1Smrbar)) %>%
+      as.numeric()
+  }
 
   # Y2 variability
   # We suppose we have an estimator of the variance
