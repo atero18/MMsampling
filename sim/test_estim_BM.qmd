@@ -1621,9 +1621,7 @@ simulation_tphi <- function(Z,
       # parameter equal to
       #  phi_k y_1k / sum of the phi_k on U
     expMeanPhi1 <- expPhi1 / sum(phi)
-    meanPhi1TW <- 
-      sum(phi[maskInt] * trueWeights[maskInt] * Yobs[maskInt]) /
-      sum(phi[maskInt] * trueWeights[maskInt])
+    meanPhi1TW <- totPhi1TW / sum(phi[maskInt] * trueWeights[maskInt])
     
     # apprVarMeanPhi1TW <- 
     #   MMsampling::estim_var_mean_phi1(Yobs,
@@ -1638,10 +1636,8 @@ simulation_tphi <- function(Z,
     
     apprVarMeanPhi1TW <- NA_real_ 
     
-    meanPhi1EW <-
-      sum(phi[maskInt] *
-            (estimWeights[maskInt] * Yobs[maskInt] - mean(Yints))) /
-      sum(phi[maskInt] * estimWeights[maskInt])
+    meanPhi1EW <- totPhi1EW / sum(phi[maskInt] * estimWeights[maskInt])
+      
     # meanPhi1EW <- NA_real_
     
     apprVarMeanPhi1EW <-
@@ -1718,9 +1714,8 @@ simulation_tphi <- function(Z,
       # parameter equal to
       #  phi_k y_2k / sum of the phi_k on U,
     expMeanPhi2 <- expPhi2 / sum(phi)
-    meanPhi2TW <- 
-      sum(phi[maskTel] * trueWeights[maskTel] * Yobs[maskTel]) /
-      sum(phi[maskTel] * trueWeights[maskTel])
+    meanPhi2TW <- totPhi2TW / sum(phi[maskTel] * trueWeights[maskTel])
+    # meanPhi2TW <- NA_real_
     
     # apprVarMeanPhi2TW <-
     #   MMsampling::estim_var_mean_phi2(Yobs,
@@ -1735,11 +1730,7 @@ simulation_tphi <- function(Z,
     
     apprVarMeanPhi2TW <- NA_real_
     
-    meanPhi2EW <-
-      sum(phi[maskTel] *
-            (estimWeights[maskTel] * Yobs[maskTel] - mean(Ytels))) /
-      sum(phi[maskTel] * estimWeights[maskTel])
-    
+    meanPhi2EW <- totPhi2EW / sum(phi[maskTel] * estimWeights[maskTel])
     # meanPhi2EW <- NA_real_
     
     apprVarMeanPhi2EW <-
@@ -1783,14 +1774,14 @@ simulation_tphi <- function(Z,
              .after = "estimator")
   }
   
-  pv <- profvis::profvis(lapply(seq_len(M), FUN = monoSim))
+  # pv <- profvis::profvis(lapply(seq_len(M), FUN = monoSim))
   # return(profvis::profvis(lapply(seq_len(10L), FUN = monoSim))) #prof_output = "test.res"))
   # pv <- profvis::profvis(lapply(seq_len(10L), FUN = monoSim))
   # pv <- microbenchmark::microbenchmark(monoSim(), times = 10L)
-  return(pv)
+  # return(pv)
   
   # res <- lapply(seq_len(M), FUN = monoSim)
-  # res <- mclapply(seq_len(M), FUN = monoSim, mc.cores = nCores)
+  res <- mclapply(seq_len(M), FUN = monoSim, mc.cores = nCores)
   do.call("rbind", res)
 }
 ```
@@ -1888,23 +1879,22 @@ for (k in seq_len(nrow(parameters)))
                              n = parameters[k, "n"],
                              rho = parameters[k, "rho"],
                              seed = NULL,
-                             nCores = 20L)
+                             nCores = 30L)
   
-  break
   resSimBiasDetection <-
     cbind(parameters[k, ], resTemp) %>%
     rbind(resSimBiasDetection)
 
   pb$tick()
   seed <- .Random.seed
+  break
 }
 
-resTemp
-# rm(resTemp)
-# 
-# resSimBiasDetection <- 
-#   resSimBiasDetection %>% 
-#   arrange(n, sigma, ratio_delta)
+rm(resTemp)
+
+resSimBiasDetection <-
+  resSimBiasDetection %>%
+  arrange(n, sigma1, sigma2, ratio_delta)
 ```
 
 ```{r}
@@ -1963,7 +1953,7 @@ temp <- resSimBiasDetection %>%
 
 temp <- temp %>% 
   # slice_head(n = nrow(temp) / 2L) %>% 
-  group_by(estimand, weights, n, sigma, rho) %>% 
+  group_by(estimand, weights, n, sigma1, sigma2, rho) %>% 
   summarize(M = n(),
             expEstimand = mean(expEstimand),
             mean = mean(estimation), 
