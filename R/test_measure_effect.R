@@ -1,9 +1,13 @@
+#' @export
 estim_var_mean_phi1 <- function(Yobs,
                                 modes, I,
                                 piMat,
                                 pq1Mat, Z,
                                 phi = rep(1.0, length(Yobs)),
-                                correcEstimWeights = TRUE)
+                                correcEstimWeights = TRUE,
+                                independenceq1 = NULL,
+                                independenceq2 = NULL,
+                                ...)
 {
 
   maskInt <- modes == "int"
@@ -26,16 +30,21 @@ estim_var_mean_phi1 <- function(Yobs,
   estim_appr_var_seq_phi1(errTerms, modes, I, piMat,
                           pq1Mat, Z, phi,
                           sd1 = 0.0,
-                          correcEstimWeights) / sumPhi^2L
+                          correcEstimWeights,
+                          independenceq1, independenceq2, ...) / sumPhi^2L
 }
 
+#' @export
 estim_var_mean_phi2 <- function(Yobs,
                                 modes, I,
                                 piMat,
                                 pq1Mat,
                                 pq2Mat, Z,
                                 phi = rep(1.0, length(Yobs)),
-                                correcEstimWeights = TRUE)
+                                correcEstimWeights = TRUE,
+                                independenceq1 = NULL,
+                                independenceq2 = NULL,
+                                ...)
 {
   maskSmr <- modes == "tel"
   weightsTel <-
@@ -56,5 +65,6 @@ estim_var_mean_phi2 <- function(Yobs,
   estim_appr_var_seq_phi2(errTerms, modes, I, piMat,
                           pq1Mat, pq2Mat, Z, phi,
                           sd2 = 0.0,
-                          correcEstimWeights) / sumPhi^2L
+                          correcEstimWeights,
+                          independenceq1, independenceq2, ...) / sumPhi^2L
 }

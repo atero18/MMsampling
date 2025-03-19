@@ -104,26 +104,26 @@ estim_appr_var_seq_phi1 <- function(Yobs,
 
   maskSr <- modes == "int"
 
-  if ("pi" %in% args)
-    pi <- args[["pi"]]
-  else
-    pi <- diag(piMat)
+  # if ("pi" %in% names(args))
+  #   pi <- args[["pi"]]
+  # else
+  pi <- diag(piMat)
 
   piSr <- pi[maskSr]
 
-  if ("piMatSr" %in% args)
-    piMatSr <- args[["piMatSr"]]
-  else
-    piMatSr <- piMat[maskSr, maskSr]
+  # if ("piMatSr" %in% names(args))
+  #   piMatSr <- args[["piMatSr"]]
+  # else
+  piMatSr <- piMat[maskSr, maskSr]
 
-  if ("p1" %in% args)
+  if ("p1" %in% names(args))
     p1 <- args[["p1"]]
   else
     p1 <- diag(pq1Mat)
 
   p1Sr <- p1[maskSr]
 
-  if ("pq1MatSr" %in% args)
+  if ("pq1MatSr" %in% names(args))
     pq1MatSr <- args[["pq1MatSr"]]
   else
     pq1MatSr <- pq1Mat[maskSr, maskSr]
@@ -134,8 +134,8 @@ estim_appr_var_seq_phi1 <- function(Yobs,
   # Sampling variability (S)
   # There is no correction needed for probabilities estimation
 
-  if ("covarpSr" %in% args)
-    covarpSr <- args[["pq1MatSr"]]
+  if ("covarpSr" %in% names(args))
+    covarpSr <- args[["covarpSr"]]
   else
     covarpSr <- pi2_to_covarInc(piMatSr)
 
@@ -172,7 +172,7 @@ estim_appr_var_seq_phi1 <- function(Yobs,
     varq1Est <- sum(correctedY1Sr^2L * (1.0 - p1Sr) / piSr^2L)
   else
   {
-    if ("covarq1Sr" %in% args)
+    if ("covarq1Sr" %in% names(args))
       covarq1Sr <- args[["covarq1Sr"]]
     else
       covarq1Sr <- pi2_to_covarInc(pq1MatSr)
@@ -309,7 +309,8 @@ estim_appr_var_seq_phi2 <- function(Yobs,
                                     sd2 = 0.0,
                                     correcEstimWeights = FALSE,
                                     independenceq1 = NULL,
-                                    independenceq2 = NULL)
+                                    independenceq2 = NULL,
+                                    ...)
 {
   if (all(phi == 0.0))
     return(0.0)
@@ -319,19 +320,19 @@ estim_appr_var_seq_phi2 <- function(Yobs,
   maskSmr <- modes == "tel"
   nSmr <- sum(maskSmr)
 
-  if ("pi" %in% args)
-    pi <- args[["pi"]]
-  else
-    pi <- diag(piMat)
+  # if ("pi" %in% names(args))
+  #   pi <- args[["pi"]]
+  # else
+  pi <- diag(piMat)
 
   piSmr <- pi[maskSmr]
 
-  if ("piMatSmr" %in% args)
-    piMatSmr <- args[["piMatSmr"]]
-  else
-    piMatSmr <- piMat[maskSmr, maskSmr]
+  # if ("piMatSmr" %in% names(args))
+  #   piMatSmr <- args[["piMatSmr"]]
+  # else
+  piMatSmr <- piMat[maskSmr, maskSmr]
 
-  if ("p1" %in% args)
+  if ("p1" %in% names(args))
     p1 <- args[["p1"]]
   else
     p1 <- diag(pq1Mat)
@@ -339,7 +340,7 @@ estim_appr_var_seq_phi2 <- function(Yobs,
   p1Smr <- p1[maskSmr]
   p1Smrbar <- 1.0 - p1Smr
 
-  if ("pq1MatSmr" %in% args)
+  if ("pq1MatSmr" %in% names(args))
     pq1MatSmr <- args[["pq1MatSmr"]]
   else
     pq1MatSmr <- pq1Mat[maskSmr, maskSmr]
@@ -349,14 +350,14 @@ estim_appr_var_seq_phi2 <- function(Yobs,
     matrix(p1Smr, nrow = nSmr, ncol = nSmr, byrow = FALSE) +
     pq1MatSmr
 
-  if ("p2" %in% args)
+  if ("p2" %in% names(args))
     p2 <- args[["p2"]]
   else
     p2 <- diag(pq2Mat)
 
   p2Smr <- p2[maskSmr]
 
-  if ("pq2MatSmr" %in% args)
+  if ("pq2MatSmr" %in% names(args))
     pq2MatSmr <- args[["pq2MatSmr"]]
   else
     pq2MatSmr <- pq2Mat[maskSmr, maskSmr]
@@ -366,8 +367,8 @@ estim_appr_var_seq_phi2 <- function(Yobs,
 
   # Sampling variability (S)
   # There is no correction needed for probabilities estimation
-  if ("covarpSmr" %in% args)
-    covarpSmr <- args[["pq1MatSmr"]]
+  if ("covarpSmr" %in% names(args))
+    covarpSmr <- args[["covarpSmr"]]
   else
     covarpSmr <- pi2_to_covarInc(piMatSmr)
 
@@ -397,7 +398,7 @@ estim_appr_var_seq_phi2 <- function(Yobs,
     varq1Est <- sum(correctedY2Smrq1^2L * p1Smr / (piSmr^2L * p2Smr))
   else
   {
-    if ("covarq1Smr" %in% args)
+    if ("covarq1Smr" %in% names(args))
       covarq1Smr <- args[["covarq1Smr"]]
     else
       covarq1Smr <- pi2_to_covarInc(covarq1Smr)
@@ -427,7 +428,7 @@ estim_appr_var_seq_phi2 <- function(Yobs,
   else
   {
 
-    if ("covarq2Smr" %in% args)
+    if ("covarq2Smr" %in% names(args))
       covarq2Smr <- args[["covarq2Smr"]]
     else
       covarq2Smr <- pi2_to_covarInc(pq2MatSmr)

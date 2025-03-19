@@ -1540,9 +1540,6 @@ simulation_tphi <- function(Z,
     maskTel <- modes == "tel"
     nTel <- sum(maskTel)
     
-    piMatSr <- piMat[maskInt, maskInt, drop = FALSE]
-    piMatSmr <- piMat[maskTel, maskTel, drop = FALSE]
-    
     trueProbsSelect <- dataModes$probSelect
     
     rm(dataModes)
@@ -1580,6 +1577,7 @@ simulation_tphi <- function(Z,
     estimpq1 <- estimProbsData$conditional[, "int"]
     # estimpq1Mat <- pi_to_pi2(estimpq1)
     estimpq1MatSr <- pi_to_pi2(estimpq1[maskInt])
+    estimpq1MatSmr <- pi_to_pi2(estimpq1[maskTel])
     
      # Total of phi_k y_1k with true probabilities
     expPhi1 <- sum(phi * expYints)
@@ -1587,17 +1585,19 @@ simulation_tphi <- function(Z,
     
         # Estimation of the approximate variance of the total estimator
         # the variance of Y1 is assumed known and homoscedastic for simplicity
-    apprVarPhi1TW <- 
-      MMsampling::estim_appr_var_seq_phi1(Yobs,
-                                          modes, 
-                                          I,
-                                          piMat,
-                                          pq1Mat,
-                                          Z,
-                                          phi, 
-                                          sd1 = sdInt,
-                                          correcEstimWeights = FALSE,
-                                          independenceq1 = TRUE)
+    # apprVarPhi1TW <- 
+    #   MMsampling::estim_appr_var_seq_phi1(Yobs,
+    #                                       modes, 
+    #                                       I,
+    #                                       piMat,
+    #                                       pq1Mat,
+    #                                       Z,
+    #                                       phi, 
+    #                                       sd1 = sdInt,
+    #                                       correcEstimWeights = FALSE,
+    #                                       independenceq1 = TRUE)
+    
+    apprVarPhi1TW <- NA_real_
     
       # Total of phi_k y_1k with estimated probabilities
     totPhi1EW <- sum(phi[maskInt] * estimWeights[maskInt] * Yobs[maskInt])
@@ -1608,12 +1608,14 @@ simulation_tphi <- function(Z,
                                           modes,
                                           I,
                                           piMat,
-                                          estimpq1Mat,
+                                          estimpq1MatSr,
                                           Z,
                                           phi,
                                           sd1 = sdInt,
                                           correcEstimWeights = TRUE,
-                                          independenceq1 = TRUE)
+                                          independenceq1 = TRUE,
+                                          p1 = estimpq1,
+                                          pq1MatSr = estimpq1MatSr)
      
     # apprVarPhi1EW <- NA_real_
       # parameter equal to
@@ -1623,21 +1625,23 @@ simulation_tphi <- function(Z,
       sum(phi[maskInt] * trueWeights[maskInt] * Yobs[maskInt]) /
       sum(phi[maskInt] * trueWeights[maskInt])
     
-    apprVarMeanPhi1TW <- 
-      MMsampling::estim_var_mean_phi1(Yobs,
-                                      modes, 
-                                      I,
-                                      piMat,
-                                      pq1Mat,
-                                      Z,
-                                      phi, 
-                                      correcEstimWeights = FALSE)
+    # apprVarMeanPhi1TW <- 
+    #   MMsampling::estim_var_mean_phi1(Yobs,
+    #                                   modes, 
+    #                                   I,
+    #                                   piMat,
+    #                                   pq1Mat,
+    #                                   Z,
+    #                                   phi, 
+    #                                   correcEstimWeights = FALSE)
+    # 
+    
+    apprVarMeanPhi1TW <- NA_real_ 
     
     meanPhi1EW <-
       sum(phi[maskInt] *
             (estimWeights[maskInt] * Yobs[maskInt] - mean(Yints))) /
       sum(phi[maskInt] * estimWeights[maskInt])
-    
     # meanPhi1EW <- NA_real_
     
     apprVarMeanPhi1EW <-
@@ -1645,10 +1649,13 @@ simulation_tphi <- function(Z,
                                       modes,
                                       I,
                                       piMat,
-                                      estimpq1Mat,
+                                      estimpq1MatSr,
                                       Z,
                                       phi,
-                                      correcEstimWeights = TRUE)
+                                      correcEstimWeights = TRUE,
+                                      independenceq1 = TRUE,
+                                      p1 = estimpq1,
+                                      pq1MatSr = estimpq1MatSr)
     
     # apprVarMeanPhi1EW <- NA_real_
     
@@ -1656,7 +1663,8 @@ simulation_tphi <- function(Z,
     
       # Estimation of the internet design covariance matrix
     estimpq2 <-  estimProbsData$conditional[, "tel"]
-    estimpq2Mat <- pi_to_pi2(estimpq2)
+    # estimpq2Mat <- pi_to_pi2(estimpq2)
+    estimpq2MatSmr <- pi_to_pi2(estimpq2[maskTel])
 
     
       # Total of phi_k y_2k with true probabilities
@@ -1665,20 +1673,22 @@ simulation_tphi <- function(Z,
     
         # Estimation of the approximate variance of the total estimator
         # the variance of Y2 is assumed known and homoscedastic for simplicity
-    apprVarPhi2TW <-
-      MMsampling::estim_appr_var_seq_phi2(Yobs,
-                                          modes,
-                                          I,
-                                          piMat,
-                                          pq1Mat,
-                                          pq2Mat,
-                                          Z,
-                                          phi,
-                                          sd2 = sdTel,
-                                          correcEstimWeights = FALSE,
-                                          independenceq1 = TRUE,
-                                          independenceq2 = TRUE)
+    # apprVarPhi2TW <-
+    #   MMsampling::estim_appr_var_seq_phi2(Yobs,
+    #                                       modes,
+    #                                       I,
+    #                                       piMat,
+    #                                       pq1Mat,
+    #                                       pq2Mat,
+    #                                       Z,
+    #                                       phi,
+    #                                       sd2 = sdTel,
+    #                                       correcEstimWeights = FALSE,
+    #                                       independenceq1 = TRUE,
+    #                                       independenceq2 = TRUE)
 
+    apprVarPhi2TW <- NA_real_
+    
       # Total of phi_k y_2k with estimated probabilities
     expPhi2 <- sum(phi * expYtels)
     totPhi2EW <- sum(phi[maskTel] * estimWeights[maskTel] * Yobs[maskTel])
@@ -1690,14 +1700,18 @@ simulation_tphi <- function(Z,
                                           modes,
                                           I,
                                           piMat,
-                                          estimpq1Mat,
-                                          estimpq2Mat,
+                                          estimpq1MatSmr, # pq1Mat,
+                                          estimpq2MatSmr, #pq2Mat,
                                           Z,
                                           phi,
                                           sd2 = sdTel,
                                           correcEstimWeights = TRUE,
                                           independenceq1 = TRUE,
-                                          independenceq2 = TRUE)
+                                          independenceq2 = TRUE,
+                                          p1 = estimpq1,
+                                          p2 = estimpq2,
+                                          pq1MatSmr = estimpq1MatSmr,
+                                          pq2MatSmr = estimpq2MatSmr)
     
     # apprVarPhi2EW <- NA_real_
     
@@ -1708,16 +1722,18 @@ simulation_tphi <- function(Z,
       sum(phi[maskTel] * trueWeights[maskTel] * Yobs[maskTel]) /
       sum(phi[maskTel] * trueWeights[maskTel])
     
-    apprVarMeanPhi2TW <-
-      MMsampling::estim_var_mean_phi2(Yobs,
-                          modes,
-                          I,
-                          piMat,
-                          pq1Mat,
-                          pq2Mat,
-                          Z,
-                          phi,
-                          correcEstimWeights = FALSE)
+    # apprVarMeanPhi2TW <-
+    #   MMsampling::estim_var_mean_phi2(Yobs,
+    #                       modes,
+    #                       I,
+    #                       piMat,
+    #                       pq1Mat,
+    #                       pq2Mat,
+    #                       Z,
+    #                       phi,
+    #                       correcEstimWeights = FALSE)
+    
+    apprVarMeanPhi2TW <- NA_real_
     
     meanPhi2EW <-
       sum(phi[maskTel] *
@@ -1728,18 +1744,24 @@ simulation_tphi <- function(Z,
     
     apprVarMeanPhi2EW <-
       MMsampling::estim_var_mean_phi2(Yobs,
-                          modes,
-                          I,
-                          piMat,
-                          estimpq1Mat,
-                          estimpq2Mat,
-                          Z,
-                          phi,
-                          correcEstimWeights = TRUE)
+                                      modes,
+                                      I,
+                                      piMat,
+                                      estimpq1MatSmr,
+                                      estimpq2MatSmr,
+                                      Z,
+                                      phi,
+                                      correcEstimWeights = TRUE,
+                                      independenceq1 = TRUE,
+                                      independenceq2 = TRUE,
+                                      p1 = estimpq1,
+                                      p2 = estimpq2,
+                                      pq1MatSmr = estimpq1MatSmr,
+                                      pq2MatSmr = estimpq2MatSmr)
     
     # apprVarMeanPhi2EW <- NA_real_
     
-    rm(estimpq1Mat, estimpq2Mat)
+    # rm(estimpq1Mat, estimpq2Mat)
     
     tibble(estimand = rep(c("phi1", "mean phi1", 
                             "phi2", "mean phi2"), each = 2L), 
@@ -1761,13 +1783,13 @@ simulation_tphi <- function(Z,
              .after = "estimator")
   }
   
-  pv <- profvis::profvis(lapply(seq_len(100L), FUN = monoSim))
+  pv <- profvis::profvis(lapply(seq_len(M), FUN = monoSim))
   # return(profvis::profvis(lapply(seq_len(10L), FUN = monoSim))) #prof_output = "test.res"))
   # pv <- profvis::profvis(lapply(seq_len(10L), FUN = monoSim))
   # pv <- microbenchmark::microbenchmark(monoSim(), times = 10L)
   return(pv)
   
-  res <- lapply(seq_len(M), FUN = monoSim)
+  # res <- lapply(seq_len(M), FUN = monoSim)
   # res <- mclapply(seq_len(M), FUN = monoSim, mc.cores = nCores)
   do.call("rbind", res)
 }
@@ -1867,8 +1889,6 @@ for (k in seq_len(nrow(parameters)))
                              rho = parameters[k, "rho"],
                              seed = NULL,
                              nCores = 20L)
-  
-  print("blop")
   
   break
   resSimBiasDetection <-

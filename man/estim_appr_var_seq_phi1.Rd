@@ -14,7 +14,9 @@ estim_appr_var_seq_phi1(
   Z,
   phi = rep(1, length(Yobs)),
   sd1 = 0,
-  correcEstimWeights = FALSE
+  correcEstimWeights = FALSE,
+  independenceq1 = NULL,
+  ...
 )
 }
 \description{
