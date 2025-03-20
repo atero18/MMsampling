@@ -1880,13 +1880,8 @@ for (k in seq_len(nrow(parameters)))
                              sdTel = parameters[k, "sigma2"],
                              n = parameters[k, "n"],
                              rho = parameters[k, "rho"],
-<<<<<<< HEAD
                              seed = 200L,
-                             nCores = 20L)
-=======
-                             seed = NULL,
                              nCores = 30L)
->>>>>>> 783188cef561d03c1a61458babf773cd389582ac
   
   resSimBiasDetection <-
     cbind(parameters[k, ], resTemp) %>%
@@ -1894,7 +1889,6 @@ for (k in seq_len(nrow(parameters)))
 
   pb$tick()
   seed <- .Random.seed
-  break
 }
 
 rm(resTemp)
