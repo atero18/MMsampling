@@ -19,7 +19,6 @@ options(dplyr.summarise.inform = FALSE)
 library(tibble)
 library(tidyr)
 library(glue)
-library(tibble)
 library(parallel)
 library(tictoc)
 library(ggplot2)
@@ -45,7 +44,12 @@ load(file = "../results.RData")
 
 Linear models on both modes
 
-# Building constants
+# Population generation
+
+```{r}
+source("simulation_functions.R")
+```
+
 
 ```{r}
 RNGkind(kind = "L'Ecuyer-CMRG")
@@ -54,24 +58,27 @@ set.seed(145L)
 
 ```{r}
 N <- 10000L
-phi <- rep(0.5, N)
 ```
 
 Creating independent covariates
 
 ```{r}
-p <- 1L
+gen_covariates <- function(N)
+{
+  sex <- sample(c(0L, 1L), replace = TRUE, size = N, prob = c(0.5, 0.5))
+  
+  age <- rnorm(n = N, mean = sex * 41.1 + (1L - sex) * 43.9, sd = 10.0)
+  age[age < 0.0] <- 0.0
+  
+  data.frame(const = 1.0, 
+             age = age, 
+             sex = sex)
+}
 
-sex <- sample(c(0L, 1L), replace = TRUE, size = N, prob = c(0.5, 0.5))
-age <- rnorm(n = N, mean = sex * 41.1 + (1L - sex) * 43.9, sd = 10.0)
-age[age < 0.0] <- 0.0
 
-X <- Z <- data.frame(const = 1.0, 
-                     age = age, 
-                     sex = sex)
+X <- Z <- gen_covariates(N)
 
-rm(age)
-sex <- factor(sex)
+sex <- factor(X$sex)
 levels(sex) <- c("Woman", "Man")
 ```
 
@@ -86,7 +93,9 @@ ggplot(data) +
   geom_density(aes(x = age, colour = sex)) +
   ggtitle("Age density conditionally to the sex")
 
-data %>% group_by(sex) %>% summarize(meanAge = mean(age))
+data %>% 
+  group_by(sex) %>% 
+  summarize(meanAge = mean(age))
 rm(data)
 ```
 
@@ -94,33 +103,33 @@ rm(data)
 X <- Z <- as.matrix(X)
 ```
 
-Creating parameters for two modes : "int" and "tel". `delta` is defined such that the average measure effect is equal to 1. It depends on `X`.
+Creating parameters for two modes : "m1" and "m2". `delta` is defined such that the average measure effect is equal to 1. It depends on `X`.
 
 ```{r}
-betaTel <- c(1.0, -0.1, 4.0)
-print(betaTel)
-delta <- c(1.0, -2.0 * mean(X[, "age"])^-1L, 2.0 * N / sum(X[, "sex"]))
-betaInt <- betaTel + delta
+beta2 <- c(1.0, -0.1, 4.0)
+print(beta2)
 
-print(betaInt)
+delta <- c(1.0, -2.0 * mean(X[, "age"])^-1L, 2.0 * N / sum(X[, "sex"]))
+beta1 <- beta2 + delta
+print(beta1)
 ```
 
 $Y_{int}$ and $Y_{tel}$ expectations depending on `X`:
 
 ```{r}
-data.frame(tel = X %*% betaTel, int = X %*% betaInt) %>% 
-  pivot_longer(cols = c("tel", "int"), names_to = "mode", values_to = "value") %>% 
+data.frame(tel = X %*% beta2, int = X %*% beta1) %>% 
+  pivot_longer(cols = c("int", "tel"), names_to = "mode", values_to = "value") %>% 
   ggplot() + 
   geom_density(aes(x = value, colour = mode)) +
   ggtitle("Distribution of the counterfactuals expected values")
 
-glue("average value for telephone: {mean(X %*% betaTel)}")
-glue("average value for internet: {mean(X %*% betaInt)}")
+glue("average value for telephone: {mean(X %*% beta2)}")
+glue("average value for internet: {mean(X %*% beta1)}")
 ```
 
 With telephone counterfactuals only:
 ```{r}
-data.frame(tel = X %*% betaTel) %>% 
+data.frame(tel = X %*% beta2) %>% 
   ggplot() + 
   geom_density(aes(x = tel)) +
   # ggtitle("Distribution of the expected value of telephone outcomes") +
@@ -128,9 +137,8 @@ data.frame(tel = X %*% betaTel) %>%
   xlab("expected value")
 ```
 
-
 ```{r}
-as.numeric(X %*% betaTel) %>% summary()
+as.numeric(X %*% beta2) %>% summary()
 ```
 
 ```{r}
@@ -143,15 +151,11 @@ glue("average bias on U: {meanBias}")
 We simulate a mode selection MAR (Missing At Random) under a logistic model, with $X$ as variable:
 
 ```{r}
-# With MAR
+alpha1 <- c(0.7, -0.02, -0.5)
+pInt <- gen_selection_probabilities(Z, alpha1)
 
-expit <- function(x) 1.0 / (1.0 + exp(-x))
-
-alphaInt <- c(0.7, -0.02, -0.5)
-pInt <- expit(X %*% alphaInt) %>% as.vector()
-
-alphaTel <- c(0.3, 0.02, -0.5)
-pTel <- expit(X %*% alphaTel) %>% as.vector()
+alpha2 <- c(0.3, 0.02, -0.5)
+pTel <- gen_selection_probabilities(Z, alpha2)
 ```
 
 Here are some details about the $p_{int}$ and $p_{tel}$:
@@ -162,7 +166,6 @@ summary(pInt) %>% print()
 glue("telephone probabilities:\n")
 summary(pTel) %>% print()
 ```
-
 
 ```{r}
 pRepTel <- (1.0 - pInt) * pTel
@@ -236,1141 +239,497 @@ pInt[sex == "Man"] %>% summary()
 pInt[sex == "Woman"] %>% summary()
 ```
 
-# Simulation functions
-
-Randomly affect a mode (or non-response) to each unit
+# Bias detection
 
 ```{r}
-gen_choice_bimode <- function(I, p1, p2, checkRank = FALSE, X = NULL)
+simulation_tphi <- function(Z,
+                            sampling = "SRS",
+                            alpha1, alpha2, 
+                            beta1, beta2, 
+                            Y1Law = "gaussian", Y2Law = "gaussian",
+                            sd1 = 1.0, sd2 = sd1, 
+                            rho = 0.8,
+                            phi = rep(0.5, N), M = 10000L,
+                            n = ceiling(N / 10L),
+                            seed = 123L,
+                            nCores = detectCores() - 1L)
 {
-  N <- length(p1)
+  set.seed(seed)
   
-  R1 <- runif(N) <= p1
-  R2 <- runif(N) <= p2
+  N <- nrow(Z)
   
-  modes <- rep("nr", N)
+  expit <- function(x) 1.0 / (1.0 + exp(-x))
+
+  pInt <- expit(Z %*% alpha1) %>% as.numeric()
+  pq1Mat <- pi_to_pi2(pInt)
   
-  modes[I & R1] <- "int"
-  modes[I & !R1 & R2] <- "tel"
-  
-  q <- ncol(Z)
-  
-  # While the rank for the submatrices are not enough
-  # we rerun the simulation
-  if (checkRank &&
-      (rankMatrix(Z[R1, , drop = FALSE]) < q || 
-      rankMatrix(Z[!R1 & R2, , drop = FALSE]) < q))
+  pTel <- expit(Z %*% alpha2) %>% as.numeric()
+  pq2Mat <- pi_to_pi2(pTel)
+
+  if (sampling == "SRS")
   {
-    warning("Rank for submatrices are not enough")
-    return(gen_choice_bimode(I, p1, p2, checkRank = TRUE, Z))
+    pi <- rep(n / N, N)
+    piMat <- piMat_SRS(n, N)
   }
-
-  # probSelect : probability of selecting the chosen mode
-  # if selected in sample S
-  probSelect <- rep(NA_real_, N)
   
-  probSelect[R1] <- p1[R1]
-  probSelect[!R1 & R2] <- (1.0 - p1[!R1 & R2]) * p2[!R1 & R2]
   
-  tibble(p1 = p1, r1 = R1, p2 = p2, r2 = R2, 
-         mode = modes, probSelect = probSelect)
-}
-```
-
-```{r}
-gen_expY <- function(X, 
-                     betaInt, YintLaw = "gaussian", sdInt,
-                     betaTel, YtelLaw = "gaussian", sdTel)
-{
-  if (YtelLaw == "gaussian")
+  dataExpY <- gen_expY(Z, 
+                       beta1, Y1Law, sd1,
+                       beta2, Y2Law, sd2)
+  
+  expY1 <- dataExpY$expY1
+  sd1s <- dataExpY$sd1s
+  
+  expY2 <- dataExpY$expY2
+  sd2s <- dataExpY$sd2s
+  
+  rm(dataExpY)
+  
+  phi <- set_phi(phi, N)
+  
+  
+  monoSim <- function(...)
   {
-
-    expYtels <- as.vector(X %*% betaTel)
-    
-    sdTel <- as.numeric(sdTel)
-    sdTels <- rep(sdTel, N)
-    # covarYtel <- diag(sdTels^2L)
+    q <- ncol(Z)
+        
       
-  }
-  else if (YtelLaw == "exponential")
-  {
-    sdTel <- "null"
-
-    expYtels <- as.vector(abs(X %*% betaTel))
-    
-    sdTels <- expYtels
-    
-    # covarYtel <- diag(sdTels^2L)
-  }
-  
-  
-  if (YintLaw == "gaussian")
-  {
-    
-    expYints <- as.vector(X %*% betaInt)
-    
-    sdInt <- as.numeric(sdInt)
-    sdInts <- rep(sdInt, N)
-    # covarYint <- diag(sdInts^2L)
-    
-  }
-  
-  else if (YintLaw == "exponential")
-  {
-    sdInt <- "null"
-    
-
-    expYints <- as.vector(abs(X %*% betaInt))
-    
-    sdInts <- expYints
-    # covarYint <- diag(sdInts^2L)
-  }
-  else if (YintLaw == "split3")
-  {
-    
-    if (is.null(expYints))
-      expYints <- as.vector(abs(X %*% betaInt))
-    
-    quantilesInt <- quantile(expYints, probs = c(1.0 / 3.0, 2.0 / 3.0))
-    
-    sdInt <- as.numeric(sdInt)
-    sdInts <- rep(as.numeric(sdInt), N)
-    # covarYint <- diag(sdInts^2L)
-    
-    # Between first and second quantile of 3rd degree we add one
-    expYints[expYints > quantilesInt[1L]] <- 
-      expYints[expYints > quantilesInt[1L]] + 1.0
-    
-    # After the second quantile of 3rd degree we add one more
-    expYints[expYints > quantilesInt[2L]] <- 
-      expYints[expYints > quantilesInt[2L]] + 1.0
-  }
-  
-  list(expYints = expYints, sdInts = sdInts,
-       expYtels = expYtels, sdTels = sdTels)
-  
-}
-```
-
-```{r}
-gen_Y <- function(X, 
-                  betaInt, sigmaInt, YintLaw = "gaussian",
-                  betaTel, sigmaTel = sigmaInt, YtelLaw = "gaussian",
-                  expYints = NULL, expYtels = NULL,
-                  rho = 0.0)
-{
-  
-  N <- nrow(X)
-  
-  recExpY <- is.null(expYints) || is.null(expYtels)
-  
-  if (recExpY)
-  {
-    dataY <- gen_expY(X, 
-                      betaInt, YintLaw, sigmaInt,
-                      betaTel, YtelLaw, sigmaTel)
-    
-    expYints <- dataY$expYints
-    sdInts <- dataY$sdInts
-    
-    expYtels <- dataY$expYtels
-    sdTels <- dataY$sdTels
-  }
-  else
-  {
-    if (YtelLaw == "gaussian")
-      sdTels <- rep(sigmaTel, N)
-    else if (YtelLaw == "exponential")
-      sdTels <- expYtels
-    
-    if (YintLaw == "gaussian")
-      sdInts <- rep(sigmaInt, N)
-    else if (YintLaw == "exponential")
-      sdInts <- expYints
-  }
-  
-  
-  # Affecting values to Y_int and Y_tel
-  if (YtelLaw == "gaussian")
-    Ytels <- expYtels + rnorm(n = N, sd = sdTels)
-    
-  else if (YtelLaw == "exponential")
-    Ytels <- rexp(n = N, rate = expYtels^-1L)
-  
-  if (YintLaw %in% c("gaussian", "split3"))
-    Yints <- expYints + rnorm(n = N, sd = sdInts)
-
-  else if (YintLaw == "exponential")
-    Yints <- rexp(n = N, rate = expYints^-1L)
-  
-  
-  
-  
-  if (rho != 0.0)
-  {
-    results <- cbind(Yint = Yints, Ytel = Ytels) %>% 
-      mc2d::cornode(target = rho, result = FALSE) %>% 
-      as_tibble()
-  }
-  else
-    results <- tibble(Yint = Yints, Ytel = Ytels)
-  
-  if (recExpY)
-  {
-    results <- results %>%
-    mutate(expYint = expYints, .before = "Yint") %>% 
-    mutate(expYtel = expYtels, .before = "Ytel")
-  }
-  
-  results
-}
-```
-
-```{r}
-set_Yobs <- function(Yint, Ytel, modes)
-{
-  N <- length(Yint)
-  
-  Yobs <- rep(NA_real_, N)
-  Yobs[modes == "int"] <- Yint[modes == "int"]
-  Yobs[modes == "tel"] <- Ytel[modes == "tel"]
-  
-  Yobs
-}
-```
-
-```{r}
-set_phi <- function(phi = "eq", N)
-{
-  if (phi == "eq")
-    phi <- rep(0.5, N)
-  
-  else if (phi == "1/3")
-    phi <- rep(1.0 / 3.0, N)
-  
-  else if (phi == "2/3")
-    phi <- rep(2.0 / 3.0, N)
-
-  else if (phi == "var")
-    phi <- seq_len(N) / N
-  
-  # When there is no bias, phi = 0.5
-  # When the bias increase (in absolute), phi tends to zero
-  # (it gives more weights to the unbiased value)
-  else if (phi == "linear")
-  {
-    expDeltas <- expYints - expYtels
-    maxBias <- max(abs(expDeltas))
-    phi <- 0.5 - 0.5 * abs(expDeltas) / maxBias
-  }
-  else if (phi == "split3")
-  {
-    expDeltas <- expYints - expYtels
-    absExpDeltas <- abs(expDeltas)
-    quantiles <- quantile(absExpDeltas, c(1.0 / 3.0, 2.0 / 3.0))
-    phi <- rep(0.5, N)
-    phi[absExpDeltas >= quantiles[1L]] <- 1.0 / 3.0
-    phi[absExpDeltas >= quantiles[2L]] <- 1.0 / 6.0
-  }
-    
-  phi
-}
-```
-
-```{r}
-piMat_SRS <- function(n, N)
-{
-  piMat <- matrix(n * (n - 1L) / (N * (N - 1L)), nrow = N, ncol = N)
-  diag(piMat) <- n / N
-  
-  piMat
-}
-```
-
-```{r}
-covar_SRS <- function(n, N)
-{
-  piMat_SRS(n, N) %>% pi2_to_covarInc()
-}
-```
-
-
-
-Parameters:
-
--   $\alpha_{tel}$ and $\alpha_min$, coefficients of conditional expectations of $r_{tel}$ and $r_{int}$
--   $\beta_{tel}$ and $\beta_{int}$, coefficients of conditional expectations of $Y_{tel}$ and $Y_{int}$
--   the sampling type (`sampling`)
--   the conditional standard deviations of $Y_{tel}$ and $Y_{int}$ (`sdInt` and `sdTel`)
--   the law of $Y_{tel}$ (`YtelLaw`)
--   the law of $Y_{int}$ (`YintLaw`)
--   the state of $\phi$ (`phi`)
--   the number of iterations (`M`)
--   the random seed (`seed`)
-
-```{r}
-simulationUncounf <- 
-  function(N, 
-           sampling = "SRS",
-           alphaInt, alphaTel, 
-           betaInt, betaTel, 
-           YintLaw = "gaussian", YtelLaw = "gaussian",
-           sdInt = 1.0, sdTel = 1.0, 
-           rho = 0.8,
-           phi = rep(0.5, N), M = 1000L,
-           X = NULL,
-           n = ceiling(N / 10L),
-           seed = 123L,
-           cluster = NULL)
-  {
-    
-    stopClusterAtEnd <- is.null(cluster)
-    # X is exported only if the cluster is created in the function
-    if (is.null(cluster))
-    {
-      nbCores <- detectCores() - 1L
-      cluster <- makeCluster(nbCores)
-    
-      clusterExport(cluster, 
-                    varlist = "X",
-                    envir = environment())
-    }
-    
-    
-    # Making clusters random-independents
-    clusterSetRNGStream(cl = cluster, iseed = seed)
-    
-    clusterEvalQ(cluster, library(dplyr))
-    clusterEvalQ(cluster, library(Matrix))
-    clusterEvalQ(cluster, library(tibble))
-    clusterEvalQ(cluster, library(marginaleffects))
-    clusterEvalQ(cluster, library(MMsampling))
-    
-    clusterExport(cluster, varlist = c("sampling", 
-                                       "betaInt", "betaTel", 
-                                       "YintLaw", "YtelLaw", 
-                                       "sdInt", "sdTel", 
-                                       "n"),
-                  envir = environment())
-    
-    expit <- function(x) 1.0 / (1.0 + exp(-x))
-
-    pInt <- expit(X %*% alphaInt) %>% as.numeric()
-    pq1Mat <- pInt %*% t(pInt)
-    diag(pq1Mat) <- pInt
-    
-    pTel <- expit(X %*% alphaTel) %>% as.numeric()
-    pq2Mat <- pTel %*% t(pTel)
-    diag(pq2Mat) <- pTel
-    
-    clusterExport(cluster, 
-                  varlist = c("pInt", "pq1Mat", "pTel", "pq2Mat"),
-                  envir = environment())
-    
-
     if (sampling == "SRS")
     {
-      pi <- rep(n / N, N)
-      piMat <- piMat_SRS(n, N)
+      selectedSample <- sample(seq_len(N), size = n, replace = FALSE)
       
-      clusterExport(cluster, 
-                    varlist = c("pi", "piMat"),
-                    envir = environment())
+      I <- logical(N)
+      I[selectedSample] <- TRUE
+      rm(selectedSample)
     }
     
     
-    dataExpY <- gen_expY(X, 
-                         betaInt, YintLaw, sdInt,
-                         betaTel, YtelLaw, sdTel)
+    dataModes <-  gen_choice_bimode(I, pInt, pTel, Z)
+    modes <- dataModes$mode
     
-    expYints <- dataExpY$expYints
-    sdInts <- dataExpY$sdInts
+    mask1 <- modes == "m1"
+    nInt <- sum(mask1)
+    mask2 <- modes == "m2"
+    nTel <- sum(mask2)
     
-    expYtels <- dataExpY$expYtels
-    sdTels <- dataExpY$sdTels
+    trueProbsSelect <- dataModes$probSelect
     
-    rm(dataExpY)
+    rm(dataModes)
     
-    
-    # if (YtelLaw == "gaussian")
-    # {
-    #   expYtels <- as.vector(Z %*% betaTel)
-    # }
-    # else if (YtelLaw == "exponential")
-    # {
-    #   sdTel <- "null"
-    #   expYtels <- as.vector(abs(X %*% betaTel))
-    # }
-    # 
-    # expTotTel <- sum(expYtels)
-    # 
-    # if (YintLaw == "gaussian")
-    #   expYints <- as.vector(X %*% betaInt)
-    #   
-    # else if (YintLaw == "exponential")
-    # {
-    #   sdInt <- "null"
-    #   expYints <- as.vector(abs(X %*% betaInt))
-    # }
-    # else if (YintLaw == "split3")
-    # {
-    #   expYints <- as.vector(X %*% betaInt)
-    #   quantilesInt <- quantile(expYints, probs = c(1.0 / 3.0, 2.0 / 3.0))
-    #   
-    # 
-    #   sdInt <- as.numeric(sdInt)
-    #   sdInts <- rep(as.numeric(sdInt), N)
-    #   covarYint <- diag(sdInts^2L)
-    #   
-    #   # Between first and second quantile of 3rd degree we add one
-    #   expYints[expYints > quantilesInt[1L]] <- 
-    #     expYints[expYints > quantilesInt[1L]] + 1.0
-    #   
-    #   # After the second quantile of 3rd degree we add one more
-    #   expYints[expYints > quantilesInt[2L]] <- 
-    #     expYints[expYints > quantilesInt[2L]] + 1.0
-    # }
-    
-    expTotYtel <- sum(expYtels)
-    expTotYint <- sum(expYints)
-    
-    clusterExport(cluster,
-                  varlist = c("expYtels", "expTotYtel",
-                              "expYints", "expTotYint",
-                              "sdInts", "sdTels", "rho"),
-                  envir = environment())
-    
-    clusterExport(cluster, c("gen_choice_bimode", 
-                  "gen_expY", "gen_Y", "set_Yobs", "set_phi"))
-      
-    
-    if (class(phi) == "character")
-      phiType <- phi
-    else
-      phiType <- "vector"
-    
-    phi <- set_phi(phi, N)
-    
-    # if (class(phi) == "character")
-    #   phiType <- phi
-    # else
-    #   phiType <- "vector"
-    # 
-    # if (phi == "eq")
-    #   phi <- rep(0.5, N)
-    # 
-    # else if (phi == "1/3")
-    #   phi <- rep(1.0 / 3.0, N)
-    # 
-    # else if (phi == "2/3")
-    #   phi <- rep(2.0 / 3.0, N)
-    # 
-    # else if (phi == "var")
-    #   phi <- seq_len(N) / N
-    
-    # # When there is no bias, phi = 0.5
-    # # When the bias increase (in absolute), phi tends to zero
-    # # (it gives more weights to the unbiased value)
-    # else if (phi == "linear")
-    # {
-    #   expDeltas <- expYints - expYtels
-    #   maxBias <- max(abs(expDeltas))
-    #   phi <- 0.5 - 0.5 * abs(expDeltas) / maxBias
-    # }
-    # else if (phi == "split3")
-    # {
-    #   expDeltas <- expYints - expYtels
-    #   absExpDeltas <- abs(expDeltas)
-    #   quantiles <- quantile(absExpDeltas, c(1.0 / 3.0, 2.0 / 3.0))
-    #   phi <- rep(0.5, N)
-    #   phi[absExpDeltas >= quantiles[1L]] <- 1.0 / 3.0
-    #   phi[absExpDeltas >= quantiles[2L]] <- 1.0 / 6.0
-    # }
-      
-    
-    clusterExport(cluster, 
-                  varlist = "phi", 
-                  envir = environment())
-    
-    monoSim <- function(...)
-    {
-      nbExperiments <- 12L
-      
-      partialResults <- data.frame(parameter = character(nbExperiments),
-                                   trueEstimator = logical(nbExperiments),
-                                   probSelect = character(nbExperiments),
-                                   invMatrices = character(nbExperiments),
-                                   calculTotal = character(nbExperiments),
-                                   estPhiBias = numeric(nbExperiments))
-      
-      row <- 1L
-      
-      Z <- X
-      p <- q <- ncol(X)
-        
-      
-      if (sampling == "SRS")
-      {
-        selectedSample <- sample(seq_len(N), size = n, replace = FALSE)
-        
-        I <- logical(N)
-        I[selectedSample] <- TRUE
-        rm(selectedSample)
-      }
-      
-      # Mode selection simulation
-      # modeChoiceOK <- FALSE
-      # 
-      # while (!modeChoiceOK)
-      # {
-      #   # modeChoiceOK <- TRUE
-      #   
-      #   dataModes <- gen_choice_bimode(I, pInt, pTel)
-      #   modes <- dataModes$mode
-      #   maskInt <- modes == "int"
-      #   nInt <- sum(maskInt)
-      #   maskTel <- modes == "tel"
-      #   nTel <- sum(maskTel)
-      #   trueProbsSelect <- dataModes$probSelect
-      #   
-      #   if (rankMatrix(Z[maskInt, , drop = FALSE]) == q &&
-      #       rankMatrix(Z[maskTel, , drop = FALSE]) == q)
-      #     modeChoiceOK <- TRUE
-      #   else
-      #     warning("Singular Zint / Ztel")
-      #   
-      # }
-      
-      dataModes <- gen_choice_bimode(I, pInt, pTel)
-      modes <- dataModes$mode
-      
-      maskInt <- modes == "int"
-      nInt <- sum(maskInt)
-      maskTel <- modes == "tel"
-      nTel <- sum(maskTel)
-      
-      trueProbsSelect <- dataModes$probSelect
-      
-      rm(dataModes)
-      
-      trueWeights <- (pi * trueProbsSelect)^-1L
-    
-      # Estimation of mode selection probabilities
-      estimProbsSelect <- 
-        MMsampling::estim_response_prob_sequential(I, pi, Z,
-                                                   modes, 
-                                                   c("int", "tel"))$unconditional
-    
-      estimWeights <- (pi * estimProbsSelect)^-1L
-      
-      # Generating values for Y_int and Y_tel
-      dataY <- gen_Y(X, 
-                     betaInt, sdInt, YintLaw,
-                     betaTel, sdTel, YtelLaw,
-                     expYints = expYints, expYtels = expYtels,
-                     rho = rho)
-      
-      Yints <- dataY$Yint
-      Ytels <- dataY$Ytel
-      
-      rm(dataY)
-      
-      # Creating the observed outcome vector
-      Yobs <- set_Yobs(Yint = Yints, Ytel = Ytels, modes = modes)
-      
-      #  # Affecting values to Y_int and Y_tel
-      # if (YtelLaw == "gaussian")
-      # {
-      #   Ytels <- expYtels + rnorm(n = N, sd = sdTels)
-      # }
-      #   
-      # 
-      # else if (YtelLaw == "exponential")
-      #   Ytels <- rexp(n = N, rate = expYtels^-1L)
-      # 
-      # expTotYtel <- sum(expYtels)
-      # trueYtel <- sum(Ytels)
-      # 
-      # if (YintLaw %in% c("gaussian", "split3"))
-      #   Yints <- expYints + rnorm(n = N, sd = sdInts)
-      # 
-      # else if (YintLaw == "exponential")
-      #   Yints <- rexp(n = N, rate = expYints^-1L)
-      
-      trueYtel <- sum(Ytels)
-      deltas <- Yints - Ytels
-      
-      # Evaluating the measure effect total (random value)
-      truePhiBias <- crossprod(phi, deltas) %>% as.vector()
-      expPhiBias <- crossprod(phi, expYints - expYtels) %>% as.vector()
-      
-      # Creating the observed outcome vector
-      # Yobs <- rep(NA_real_, N)
-      # Yobs[maskInt] <- Yints[maskInt]
-      # Yobs[maskTel] <- Ytels[maskTel]
-      
-      sample <- MMsampling:::MMSample$new(Z = X, pi = pi, I = I, 
-                             modes = modes, Yobs = Yobs, phi = phi)
-      
-      # Full HT estimation, with full population matrix (X^tX)^-1 and
-      # known probabilities
-      resEval <-
-        estim_delta_MCO(sample$Z, sample$Yobs, sample$modes,
-                               "int", "tel", "HT", "HT", pi,
-                        trueProbsSelect, sampleMatrix = FALSE) %>%
-        estim_MB_by_MCO(X, phi = phi) %>%
-        sum()
-      
+    trueWeights <- (pi * trueProbsSelect)^-1L
   
-      partialResults[row,] <- 
-        c(parameter = "HT", trueEstimator = FALSE,
-          probSelect = "true", invMatrices = "population",
-          calculTotal = "population", estPhiBias = resEval)
-      
-      row <- row + 1L
-  
-      # Full HT estimation, with sample matrix (Z_S^TZ_S)^-1 and
-      # known probabilities
-      resEval <-
-        estim_delta_MCO(sample$Z, sample$Yobs, sample$modes,
-                               "int", "tel", "HT", "HT", pi,
-                        trueProbsSelect, sampleMatrix = TRUE) %>%
-        estim_MB_by_MCO(Z, phi = phi) %>%
-        sum()
-  
-      partialResults[row,] <- c(parameter = "HT", trueEstimator = FALSE,
-                                probSelect = "true", invMatrices = "samples", 
-                                calculTotal = "population", estPhiBias = resEval)
-      
-      row <- row + 1L
-      
+    # Estimation of mode selection probabilities
+    estimProbsData <-
+      MMsampling::estim_response_prob_sequential(I, pi, Z,
+                                                 modes,
+                                                 c("m1", "m2"),
+                                                 chosenOnly = FALSE)
 
-      # Estimation on a unique MCO for Y1 and Y2, with beta X and only a constant
-      # delta for the estimation of the measure effect
-      deltaEval <- 
-        estim_delta_MCO_unique_model_const(Z, Yobs, modes, "int", "tel")
-      resEvalFull <- sum(phi) * deltaEval
-      resEvalHT <- 
-        as.vector(crossprod(phi[maskInt],
-                            estimWeights[maskInt]) * 
-                    deltaEval)
-      
-      
-      partialResults[c(row, row + 1L),] <- 
-        data.frame(parameter = "G-COMP_0_deg",
-                   trueEstimator = TRUE,
-                   probSelect = "null",
-                   invMatrices = "null",
-                   calculTotal = c("population", "sample"),
-                   estPhiBias = c(resEvalFull, resEvalHT))
-      
-      
-      row <- row + 2L
-      
-      
-      # G-COMP first degree estimation, <=> double MCO estimation
-      # tic()
-      # estimdelta <- estim_delta_MCO(sample$Z, sample$Yobs, sample$modes, 
-      #                   "int", "tel", "MCO", "MCO", pi, NULL)
-      estMBs <- estim_delta_MCO(sample$Z, sample$Yobs, sample$modes, 
-                                "int", "tel", "G-COMP", "G-COMP", pi, NULL, 
-                                returnMB = TRUE, order = 1L)
-      
-      resEvalFull <- crossprod(phi, estMBs) %>% as.vector()
-      
-      resEvalHT <- crossprod(phi[maskInt] * estimWeights[maskInt],
-                             estMBs[maskInt]) %>% as.vector()
-      # toc() %>% print()
-      
-      
-      
-      partialResults[c(row, row + 1L),] <- 
-        data.frame(parameter = "G-COMP_1_deg", trueEstimator = TRUE,
-                   probSelect = "null", 
-                   invMatrices = "null", calculTotal = c("population", "sample"),
-                   estPhiBias = c(resEvalFull, resEvalHT))
-      
-      row <- row + 2L
-      
-      # G-COMP two degrees estimation
-      # tic()
-      estMBs <- estim_delta_MCO(sample$Z, sample$Yobs, sample$modes, 
-                                "int", "tel", "G-COMP", "G-COMP", pi, NULL, 
-                                returnMB = TRUE, order = 2L)
-      
-      resEvalFull <- crossprod(phi, estMBs) %>% as.vector()
-      
-      resEvalHT <- crossprod(phi[maskInt] * estimWeights[maskInt],
-                             estMBs[maskInt]) %>% as.vector()
-      # toc() %>% print()
-      
-      
-      
-      partialResults[c(row, row + 1L),] <- 
-        data.frame(parameter = "G-COMP_2_deg", trueEstimator = TRUE,
-                   probSelect = "null", 
-                   invMatrices = "null", calculTotal = c("population", "sample"),
-                   estPhiBias = c(resEvalFull, resEvalHT))
-      
-      row <- row + 2L
-      
-      
-      
-      # Full HT estimation, with full population matrix (Z^tZ)^-1 and
-      # unknown probabilities
-      # tic()
-      estimdelta <- 
-        estim_delta_MCO(sample$Z, sample$Yobs, sample$modes, 
-                        "int", "tel", "HT", "HT", pi, 
-                        estimProbsSelect, sampleMatrix = FALSE)
-      
-      resEvalFull <- estimdelta %>% 
-        estim_MB_by_MCO(Z, phi = phi) %>% 
-        sum()
-      
-      resEvalHT <- estimdelta %>% 
-        estim_MB_by_MCO(Z, 
-                        phi = phi, 
-                        weights = estimWeights,
-                        mask = maskInt) %>% 
-        sum()
+    estimProbsSelect <-
+       MMsampling::get_value_by_mode(estimProbsData$unconditional, modes)
+    estimWeights <- (pi * estimProbsSelect)^-1L
     
-      # toc() %>% print()
+    # Generating values for Y_int and Y_tel
+    dataY <- gen_Y(Z, 
+                   beta1, sd1, Y1Law,
+                   beta2, sd2, Y2Law,
+                   expY1 = expY1, expY2 = expY2,
+                   rho = rho)
+    
+    Y1 <- dataY$Y1
+    Y2 <- dataY$Y2
+    
+    rm(dataY)
+    
+    # Creating the observed outcome vector
+    Yobs <- set_Yobs(Y1 = Y1, Y2 = Y2, modes = modes)
+    
+    # Estimations with Y1
+      # Estimation of the internet design covariance matrix
+    estimpq1 <- estimProbsData$conditional[, "m1"]
+    # estimpq1Mat <- pi_to_pi2(estimpq1)
+    estimpq1MatSr <- pi_to_pi2(estimpq1[mask1])
+    estimpq1MatSmr <- pi_to_pi2(estimpq1[mask2])
+    
+     # Total of phi_k y_1k with true probabilities
+    expPhi1 <- sum(phi * expY1)
+    totPhi1TW <- sum(phi[mask1] * trueWeights[mask1] * Yobs[mask1])
+    
+        # Estimation of the approximate variance of the total estimator
+        # the variance of Y1 is assumed known and homoscedastic for simplicity
+    # apprVarPhi1TW <- 
+    #   MMsampling::estim_appr_var_seq_phi1(Yobs,
+    #                                       modes, 
+    #                                       I,
+    #                                       piMat,
+    #                                       pq1Mat,
+    #                                       Z,
+    #                                       phi, 
+    #                                       sd1 = sd1,
+    #                                       correcEstimWeights = FALSE,
+    #                                       independenceq1 = TRUE)
+    
+    apprVarPhi1TW <- NA_real_
+    
+      # Total of phi_k y_1k with estimated probabilities
+    totPhi1EW <- sum(phi[mask1] * estimWeights[mask1] * Yobs[mask1])
+    # totPhi1EW <- NA_real_
+    
+    apprVarPhi1EW <-
+      MMsampling::estim_appr_var_seq_phi1(Yobs,
+                                          modes,
+                                          I,
+                                          piMat,
+                                          estimpq1MatSr,
+                                          Z,
+                                          phi,
+                                          sd1 = sd1,
+                                          correcEstimWeights = TRUE,
+                                          independenceq1 = TRUE,
+                                          p1 = estimpq1,
+                                          pq1MatSr = estimpq1MatSr)
      
-      
-      partialResults[c(row, row + 1L),] <- 
-        data.frame(parameter = "HT", trueEstimator = TRUE,
-                   probSelect = "estimation", invMatrices = "population", 
-                   calculTotal = c("population", "sample"), 
-                   estPhiBias = c(resEvalFull, resEvalHT))
-      
-      row <- row + 2L
-      
-      # Full HT estimation, with sample matrix (Z_S^TZ_S)^-1 and
-      # unknown probabilities
-      # tic()
-      estimdelta <- 
-        estim_delta_MCO(sample$Z, sample$Yobs, sample$modes, 
-                        "int", "tel", "HT", "HT", pi, 
-                        estimProbsSelect, sampleMatrix = TRUE) 
-      
-      
-      resEvalFull <- estimdelta %>% 
-        estim_MB_by_MCO(Z, phi = phi) %>% 
-        sum()
-      
-      resEvalHT <- estimdelta %>% 
-        estim_MB_by_MCO(Z, 
-                        phi = phi, 
-                        weights = estimWeights, 
-                        mask = maskInt) %>% 
-        sum()
+    # apprVarPhi1EW <- NA_real_
+      # parameter equal to
+      #  phi_k y_1k / sum of the phi_k on U
+    expMeanPhi1 <- expPhi1 / sum(phi)
+    meanPhi1TW <- totPhi1TW / sum(phi[mask1] * trueWeights[mask1])
     
-      # toc() %>% print()
-      
-      partialResults[c(row, row + 1L),] <- 
-        data.frame(parameter = "HT", trueEstimator = TRUE,
-                   probSelect = "estimation", invMatrices = "samples", 
-                   calculTotal = c("population", "sample"), 
-                   estPhiBias = c(resEvalFull, resEvalHT))
-      
-      row <- row + 2L
-      
-      # Estimations of t_phi1 and t_phi2
-      # - With true weights
-      estTotPhiYintHTTrueMP <- 
-        phi[maskInt] * 
-        trueWeights[maskInt] * 
-        Yints[maskInt]
-      
-      estTotPhiYintHTTrueMP <- sum(estTotPhiYintHTTrueMP)
-      
-      estTotPhiYtelHTTrueMP <- 
-        (1.0 - phi[maskTel]) * 
-        trueWeights[maskTel] * 
-        Ytels[maskTel]
-      
-      # - With estimated weights
-      estTotPhiYtelHTTrueMP <- sum(estTotPhiYtelHTTrueMP)
+    # apprVarMeanPhi1TW <- 
+    #   MMsampling::estim_var_mean_phi1(Yobs,
+    #                                   modes, 
+    #                                   I,
+    #                                   piMat,
+    #                                   pq1Mat,
+    #                                   Z,
+    #                                   phi, 
+    #                                   correcEstimWeights = FALSE)
+    # 
     
-      estTotPhiYintHTEstMP <-
-        phi[maskInt] *
-        estimWeights[maskInt] *
-        Yints[maskInt]
+    apprVarMeanPhi1TW <- NA_real_ 
     
-      estTotPhiYintHTEstMP <- sum(estTotPhiYintHTEstMP)
+    meanPhi1EW <- totPhi1EW / sum(phi[mask1] * estimWeights[mask1])
+      
+    # meanPhi1EW <- NA_real_
     
-      estTotPhiYtelHTEstmMP <-
-        (1.0 - phi[maskTel]) *
-        estimWeights[maskTel] *
-        Ytels[maskTel]
+    apprVarMeanPhi1EW <-
+      MMsampling::estim_var_mean_phi1(Yobs,
+                                      modes,
+                                      I,
+                                      piMat,
+                                      estimpq1MatSr,
+                                      Z,
+                                      phi,
+                                      correcEstimWeights = TRUE,
+                                      independenceq1 = TRUE,
+                                      p1 = estimpq1,
+                                      pq1MatSr = estimpq1MatSr)
     
-      estTotPhiYtelHTEstmMP <- sum(estTotPhiYtelHTEstmMP)
-      
-      estPhiYtelEstMP <-
-        phi[maskTel] *
-        estimWeights[maskTel] *
-        Ytels[maskTel]
-      
-      estPhiYtelEstMP <- sum(estPhiYtelEstMP)
-      
-      normEstPhiBiasDiffHT <-
-        (estTotPhiYintHTEstMP - estPhiYtelEstMP) / sum(phi)
-      
-      # Don't know why but some columns are
-      #  automatically converted as character
-      partialResults$estPhiBias <- as.numeric(partialResults$estPhiBias)
-      partialResults$trueEstimator <- as.logical(partialResults$trueEstimator)
-      # Value estimated only on telephone answers, with estimated selection probabilities
-      benchmark <- crossprod(estimWeights[maskTel], Ytels[maskTel]) %>% 
-        as.vector()
-      trueWeightsBenchmark <- crossprod(trueWeights[maskTel], Ytels[maskTel]) %>% 
-        as.vector()
+    # apprVarMeanPhi1EW <- NA_real_
+    
+    # Estimations with Y2
+    
+      # Estimation of the internet design covariance matrix
+    estimpq2 <-  estimProbsData$conditional[, "m2"]
+    # estimpq2Mat <- pi_to_pi2(estimpq2)
+    estimpq2MatSmr <- pi_to_pi2(estimpq2[mask2])
 
-      
-      partialResults <- partialResults %>% 
-        add_column(.before = 1L, expn = sum(pi)) %>% 
-        add_column(.after = "expn", n = sum(I)) %>% 
-        add_column(.after = "n", nInt = nInt) %>% 
-        add_column(.after = "nInt", nTel = nTel) %>% 
-        add_column(.after = "nTel", expYint = expTotYint) %>% 
-        add_column(.after = "expYint", trueYtel = trueYtel) %>% 
-        add_column(.after = "trueYtel", expYtel = expTotYtel) %>% 
-        add_column(.before = "estPhiBias", truePhiBias = truePhiBias) %>% 
-        add_column(.adter = "estPhiBias", normEstPhiBiasDiffHT = normEstPhiBiasDiffHT) %>% 
-        add_column(.after = "truePhiBias", expPhiBias = expPhiBias) %>% 
-        add_column(.after = "expPhiBias", 
-                   estPhiYintTrueMP = estTotPhiYintHTTrueMP) %>% 
-        add_column(.after = "estPhiYintTrueMP", avgEstWeightsInt = mean(trueWeights[maskInt])) %>% 
-        add_column(.after = "estPhiYintTrueMP", 
-                   estPhiYintEstMP = estTotPhiYintHTEstMP) %>% 
-        add_column(.after = "estPhiYintEstMP", avgEstWeightsTel = mean(trueWeights[maskTel])) %>%
-        add_column(.after = "avgEstWeightsTel", estPhiYtelEstMP = estPhiYtelEstMP) %>% 
-        add_column(.after = "estPhiYtelEstMP", 
-                   estPhiBarYtelTrueMP = estTotPhiYtelHTTrueMP) %>% 
-        add_column(.after = "estPhiBarYtelTrueMP", 
-                   estPhiBarYtelEstMP = estTotPhiYtelHTEstmMP) %>% 
-        mutate(.after = "estPhiBarYtelEstMP",
-               estYtelTrueMP = estPhiYintTrueMP + 
-                 estPhiBarYtelTrueMP -
-                 estPhiBias) %>% 
-        mutate(.after = "estYtelTrueMP", 
-               estYtelEstMP = estPhiYintEstMP + 
-                 estPhiBarYtelEstMP -
-                 estPhiBias) %>% 
-        add_column(.after = "estYtelEstMP", benchmark = benchmark) %>% 
-        add_column(.after = "benchmark", TWBenchmark = trueWeightsBenchmark)
-        
-      #results <- rbind(results, partialResults)
-    }
     
-    clusterExport(cluster, 
-                  varlist = "monoSim", 
-                  envir = environment())
+      # Total of phi_k y_2k with true probabilities
+    totPhi2TW <- sum(phi[mask2] * trueWeights[mask2] * Yobs[mask2])
     
-    #results <- lapply(X = seq_len(M), FUN = monoSim)
-    results <- parLapply(cluster, X = seq_len(M), fun = monoSim)
     
-    if (stopClusterAtEnd)
-      stopCluster(cluster)
-      
+        # Estimation of the approximate variance of the total estimator
+        # the variance of Y2 is assumed known and homoscedastic for simplicity
+    # apprVarPhi2TW <-
+    #   MMsampling::estim_appr_var_seq_phi2(Yobs,
+    #                                       modes,
+    #                                       I,
+    #                                       piMat,
+    #                                       pq1Mat,
+    #                                       pq2Mat,
+    #                                       Z,
+    #                                       phi,
+    #                                       sd2 = sd2,
+    #                                       correcEstimWeights = FALSE,
+    #                                       independenceq1 = TRUE,
+    #                                       independenceq2 = TRUE)
 
-    parameters <- results[[1L]] %>% 
-    select(parameter, probSelect, invMatrices, calculTotal)
+    apprVarPhi2TW <- NA_real_
     
-    parameters[, c("expVar2", "expVarPhi1", "expVarPhi2", 
-                   "expCovarPhi12", "expVarPhiDelta", 
-                   "expCovarPhi1Delta", "expCovarPhi2Delta")] <- NA_real_
-  
-    for (l in seq_len(nrow(parameters)))
-    {
-      parameter <- parameters[l, ]
-      
-      if (parameter$parameter == "HT" && 
-          parameter$probSelect == "true" &&
-          parameter$invMatrices == "population" && 
-          parameter$calculTotal == "population")
-      {
-        expVars <- var_estim_tot_BM(modeTotBiased = "HT", modeTotRef = "HT",
-                                    calculTotal = "population",
-                                    expY1 = expYints, expY2 = expYtels,
-                                    covarY1 = covarYint, covarY2 = covarYtel,
-                                    piMat = piMat,
-                                    pq1Mat = pq1Mat, pq2Mat = pq2Mat,
-                                    phi = phi,
-                                    subResults = TRUE)
-        
-        parameters[l, names(expVars)] <- expVars
-      }
-    }
+      # Total of phi_k y_2k with estimated probabilities
+    expPhi2 <- sum(phi * expY2)
+    totPhi2EW <- sum(phi[mask2] * estimWeights[mask2] * Yobs[mask2])
+    # totPhi2EW <- NA_real_
     
     
-    results <- do.call("rbind", results)
+    apprVarPhi2EW <-
+      MMsampling::estim_appr_var_seq_phi2(Yobs,
+                                          modes,
+                                          I,
+                                          piMat,
+                                          estimpq1MatSmr, # pq1Mat,
+                                          estimpq2MatSmr, #pq2Mat,
+                                          Z,
+                                          phi,
+                                          sd2 = sd2,
+                                          correcEstimWeights = TRUE,
+                                          independenceq1 = TRUE,
+                                          independenceq2 = TRUE,
+                                          p1 = estimpq1,
+                                          p2 = estimpq2,
+                                          pq1MatSmr = estimpq1MatSmr,
+                                          pq2MatSmr = estimpq2MatSmr)
     
-    if (any((betaInt - betaTel)[-1L] != 0.0))
-        MBtype <- "variable"
-      else
-        MBtype <- "constant"
+    # apprVarPhi2EW <- NA_real_
     
-    results <- results %>% 
-      add_column(.before = "n", sampling = sampling) %>% 
-      add_column(.before = "sampling", N = N) %>% 
-      add_column(.after = "n", YtelLaw = factor(YtelLaw)) %>% 
-      add_column(.after = "YtelLaw", sdTel = sdTel) %>% 
-      add_column(.after = "YtelLaw", YintLaw = factor(YintLaw)) %>% 
-      add_column(.after = "YintLaw", sdInt = sdInt) %>% 
-      add_column(.after = "sdInt", rho = rho) %>% 
-      add_column(.after = "rho",
-                 MBtype = factor(MBtype)) %>% 
-      add_column(.after = "MBtype", phi = factor(phiType))
+      # parameter equal to
+      #  phi_k y_2k / sum of the phi_k on U,
+    expMeanPhi2 <- expPhi2 / sum(phi)
+    meanPhi2TW <- totPhi2TW / sum(phi[mask2] * trueWeights[mask2])
+    # meanPhi2TW <- NA_real_
     
-
-    suppressMessages(results <- results %>% inner_join(parameters, by = NULL))
+    # apprVarMeanPhi2TW <-
+    #   MMsampling::estim_var_mean_phi2(Yobs,
+    #                       modes,
+    #                       I,
+    #                       piMat,
+    #                       pq1Mat,
+    #                       pq2Mat,
+    #                       Z,
+    #                       phi,
+    #                       correcEstimWeights = FALSE)
     
-      
-    # We calculate the real variance of the benchmark estimator
-    sdTWBenchmark <- var_HT_seq_phi2(expY2 = expYtels, 
-                                     covarY2 = covarYtel,
-                                     piMat = piMat,
-                                     pq1Mat = pq1Mat,
-                                     pq2Mat = pq2Mat,
-                                     phi = numeric(N),
-                                     correcEstimWeights = FALSE) %>% sqrt()
+    apprVarMeanPhi2TW <- NA_real_
     
-    results <- results %>% 
-      mutate(expSDTWBenchmark = sdTWBenchmark)
+    meanPhi2EW <- totPhi2EW / sum(phi[mask2] * estimWeights[mask2])
+    # meanPhi2EW <- NA_real_
     
+    apprVarMeanPhi2EW <-
+      MMsampling::estim_var_mean_phi2(Yobs,
+                                      modes,
+                                      I,
+                                      piMat,
+                                      estimpq1MatSmr,
+                                      estimpq2MatSmr,
+                                      Z,
+                                      phi,
+                                      correcEstimWeights = TRUE,
+                                      independenceq1 = TRUE,
+                                      independenceq2 = TRUE,
+                                      p1 = estimpq1,
+                                      p2 = estimpq2,
+                                      pq1MatSmr = estimpq1MatSmr,
+                                      pq2MatSmr = estimpq2MatSmr)
     
-    results
-  }
-```
-
--   `trueYtel`: $t_{tel} =\sum_{k \in U} y_{2k}$ for this iteration
--   `expYtel` : $\mathbb{E}[t_{tel}]=\mathbb{E} [\sum_{k \in U} y_{2k}]$
--   `estPhiBias` : $t_{\phi \hat{\Delta y}}$
--   `estPhiBiasDiffHT` : $\hat{t}_{\hat{p},\phi y_1} - \hat{t}_{\hat{p},\phi y_2}$
--   `truePhiBias` : $t_{\phi\Delta y}=\sum_{k\in U} \phi_k \Delta y_k$
--   `expPhiBias` : $\mathbb{E}[t_{\phi\Delta y}]$
--   `estPhiYintTrueMP` : $\hat{t}_{p,\phi y_1} = \sum_{k \in S_r}\frac{\phi_k y_{1k}}{\pi_k p_{1k}}$
--   `estPhiYintEstMP` : $\hat{t}_{\hat{p},\phi y_1} = \sum_{k \in S_r}\frac{\phi_k y_{1k}}{\pi_k \hat{p}_{1k}}$
--   `estYtelTrueMP` : $\hat{t}_{py_2}:= \hat{t}_{p,\phi y_1} + \hat{t}_{p,\bar{\phi} y_2} - t_{\phi \hat{\Delta y}}$
--   `estYtelEstMP` : $\hat{t}_{\hat{p}y_2}:= \hat{t}_{\hat{p},\phi y_1} + \hat{t}_{\hat{p},\bar{\phi} y_2} - t_{\phi \hat{\Delta y}}$
--   `expVar2` : $\mathbb{V}[\hat{t}_{\hat{p}y_2}]$ PAS ENCORE VRAI, À CONSIDÉRER
--   `TWBenchmark` : $\sum_{k \in S_{mr}} \frac{y_{2k}}{\pi_k(1-p_{1k})p_{2k}}$
--   `benchmark` : $\sum_{k \in S_{mr}} \frac{y_{2k}}{\pi_k(1-\hat{p}_{1k})\hat{p}_{2k}}$
--   `sdTWBenchmark` : standard deviation of the benchmark
--   `calculTotal` : `population` if we calculate $\hat{t}_{\phi \hat{\Delta y}}$ (imputation on the entire population), `sample` if it is $t_{\phi \hat{\Delta y}}$ (on $S_{r\bullet}$)
-
-```{r}
-#| echo: false
-loop_simulation <- function(parameters, M = 2000L)
-{
-  nbCores <- detectCores() - 1L
-  cluster <- makeCluster(nbCores)
-  
-  clusterExport(cluster, 
-                varlist = "Z",
-                envir = environment())
-
-  results <- NULL
-  nbResults <- 0L
-  
-  parameters <- parameters %>% distinct()
-  
-  betaTelMinus <- betaTel
-  betaIntMinus <- betaInt
-  
-  # Case when the sign a the age coefficient for telephone is positive
-  betaTelPlus <- betaTel
-  betaTelPlus[-1L] <- -betaTel[-1L]
-  betaIntPlus <- betaInt
-  betaIntPlus[-1L] <- -betaInt[-1L]
-  
-  bar <- progress_bar$new(total = nrow(parameters),
-                          format = "[:bar] :current/:total (:percent) eta: :eta")
-  
-  for (i in seq_len(nrow(parameters)))
-  {
-    tic()
-    expParams <- parameters[i, ]
-    #print(expParams)
-  
+    # apprVarMeanPhi2EW <- NA_real_
     
-    if (expParams$signAge == "plus")
-    {
-      betaIntTemp <- betaIntPlus
-      betaTelTemp <- betaTelPlus
-    }
-    else if (expParams$signAge == "minus")
-    {
-      betaIntTemp <- betaIntMinus
-      betaTelTemp <- betaTelMinus
-    }
+    # rm(estimpq1Mat, estimpq2Mat)
     
-    if (expParams$constBias)
-      betaIntTemp[-1L] <- betaTelTemp[-1L]
-    
-    expResults <- simulationUncounf(N, M = M,
-                                    Z = Z,
-                                    sampling = expParams$sampling,
-                                    alphaInt = alphaInt,
-                                    alphaTel = alphaTel,
-                                    betaInt = betaIntTemp,
-                                    betaTel = betaTelTemp,
-                                    YtelLaw = expParams$YtelLaw,
-                                    YintLaw = expParams$YintLaw,
-                                    phi = expParams$phi,
-                                    sdInt = expParams$sdY,
-                                    sdTel = expParams$sdY,
-                                    seed = 200L,
-                                    cluster = cluster)
-    
-    expResults <- expResults %>% 
-      rename(sd = sdInt) %>% 
-      select(-sdTel) %>% 
-      mutate(signAge = expParams$signAge)
-  
-    if (i == 1L)
-      expNbResults <- nrow(expResults)
-    
-    nbResults <- nbResults + expNbResults
-    expResults <- expResults %>% 
-      add_column(.before = 1L, 
-                 experiment = factor(rep(nbResults + seq_len(M), 
-                                         each = expNbResults / M)))
-    
-    results <- rbind(results, expResults)
-    
-    #t <- toc(quiet = TRUE)
-    
-    #glue("{round(unname(t$toc - t$tic))}s ({i} / {nrow(parameters)})") %>% print()
-    bar$tick()
+    tibble(estimand = rep(c("phi1", "mean phi1", 
+                            "phi2", "mean phi2"), each = 2L), 
+           expEstimand = rep(c(expPhi1, expMeanPhi1, expPhi2, expMeanPhi2), 
+                             each = 2L),
+           estimator = c("totPhi1TW", "totPhi1EW", 
+                         "meanPhi1TW", "meanPhi1EW", 
+                         "totPhi2TW", "totPhi2EW",
+                         "meanPhi2TW", "meanPhi2EW"), 
+           estimation = c(totPhi1TW, totPhi1EW, 
+                          meanPhi1TW, meanPhi1EW, 
+                          totPhi2TW, totPhi2EW,
+                          meanPhi2TW, meanPhi2EW), 
+           apprVar = c(apprVarPhi1TW, apprVarPhi1EW, 
+                       apprVarMeanPhi1TW, apprVarMeanPhi1EW,
+                       apprVarPhi2TW, apprVarPhi2EW,
+                       apprVarMeanPhi2TW, apprVarMeanPhi2EW)) %>% 
+      mutate(weights = rep_len(c("true", "estimated"), length.out = n()),
+             .after = "estimator")
   }
   
-  stopCluster(cluster)
+  # pv <- profvis::profvis(lapply(seq_len(M), FUN = monoSim))
+  # return(profvis::profvis(lapply(seq_len(10L), FUN = monoSim))) #prof_output = "test.res"))
+  # pv <- profvis::profvis(lapply(seq_len(10L), FUN = monoSim))
+  # pv <- microbenchmark::microbenchmark(monoSim(), times = 10L)
+  # return(pv)
   
-  results$signAge <- as.factor(results$signAge)
-  results$parameter <- as.factor(results$parameter)
-  results$probSelect <- as.factor(results$probSelect)
-  results$invMatrices <- as.factor(results$invMatrices)
-  results$calculTotal <- as.factor(results$calculTotal)
-  
-  results <- results %>% 
-    mutate(.after = "estPhiBias", diffPhiBias = estPhiBias - truePhiBias) %>% 
-    mutate(.after = "estPhiBarYtelEstMP", 
-           diffYtelEstMP = estYtelEstMP - trueYtel) %>% 
-    mutate(.after = "estPhiBarYtelTrueMP",
-           diffYtelTrueMP = estYtelTrueMP - trueYtel) %>% 
-    mutate(.after = "diffYtelTrueMP", 
-           diffWithoutCorrectionEstMP = estPhiYintEstMP + 
-             estPhiBarYtelEstMP - 
-             trueYtel) %>% 
-    mutate(.after = "diffYtelTrueMP", diffBenchmark = benchmark - trueYtel)
-  
-  results
+  # res <- lapply(seq_len(M), FUN = monoSim)
+  res <- mclapply(seq_len(M), FUN = monoSim, mc.cores = nCores)
+  do.call("rbind", res)
 }
 ```
 
-# measure effect evaluation
+We would like to test our ability to detect the presence or absence of a constant measure effect with the superposition of confidence intervals of $\hat{t}_{pq\phi1}$ and $\hat{t}_{pq\phi2}$. If there is no measure effect then we can assume there will be superposition of the confidence intervals.
 
-Evaluation of $M$ experiments:
+We will change the value of the constant measure effect $\delta$ and test the coverage of our test. We consider the ratio between the measure bias and the expected mean of the telephone answers.
 
 ```{r}
-M <- 1000L
-Kvec <- seq_len(M)
+ratioDeltas <- c(0.0, 0.1, 0.25, 0.5, 0.75, 1.0)
+expMean2 <- mean(Z %*% beta2)
+deltas <- ratioDeltas * abs(expMean2)
+
+deltas
+```
+
+Then for each measure bias we try the recognition of an eventual measure bias, with confidence intervals with errors $\alpha_1 = \alpha_2 = 0.05$.
+
+For centered it is not really an estimation because it uses the empiracal mean on U
+
+
+```{r}
+ratiosn <- c(0.16, 0.25, 0.4)
+nvec <- ratiosn * N
+nMin <- min(nvec)
+sdvec <- c(1.0, 2.0, 5.0)
+ratiosdvec <- c(0.25, 0.5, 1.0, 2.0, 4.0)
+rhovec <- c(0.8, 0.9)
+rhoRef <- 0.8
+
+paramVarn <- 
+  expand.grid(ratio_delta = ratioDeltas, 
+              ratio_n = ratiosn, 
+              sd = sdvec[1L], rho = rhoRef)
+paramVarRho <- 
+  expand.grid(ratio_delta = ratioDeltas, ratio_n = nMin, sd = sdvec[1L], 
+              rho = rhovec)
+paramVarSD <- 
+  expand.grid(ratio_delta = ratioDeltas, ratio_n = nMin,
+              sd = sdvec[-1L], 
+              rho = rhoRef)
+
+paramVarRatioSD <- expand.grid(ratio_delta = ratioDeltas, ratio_n = nMin,
+                               sd1 = sdvec[1L],
+                               ratiosd = ratiosdvec,
+                               rho = rhoRef)
+  
+parameters <- 
+  rbind(paramVarn, paramVarRho, paramVarSD) %>% 
+  mutate(sd1 = sd, ratiosd = 1.0) %>% 
+  select(-sd) %>% 
+  rbind(paramVarRatioSD) %>% 
+  filter(sd1 == sdvec[1L] | !ratio_delta %in% c(0.1, 0.75)) %>% 
+  mutate(delta = ratio_delta * abs(expMean2), .after = "ratio_delta") %>% 
+  mutate(n = ratio_n * N, .after = "ratio_n") %>% 
+  mutate(sd2 = sd1 * ratiosd, .after = "ratiosd") %>% 
+  distinct()
+
+rm(paramVarn, paramVarRho, paramVarSD, paramVarRatioSigma)
+
+parameters
 ```
 
 ```{r}
-#| eval: false
-
-load(file = "../results.RData")
+Msim <- 1000L
 ```
 
-Here we evaluate our estimators on the simplest cases : Gaussian laws with $\phi_k \equiv \frac{1}{2}$, a few values for $\sigma$ and a changing sign for $\beta_{tel,age}$.
+The different lines of the grid have the same seed. It is useful to run in different orders the evaluations and because the results from different parameters are never mixed there is no independency issue.
+
+If the number of parallel cores changes, the results might be different.
 
 ```{r}
-#| eval: false
-# Grid of all evaluated parameters
-parameters <- expand_grid(constBias = c(TRUE, FALSE),
-                          sampling = "SRS",#c("SRS", "STSRS"),
-                          YtelLaw = "gaussian",
-                          YintLaw = "gaussian",
-                          signAge = c("plus", "minus"),
-                          phi = "eq",
-                          sdY = 1.0) %>%
-  # If there is only exponential laws the parameter sdY is of no interest
-  mutate(sdY =
-           ifelse(YtelLaw == "gaussian" |
-                    YintLaw == "gaussian", sdY, "null")) 
+resSimBiasDetection <- NULL
 
-resultsGaussian <- loop_simulation(parameters, M = M)
+pb <- progress::progress_bar$new(format = "[:bar] :percent eta: :eta",
+                                 total = nrow(parameters))
+
+pb$tick(0L)
+for (k in seq_len(nrow(parameters)))
+{
+  # Change of the constant of the web conditional expectations
+  delta <- parameters[k, "delta"]
+  beta1Temp <- beta2
+  beta1Temp[1L] <- beta1Temp[1L] + delta
+  
+  
+  resTemp <- simulation_tphi(M = Msim,
+                             Z = Z,
+                             sampling = "SRS",
+                             alpha1 = alpha1,
+                             alpha2 = alpha2,
+                             beta1 = beta1Temp,
+                             beta2 = beta2,
+                             Y1Law = "gaussian",
+                             Y2Law = "gaussian",
+                             phi = "eq",
+                             sd1 = parameters[k, "sd1"],
+                             sd2 = parameters[k, "sd2"],
+                             n = parameters[k, "n"],
+                             rho = parameters[k, "rho"],
+                             seed = 200L,
+                             nCores = 30L)
+  
+  resSimBiasDetection <-
+    cbind(parameters[k, ], resTemp) %>%
+    rbind(resSimBiasDetection)
+
+  pb$tick()
+  seed <- .Random.seed
+  if (k >= 2L)
+    break
+}
+
+rm(resTemp)
+
+resSimBiasDetection <-
+  resSimBiasDetection %>%
+  arrange(n, sd1, sd2, ratio_delta)
 ```
-
-# Ex : Gaussian constant measure effect
-
-Results of each parameter for the case of SRS with **constant** measure effect, $\beta_{tel,age} > 0$ and Gaussian laws (with $\sigma =1$).
-
-## measure effect total
-
-$$\text{relError} = \frac{1}{M}\sum_{k=1}^M \frac{\hat{t}_{\phi\Delta y,k}-t_{\phi\Delta y,k}}{\mathbb{E}[t_{\phi\Delta y}]}$$
-
-$$\text{relRMSE} = \frac{\sqrt{\frac{1}{M}\sum_{k=1}^M (\hat{t}_{\phi\Delta y,k}-t_{\phi\Delta y,k})^2}}{|\mathbb{E}[t_{\phi\Delta y}]|}$$
 
 ```{r}
-temp <- resultsGaussian %>% 
-  filter(YtelLaw == "gaussian", YintLaw == "gaussian", 
-         sampling == "SRS", 
-         MBtype == "constant", signAge == "plus", 
-         trueEstimator) %>% 
-  select(-sampling, -MBtype, -probSelect) %>% 
-  group_by(parameter, invMatrices, calculTotal)
-
-temp %>% 
-  summarise(M = n(),
-            relErrorWithoutCorr = round(mean(diffWithoutCorrectionEstMP / abs(expYtel)), 4L),
-            relError = round(mean(diffPhiBias / abs(expPhiBias)), 4L), 
-            relRMSE = round(sqrt(mean(diffPhiBias^2L / expPhiBias^2L)), 4L)) %>% 
-  ungroup() %>% 
-  arrange(relRMSE)
+rm(seed)
 ```
 
-The relative error `relError` is close to zero for each estimator. It is clear that it is an improvement compared to the estimator that totally neglect the bias, i.e. $\hat{t}_{pq\phi1}-\hat{t}_{pq\bar{\phi}2}$. RMSEs are about the same, being in \[0.13, 0.18\]. For the best RMSE we have the model that consider the bias constant (up to a centered noise): the G-COMP model with a simple constant $\delta$ for the MB consideration.
-
-## telephone total estimation
-
-Our different estimators are all approximately unbiased, so we focus on the RMSE appearing when we estimate the total $t_2$ with each estimator:
-
-```{r}
-temp %>% 
-  summarise(M = n(),
-            relEstRMSE = round(sqrt(mean(diffYtelEstMP^2L / expYtel^2L)), 4L),
-            relEstRMSEBenchmark = round(sqrt(mean(diffBenchmark^2L / expYtel^2L)), 4L),
-            relExpRMSETWBenchmark = mean(expSDTWBenchmark / abs(expYtel))) %>% 
-  ungroup() %>% 
-  arrange(relEstRMSE)
-
-rm(temp)
-```
-
-The `relEstRMSEBenchmark` variable is the estimated RMSE of the benchmark estimator. We can observe that among the different estimators, we have a few of them that offer a **lower RMSE than the benchmark**. We have, with $\phi \equiv \frac{1}{2}$ :
-
--   G-COMPUTATION with 0, 1 or 2 degrees and a estimation of the total $\phi\Delta$ via the sample or the population
-
--   The HT Thompson estimator with sample inverse matrices and a total on the sample or the population
-
-Summing the bias on exclusively $S_{r\bullet}$ seems to be effective (with `calculTotal = sample`), which is great because in that case we don't need to know the $z_k$ for units that didn't respond by internet.
-
-The case $\phi = \frac{1}{N}, \frac{2}{N}, \cdots$ gives a RMSE higher than the benchmark RMSE.
-
-With $\phi$ fixed, the other estimators give a RMSE nearly equal the benckmark.
-
-The `relExpRMSETWBenchmark` variable is the expected standard deviation of the benchmark calculated with the true selection probabilities. The bias is equal to zero with the true weights so the RMSE is equal to the standard deviation. Biases of the estimators are nearly zero so RMSE and standard deviations can be compared. We can observe that for every estimator the (estimated) RMSE is **clearly lower** than the standard deviation / RMSE of the benchmark with true probabilities.
 
 ## Convergence in law
 
 ```{r}
+temp <- resSimBiasDetection %>% 
+  filter(ratio_delta == 0.0)
+```
+
+Note : having sd1 = sd2 ensure to have only independent estimators.
+```{r}
+resSimBiasDetection %>% 
+  filter(delta == 0.0,
+         sd1 == sd2,
+         estimand %in% c("phi1", "phi2"), 
+         weights == "estimated") %>% 
+  group_by(n, sd1, rho) %>% 
+  summarise(shapiro = shapiro.test(estimation))
+
+
+for (sigm in sigmavec)
+  {
+    for (nb in nvec)
+    {
+      for (cor in rhovec)
+      {
+        estimators1 <- resSimBiasDetection %>% 
+          filter(delta == 0.0,
+                 sd1 == sigm,
+                 sd2 == sigm,
+                 n == nb,
+                 estimand == "phi1", 
+                 weights == "estimated") %>% 
+          select(estimation) %>% 
+          pull()
+        
+        
+      
+        data2 <- resSimBiasDetection %>% 
+          filter(delta == 0.0, 
+                 sd1 == sigm,
+                 sd2 == sigm,
+                 n == nb,
+                 estimand == "phi2", 
+                 weights == "estimated") %>% 
+          select(estimation)
+      }
+    }
+  }
+```
+
+```{r}
 temp <- resultsGaussian %>% 
-  filter(YtelLaw == "gaussian", YintLaw == "gaussian", 
+  filter(Y2Law == "gaussian", Y1Law == "gaussian", 
          sampling == "SRS", 
          MBtype == "constant", signAge == "plus", 
          phi == "eq", trueEstimator) %>% 
@@ -1440,467 +799,7 @@ ks.test(x = (estimatorsPhi2 - empMean2) / empSD2, y = "pnorm")
 ```
 
 
-
-
-
-```{r}
-Mbis <- 10000L
-```
-
-Simulation with no measure effect:
-```{r}
-tic()
-pv <- profvis::profvis({
-resSimTotals <- simulation_tphi(M = Mbis,
-                                Z = Z,
-                                sampling = "SRS",
-                                alphaInt = alphaInt,
-                                alphaTel = alphaTel,
-                                betaInt = betaTel,
-                                betaTel = betaTel,
-                                YintLaw = "gaussian",
-                                YtelLaw = "gaussian",
-                                phi = "eq",
-                                sdInt = 1.0,
-                                sdTel = 1.0,
-                                seed = 200L)
-})
-glue("{toc()}")
-```
-
 ## Bias detection
-
-```{r}
-simulation_tphi <- function(Z,
-                            sampling = "SRS",
-                            alphaInt, alphaTel, 
-                            betaInt, betaTel, 
-                            YintLaw = "gaussian", YtelLaw = "gaussian",
-                            sdInt = 1.0, sdTel = 1.0, 
-                            rho = 0.8,
-                            phi = rep(0.5, N), M = 10000L,
-                            n = ceiling(N / 10L),
-                            seed = 123L,
-                            nCores = detectCores() - 1L)
-{
-  set.seed(seed)
-  
-  N <- nrow(Z)
-  
-  expit <- function(x) 1.0 / (1.0 + exp(-x))
-
-  pInt <- expit(Z %*% alphaInt) %>% as.numeric()
-  pq1Mat <- pi_to_pi2(pInt)
-  
-  pTel <- expit(Z %*% alphaTel) %>% as.numeric()
-  pq2Mat <- pi_to_pi2(pTel)
-
-  if (sampling == "SRS")
-  {
-    pi <- rep(n / N, N)
-    piMat <- piMat_SRS(n, N)
-  }
-  
-  
-  dataExpY <- gen_expY(Z, 
-                       betaInt, YintLaw, sdInt,
-                       betaTel, YtelLaw, sdTel)
-  
-  expYints <- dataExpY$expYints
-  sdInts <- dataExpY$sdInts
-  
-  expYtels <- dataExpY$expYtels
-  sdTels <- dataExpY$sdTels
-  
-  rm(dataExpY)
-  
-  phi <- set_phi(phi, N)
-  
-  
-  monoSim <- function(...)
-  {
-    q <- ncol(Z)
-        
-      
-    if (sampling == "SRS")
-    {
-      selectedSample <- sample(seq_len(N), size = n, replace = FALSE)
-      
-      I <- logical(N)
-      I[selectedSample] <- TRUE
-      rm(selectedSample)
-    }
-    
-    
-    dataModes <-  gen_choice_bimode(I, pInt, pTel)
-    modes <- dataModes$mode
-    
-    maskInt <- modes == "int"
-    nInt <- sum(maskInt)
-    maskTel <- modes == "tel"
-    nTel <- sum(maskTel)
-    
-    trueProbsSelect <- dataModes$probSelect
-    
-    rm(dataModes)
-    
-    trueWeights <- (pi * trueProbsSelect)^-1L
-  
-    # Estimation of mode selection probabilities
-    estimProbsData <-
-      MMsampling::estim_response_prob_sequential(I, pi, Z,
-                                                 modes,
-                                                 c("int", "tel"),
-                                                 chosenOnly = FALSE)
-
-    estimProbsSelect <-
-       MMsampling::get_value_by_mode(estimProbsData$unconditional, modes)
-    estimWeights <- (pi * estimProbsSelect)^-1L
-    
-    # Generating values for Y_int and Y_tel
-    dataY <- gen_Y(Z, 
-                   betaInt, sdInt, YintLaw,
-                   betaTel, sdTel, YtelLaw,
-                   expYints = expYints, expYtels = expYtels,
-                   rho = rho)
-    
-    Yints <- dataY$Yint
-    Ytels <- dataY$Ytel
-    
-    rm(dataY)
-    
-    # Creating the observed outcome vector
-    Yobs <- set_Yobs(Yint = Yints, Ytel = Ytels, modes = modes)
-    
-    # Estimations with Y1
-      # Estimation of the internet design covariance matrix
-    estimpq1 <- estimProbsData$conditional[, "int"]
-    # estimpq1Mat <- pi_to_pi2(estimpq1)
-    estimpq1MatSr <- pi_to_pi2(estimpq1[maskInt])
-    estimpq1MatSmr <- pi_to_pi2(estimpq1[maskTel])
-    
-     # Total of phi_k y_1k with true probabilities
-    expPhi1 <- sum(phi * expYints)
-    totPhi1TW <- sum(phi[maskInt] * trueWeights[maskInt] * Yobs[maskInt])
-    
-        # Estimation of the approximate variance of the total estimator
-        # the variance of Y1 is assumed known and homoscedastic for simplicity
-    # apprVarPhi1TW <- 
-    #   MMsampling::estim_appr_var_seq_phi1(Yobs,
-    #                                       modes, 
-    #                                       I,
-    #                                       piMat,
-    #                                       pq1Mat,
-    #                                       Z,
-    #                                       phi, 
-    #                                       sd1 = sdInt,
-    #                                       correcEstimWeights = FALSE,
-    #                                       independenceq1 = TRUE)
-    
-    apprVarPhi1TW <- NA_real_
-    
-      # Total of phi_k y_1k with estimated probabilities
-    totPhi1EW <- sum(phi[maskInt] * estimWeights[maskInt] * Yobs[maskInt])
-    # totPhi1EW <- NA_real_
-    
-    apprVarPhi1EW <-
-      MMsampling::estim_appr_var_seq_phi1(Yobs,
-                                          modes,
-                                          I,
-                                          piMat,
-                                          estimpq1MatSr,
-                                          Z,
-                                          phi,
-                                          sd1 = sdInt,
-                                          correcEstimWeights = TRUE,
-                                          independenceq1 = TRUE,
-                                          p1 = estimpq1,
-                                          pq1MatSr = estimpq1MatSr)
-     
-    # apprVarPhi1EW <- NA_real_
-      # parameter equal to
-      #  phi_k y_1k / sum of the phi_k on U
-    expMeanPhi1 <- expPhi1 / sum(phi)
-    meanPhi1TW <- totPhi1TW / sum(phi[maskInt] * trueWeights[maskInt])
-    
-    # apprVarMeanPhi1TW <- 
-    #   MMsampling::estim_var_mean_phi1(Yobs,
-    #                                   modes, 
-    #                                   I,
-    #                                   piMat,
-    #                                   pq1Mat,
-    #                                   Z,
-    #                                   phi, 
-    #                                   correcEstimWeights = FALSE)
-    # 
-    
-    apprVarMeanPhi1TW <- NA_real_ 
-    
-    meanPhi1EW <- totPhi1EW / sum(phi[maskInt] * estimWeights[maskInt])
-      
-    # meanPhi1EW <- NA_real_
-    
-    apprVarMeanPhi1EW <-
-      MMsampling::estim_var_mean_phi1(Yobs,
-                                      modes,
-                                      I,
-                                      piMat,
-                                      estimpq1MatSr,
-                                      Z,
-                                      phi,
-                                      correcEstimWeights = TRUE,
-                                      independenceq1 = TRUE,
-                                      p1 = estimpq1,
-                                      pq1MatSr = estimpq1MatSr)
-    
-    # apprVarMeanPhi1EW <- NA_real_
-    
-    # Estimations with Y2
-    
-      # Estimation of the internet design covariance matrix
-    estimpq2 <-  estimProbsData$conditional[, "tel"]
-    # estimpq2Mat <- pi_to_pi2(estimpq2)
-    estimpq2MatSmr <- pi_to_pi2(estimpq2[maskTel])
-
-    
-      # Total of phi_k y_2k with true probabilities
-    totPhi2TW <- sum(phi[maskTel] * trueWeights[maskTel] * Yobs[maskTel])
-    
-    
-        # Estimation of the approximate variance of the total estimator
-        # the variance of Y2 is assumed known and homoscedastic for simplicity
-    # apprVarPhi2TW <-
-    #   MMsampling::estim_appr_var_seq_phi2(Yobs,
-    #                                       modes,
-    #                                       I,
-    #                                       piMat,
-    #                                       pq1Mat,
-    #                                       pq2Mat,
-    #                                       Z,
-    #                                       phi,
-    #                                       sd2 = sdTel,
-    #                                       correcEstimWeights = FALSE,
-    #                                       independenceq1 = TRUE,
-    #                                       independenceq2 = TRUE)
-
-    apprVarPhi2TW <- NA_real_
-    
-      # Total of phi_k y_2k with estimated probabilities
-    expPhi2 <- sum(phi * expYtels)
-    totPhi2EW <- sum(phi[maskTel] * estimWeights[maskTel] * Yobs[maskTel])
-    # totPhi2EW <- NA_real_
-    
-    
-    apprVarPhi2EW <-
-      MMsampling::estim_appr_var_seq_phi2(Yobs,
-                                          modes,
-                                          I,
-                                          piMat,
-                                          estimpq1MatSmr, # pq1Mat,
-                                          estimpq2MatSmr, #pq2Mat,
-                                          Z,
-                                          phi,
-                                          sd2 = sdTel,
-                                          correcEstimWeights = TRUE,
-                                          independenceq1 = TRUE,
-                                          independenceq2 = TRUE,
-                                          p1 = estimpq1,
-                                          p2 = estimpq2,
-                                          pq1MatSmr = estimpq1MatSmr,
-                                          pq2MatSmr = estimpq2MatSmr)
-    
-    # apprVarPhi2EW <- NA_real_
-    
-      # parameter equal to
-      #  phi_k y_2k / sum of the phi_k on U,
-    expMeanPhi2 <- expPhi2 / sum(phi)
-    meanPhi2TW <- totPhi2TW / sum(phi[maskTel] * trueWeights[maskTel])
-    # meanPhi2TW <- NA_real_
-    
-    # apprVarMeanPhi2TW <-
-    #   MMsampling::estim_var_mean_phi2(Yobs,
-    #                       modes,
-    #                       I,
-    #                       piMat,
-    #                       pq1Mat,
-    #                       pq2Mat,
-    #                       Z,
-    #                       phi,
-    #                       correcEstimWeights = FALSE)
-    
-    apprVarMeanPhi2TW <- NA_real_
-    
-    meanPhi2EW <- totPhi2EW / sum(phi[maskTel] * estimWeights[maskTel])
-    # meanPhi2EW <- NA_real_
-    
-    apprVarMeanPhi2EW <-
-      MMsampling::estim_var_mean_phi2(Yobs,
-                                      modes,
-                                      I,
-                                      piMat,
-                                      estimpq1MatSmr,
-                                      estimpq2MatSmr,
-                                      Z,
-                                      phi,
-                                      correcEstimWeights = TRUE,
-                                      independenceq1 = TRUE,
-                                      independenceq2 = TRUE,
-                                      p1 = estimpq1,
-                                      p2 = estimpq2,
-                                      pq1MatSmr = estimpq1MatSmr,
-                                      pq2MatSmr = estimpq2MatSmr)
-    
-    # apprVarMeanPhi2EW <- NA_real_
-    
-    # rm(estimpq1Mat, estimpq2Mat)
-    
-    tibble(estimand = rep(c("phi1", "mean phi1", 
-                            "phi2", "mean phi2"), each = 2L), 
-           expEstimand = rep(c(expPhi1, expMeanPhi1, expPhi2, expMeanPhi2), 
-                             each = 2L),
-           estimator = c("totPhi1TW", "totPhi1EW", 
-                         "meanPhi1TW", "meanPhi1EW", 
-                         "totPhi2TW", "totPhi2EW",
-                         "meanPhi2TW", "meanPhi2EW"), 
-           estimation = c(totPhi1TW, totPhi1EW, 
-                          meanPhi1TW, meanPhi1EW, 
-                          totPhi2TW, totPhi2EW,
-                          meanPhi2TW, meanPhi2EW), 
-           apprVar = c(apprVarPhi1TW, apprVarPhi1EW, 
-                       apprVarMeanPhi1TW, apprVarMeanPhi1EW,
-                       apprVarPhi2TW, apprVarPhi2EW,
-                       apprVarMeanPhi2TW, apprVarMeanPhi2EW)) %>% 
-      mutate(weights = rep_len(c("true", "estimated"), length.out = n()),
-             .after = "estimator")
-  }
-  
-  # pv <- profvis::profvis(lapply(seq_len(M), FUN = monoSim))
-  # return(profvis::profvis(lapply(seq_len(10L), FUN = monoSim))) #prof_output = "test.res"))
-  # pv <- profvis::profvis(lapply(seq_len(10L), FUN = monoSim))
-  # pv <- microbenchmark::microbenchmark(monoSim(), times = 10L)
-  # return(pv)
-  
-  # res <- lapply(seq_len(M), FUN = monoSim)
-  res <- mclapply(seq_len(M), FUN = monoSim, mc.cores = nCores)
-  do.call("rbind", res)
-}
-```
-
-We would like to test our ability to detect the presence or absence of a constant measure effect with the superposition of confidence intervals of $\hat{t}_{pq\phi1}$ and $\hat{t}_{pq\phi2}$. If there is no measure effect then we can assume there will be superposition of the confidence intervals.
-
-We will change the value of the constant measure effect $\delta$ and test the coverage of our test. We consider the ratio between the measure bias and the expected mean of the telephone answers.
-
-```{r}
-ratioDeltas <- c(0.0, 0.1, 0.25, 0.5, 0.75, 1.0)
-expMean2 <- mean(Z %*% betaTel)
-deltas <- ratioDeltas * abs(expMean2)
-
-deltas
-```
-
-Then for each measure bias we try the recognition of an eventual measure bias, with confidence intervals with errors $\alpha_1 = \alpha_2 = 0.05$.
-
-For centered it is not really an estimation because it uses the empiracal mean on U
-
-
-```{r}
-ratiosn <- c(0.16, 0.25, 0.4)
-nvec <- ratiosn * N
-nMin <- min(nvec)
-sigmavec <- c(1.0, 2.0, 5.0)
-ratiosigmavec <- c(0.25, 0.5, 1.0, 2.0, 4.0)
-rhovec <- c(0.8, 0.9)
-rhoRef <- 0.8
-
-paramVarn <- 
-  expand.grid(ratio_delta = ratioDeltas, 
-              ratio_n = ratiosn, 
-              sigma = sigmavec[1L], rho = rhoRef)
-paramVarRho <- 
-  expand.grid(ratio_delta = ratioDeltas, ratio_n = nMin, sigma = sigmavec[1L], 
-              rho = rhovec)
-paramVarSigma <- 
-  expand.grid(ratio_delta = ratioDeltas, ratio_n = nMin,
-              sigma = sigmavec[-1L], 
-              rho = rhoRef)
-
-paramVarRatioSigma <- expand.grid(ratio_delta = ratioDeltas, ratio_n = nMin,
-                                  sigma1 = sigmavec[1L],
-                                  ratiosigma = ratiosigmavec,
-                                  rho = rhoRef)
-  
-parameters <- 
-  rbind(paramVarn, paramVarRho, paramVarSigma) %>% 
-  mutate(sigma1 = sigma, ratiosigma = 1.0, sigma2 = sigma) %>% 
-  select(-sigma) %>% 
-  rbind(paramVarRatioSigma) %>% 
-  filter(sigma1 == sigmavec[1L] | !ratio_delta %in% c(0.1, 0.75)) %>% 
-  mutate(delta = ratio_delta * abs(expMean2), .after = "ratio_delta") %>% 
-  mutate(n = ratio_n * N, .after = "ratio_n") %>% 
-  mutate(sigma2 = sigma1 * ratiosigma, .after = "ratiosigma") %>% 
-  distinct()
-
-rm(paramVarn, paramVarRho, paramVarSigma, paramVarRatioSigma)
-
-summary(parameters)
-parameters
-```
-```{r}
-Msim <- 10000L
-```
-
-The different lines of the grid have the same seed. It is useful to run in different orders the evaluations and because the results from different parameters are never mixed there is no independency issue.
-
-
-```{r}
-resSimBiasDetection <- NULL
-
-pb <- progress::progress_bar$new(format = "[:bar] :percent eta: :eta",
-                                 total = nrow(parameters))
-
-pb$tick(0L)
-for (k in seq_len(nrow(parameters)))
-{
-  delta <- parameters[k, "delta"]
-  betaIntTemp <- betaTel
-  betaIntTemp[1L] <- betaIntTemp[1L] + delta
-  
-  
-  resTemp <- simulation_tphi(M = Msim,
-                             Z = Z,
-                             sampling = "SRS",
-                             alphaInt = alphaInt,
-                             alphaTel = alphaTel,
-                             betaInt = betaIntTemp,
-                             betaTel = betaTel,
-                             YintLaw = "gaussian",
-                             YtelLaw = "gaussian",
-                             phi = "eq",
-                             sdInt = parameters[k, "sigma1"],
-                             sdTel = parameters[k, "sigma2"],
-                             n = parameters[k, "n"],
-                             rho = parameters[k, "rho"],
-                             seed = 200L,
-                             nCores = 30L)
-  
-  resSimBiasDetection <-
-    cbind(parameters[k, ], resTemp) %>%
-    rbind(resSimBiasDetection)
-
-  pb$tick()
-  seed <- .Random.seed
-}
-
-rm(resTemp)
-
-resSimBiasDetection <-
-  resSimBiasDetection %>%
-  arrange(n, sigma1, sigma2, ratio_delta)
-```
-
-```{r}
-rm(seed)
-```
 
 
 ### Variance estimators for the totals
@@ -1976,12 +875,12 @@ resSimBiasDetection %>%
   select(-weights)
 
 
-expYtels <- Z %*% betaTel
+expY2 <- Z %*% beta2
 
 # List of the expected values of the web counterfactuals for each delta
-expYints_list <- list("0" = expYtels)
+expY1_list <- list("0" = expY2)
 for (delta in unique(temp$delta))
-  expYints_list[[as.character(delta)]] <- expYtels + delta
+  expY1_list[[as.character(delta)]] <- expY2 + delta
 
 covarSRS <- covar_SRS(n, N)
 
@@ -1990,7 +889,7 @@ vartotphi2TW_list <- list()
 for (sigma in unique(temp$sigma))
 {
   vartotphi2TW_list[[as.character(sigma)]] <- 
-    true_variance_tephi2(expYtels,
+    true_variance_tephi2(expY2,
                          pi, covarSRS, 
                          pInt, pTel, 
                          phi, 
@@ -2004,11 +903,11 @@ for (k in seq_len(nrow(temp) / 2L))
   delta <- temp[2L * k, "delta"]
   sigma <- temp[2L * k, "sigma"]
   # expData <- gen_expY(Z, 
-  #                     betaInt = betaInt, sdInt = sigma, 
-  #                     betaTel = betaTel, sdTel = sigma)
+  #                     beta1 = beta1, sd1 = sigma, 
+  #                     beta2 = beta2, sd2 = sigma)
 
   n <- temp[k, "n"]
-  vartotphi1TW <- true_variance_tephi1(expYints_list[[as.character(delta)]], 
+  vartotphi1TW <- true_variance_tephi1(expY1_list[[as.character(delta)]], 
                                        pi, covarSRS, 
                                        pInt,
                                        phi, 
@@ -2557,13 +1456,915 @@ glue("coverage: {coverage} (expected: {1 - alpha})")
 rm(deltas, ratioDeltas)
 ```
 
+Parameters:
+
+-   $\alpha_{tel}$ and $\alpha_min$, coefficients of conditional expectations of $r_{tel}$ and $r_{int}$
+-   $\beta_{tel}$ and $\beta_{int}$, coefficients of conditional expectations of $Y_{tel}$ and $Y_{int}$
+-   the sampling type (`sampling`)
+-   the conditional standard deviations of $Y_{tel}$ and $Y_{int}$ (`sd1` and `sd2`)
+-   the law of $Y_{tel}$ (`Y2Law`)
+-   the law of $Y_{int}$ (`Y1Law`)
+-   the state of $\phi$ (`phi`)
+-   the number of iterations (`M`)
+-   the random seed (`seed`)
+
+```{r}
+#| eval: false
+simulationUncounf <- 
+  function(N, 
+           sampling = "SRS",
+           alpha1, alpha2, 
+           beta1, beta2, 
+           Y1Law = "gaussian", Y2Law = "gaussian",
+           sd1 = 1.0, sd2 = 1.0, 
+           rho = 0.8,
+           phi = rep(0.5, N), M = 1000L,
+           X = NULL,
+           n = ceiling(N / 10L),
+           seed = 123L,
+           cluster = NULL)
+  {
+    
+    stopClusterAtEnd <- is.null(cluster)
+    # X is exported only if the cluster is created in the function
+    if (is.null(cluster))
+    {
+      nbCores <- detectCores() - 1L
+      cluster <- makeCluster(nbCores)
+    
+      clusterExport(cluster, 
+                    varlist = "X",
+                    envir = environment())
+    }
+    
+    
+    # Making clusters random-independents
+    clusterSetRNGStream(cl = cluster, iseed = seed)
+    
+    clusterEvalQ(cluster, library(dplyr))
+    clusterEvalQ(cluster, library(Matrix))
+    clusterEvalQ(cluster, library(tibble))
+    clusterEvalQ(cluster, library(marginaleffects))
+    clusterEvalQ(cluster, library(MMsampling))
+    
+    clusterExport(cluster, varlist = c("sampling", 
+                                       "beta1", "beta2", 
+                                       "Y1Law", "Y2Law", 
+                                       "sd1", "sd2", 
+                                       "n"),
+                  envir = environment())
+    
+    expit <- function(x) 1.0 / (1.0 + exp(-x))
+
+    pInt <- expit(X %*% alpha1) %>% as.numeric()
+    pq1Mat <- pInt %*% t(pInt)
+    diag(pq1Mat) <- pInt
+    
+    pTel <- expit(X %*% alpha2) %>% as.numeric()
+    pq2Mat <- pTel %*% t(pTel)
+    diag(pq2Mat) <- pTel
+    
+    clusterExport(cluster, 
+                  varlist = c("pInt", "pq1Mat", "pTel", "pq2Mat"),
+                  envir = environment())
+    
+
+    if (sampling == "SRS")
+    {
+      pi <- rep(n / N, N)
+      piMat <- piMat_SRS(n, N)
+      
+      clusterExport(cluster, 
+                    varlist = c("pi", "piMat"),
+                    envir = environment())
+    }
+    
+    
+    dataExpY <- gen_expY(X, 
+                         beta1, Y1Law, sd1,
+                         beta2, Y2Law, sd2)
+    
+    expY1 <- dataExpY$expY1
+    sd1s <- dataExpY$sd1s
+    
+    expY2 <- dataExpY$expY2
+    sd2s <- dataExpY$sd2s
+    
+    rm(dataExpY)
+    
+    
+    # if (Y2Law == "gaussian")
+    # {
+    #   expY2 <- as.vector(Z %*% beta2)
+    # }
+    # else if (Y2Law == "exponential")
+    # {
+    #   sd2 <- "null"
+    #   expY2 <- as.vector(abs(X %*% beta2))
+    # }
+    # 
+    # expTotTel <- sum(expY2)
+    # 
+    # if (Y1Law == "gaussian")
+    #   expY1 <- as.vector(X %*% beta1)
+    #   
+    # else if (Y1Law == "exponential")
+    # {
+    #   sd1 <- "null"
+    #   expY1 <- as.vector(abs(X %*% beta1))
+    # }
+    # else if (Y1Law == "split3")
+    # {
+    #   expY1 <- as.vector(X %*% beta1)
+    #   quantilesInt <- quantile(expY1, probs = c(1.0 / 3.0, 2.0 / 3.0))
+    #   
+    # 
+    #   sd1 <- as.numeric(sd1)
+    #   sd1s <- rep(as.numeric(sd1), N)
+    #   covarYint <- diag(sd1s^2L)
+    #   
+    #   # Between first and second quantile of 3rd degree we add one
+    #   expY1[expY1 > quantilesInt[1L]] <- 
+    #     expY1[expY1 > quantilesInt[1L]] + 1.0
+    #   
+    #   # After the second quantile of 3rd degree we add one more
+    #   expY1[expY1 > quantilesInt[2L]] <- 
+    #     expY1[expY1 > quantilesInt[2L]] + 1.0
+    # }
+    
+    expTotYtel <- sum(expY2)
+    expTotYint <- sum(expY1)
+    
+    clusterExport(cluster,
+                  varlist = c("expY2", "expTotYtel",
+                              "expY1", "expTotYint",
+                              "sd1s", "sd2s", "rho"),
+                  envir = environment())
+    
+    clusterExport(cluster, c("gen_choice_bimode", 
+                  "gen_expY", "gen_Y", "set_Yobs", "set_phi"))
+      
+    
+    if (class(phi) == "character")
+      phiType <- phi
+    else
+      phiType <- "vector"
+    
+    phi <- set_phi(phi, N)
+    
+    # if (class(phi) == "character")
+    #   phiType <- phi
+    # else
+    #   phiType <- "vector"
+    # 
+    # if (phi == "eq")
+    #   phi <- rep(0.5, N)
+    # 
+    # else if (phi == "1/3")
+    #   phi <- rep(1.0 / 3.0, N)
+    # 
+    # else if (phi == "2/3")
+    #   phi <- rep(2.0 / 3.0, N)
+    # 
+    # else if (phi == "var")
+    #   phi <- seq_len(N) / N
+    
+    # # When there is no bias, phi = 0.5
+    # # When the bias increase (in absolute), phi tends to zero
+    # # (it gives more weights to the unbiased value)
+    # else if (phi == "linear")
+    # {
+    #   expDeltas <- expY1 - expY2
+    #   maxBias <- max(abs(expDeltas))
+    #   phi <- 0.5 - 0.5 * abs(expDeltas) / maxBias
+    # }
+    # else if (phi == "split3")
+    # {
+    #   expDeltas <- expY1 - expY2
+    #   absExpDeltas <- abs(expDeltas)
+    #   quantiles <- quantile(absExpDeltas, c(1.0 / 3.0, 2.0 / 3.0))
+    #   phi <- rep(0.5, N)
+    #   phi[absExpDeltas >= quantiles[1L]] <- 1.0 / 3.0
+    #   phi[absExpDeltas >= quantiles[2L]] <- 1.0 / 6.0
+    # }
+      
+    
+    clusterExport(cluster, 
+                  varlist = "phi", 
+                  envir = environment())
+    
+    monoSim <- function(...)
+    {
+      nbExperiments <- 12L
+      
+      partialResults <- data.frame(parameter = character(nbExperiments),
+                                   trueEstimator = logical(nbExperiments),
+                                   probSelect = character(nbExperiments),
+                                   invMatrices = character(nbExperiments),
+                                   calculTotal = character(nbExperiments),
+                                   estPhiBias = numeric(nbExperiments))
+      
+      row <- 1L
+      
+      Z <- X
+      p <- q <- ncol(X)
+        
+      
+      if (sampling == "SRS")
+      {
+        selectedSample <- sample(seq_len(N), size = n, replace = FALSE)
+        
+        I <- logical(N)
+        I[selectedSample] <- TRUE
+        rm(selectedSample)
+      }
+      
+      # Mode selection simulation
+      # modeChoiceOK <- FALSE
+      # 
+      # while (!modeChoiceOK)
+      # {
+      #   # modeChoiceOK <- TRUE
+      #   
+      #   dataModes <- gen_choice_bimode(I, pInt, pTel)
+      #   modes <- dataModes$mode
+      #   mask1 <- modes == "m1"
+      #   nInt <- sum(mask1)
+      #   mask2 <- modes == "m2"
+      #   nTel <- sum(mask2)
+      #   trueProbsSelect <- dataModes$probSelect
+      #   
+      #   if (rankMatrix(Z[mask1, , drop = FALSE]) == q &&
+      #       rankMatrix(Z[mask2, , drop = FALSE]) == q)
+      #     modeChoiceOK <- TRUE
+      #   else
+      #     warning("Singular Zint / Ztel")
+      #   
+      # }
+      
+      dataModes <- gen_choice_bimode(I, pInt, pTel)
+      modes <- dataModes$mode
+      
+      mask1 <- modes == "m1"
+      nInt <- sum(mask1)
+      mask2 <- modes == "m2"
+      nTel <- sum(mask2)
+      
+      trueProbsSelect <- dataModes$probSelect
+      
+      rm(dataModes)
+      
+      trueWeights <- (pi * trueProbsSelect)^-1L
+    
+      # Estimation of mode selection probabilities
+      estimProbsSelect <- 
+        MMsampling::estim_response_prob_sequential(I, pi, Z,
+                                                   modes, 
+                                                   c("m1", "m2"))$unconditional
+    
+      estimWeights <- (pi * estimProbsSelect)^-1L
+      
+      # Generating values for Y_int and Y_tel
+      dataY <- gen_Y(X, 
+                     beta1, sd1, Y1Law,
+                     beta2, sd2, Y2Law,
+                     expY1 = expY1, expY2 = expY2,
+                     rho = rho)
+      
+      Yints <- dataY$Yint
+      Ytels <- dataY$Ytel
+      
+      rm(dataY)
+      
+      # Creating the observed outcome vector
+      Yobs <- set_Yobs(Yint = Yints, Ytel = Ytels, modes = modes)
+      
+      #  # Affecting values to Y_int and Y_tel
+      # if (Y2Law == "gaussian")
+      # {
+      #   Ytels <- expY2 + rnorm(n = N, sd = sd2s)
+      # }
+      #   
+      # 
+      # else if (Y2Law == "exponential")
+      #   Ytels <- rexp(n = N, rate = expY2^-1L)
+      # 
+      # expTotYtel <- sum(expY2)
+      # trueYtel <- sum(Ytels)
+      # 
+      # if (Y1Law %in% c("gaussian", "split3"))
+      #   Yints <- expY1 + rnorm(n = N, sd = sd1s)
+      # 
+      # else if (Y1Law == "exponential")
+      #   Yints <- rexp(n = N, rate = expY1^-1L)
+      
+      trueYtel <- sum(Ytels)
+      deltas <- Yints - Ytels
+      
+      # Evaluating the measure effect total (random value)
+      truePhiBias <- crossprod(phi, deltas) %>% as.vector()
+      expPhiBias <- crossprod(phi, expY1 - expY2) %>% as.vector()
+      
+      # Creating the observed outcome vector
+      # Yobs <- rep(NA_real_, N)
+      # Yobs[mask1] <- Yints[mask1]
+      # Yobs[mask2] <- Ytels[mask2]
+      
+      sample <- MMsampling:::MMSample$new(Z = X, pi = pi, I = I, 
+                             modes = modes, Yobs = Yobs, phi = phi)
+      
+      # Full HT estimation, with full population matrix (X^tX)^-1 and
+      # known probabilities
+      resEval <-
+        estim_delta_MCO(sample$Z, sample$Yobs, sample$modes,
+                               "m1", "m2", "HT", "HT", pi,
+                        trueProbsSelect, sampleMatrix = FALSE) %>%
+        estim_MB_by_MCO(X, phi = phi) %>%
+        sum()
+      
+  
+      partialResults[row,] <- 
+        c(parameter = "HT", trueEstimator = FALSE,
+          probSelect = "true", invMatrices = "population",
+          calculTotal = "population", estPhiBias = resEval)
+      
+      row <- row + 1L
+  
+      # Full HT estimation, with sample matrix (Z_S^TZ_S)^-1 and
+      # known probabilities
+      resEval <-
+        estim_delta_MCO(sample$Z, sample$Yobs, sample$modes,
+                               "m1", "m2", "HT", "HT", pi,
+                        trueProbsSelect, sampleMatrix = TRUE) %>%
+        estim_MB_by_MCO(Z, phi = phi) %>%
+        sum()
+  
+      partialResults[row,] <- c(parameter = "HT", trueEstimator = FALSE,
+                                probSelect = "true", invMatrices = "samples", 
+                                calculTotal = "population", estPhiBias = resEval)
+      
+      row <- row + 1L
+      
+
+      # Estimation on a unique MCO for Y1 and Y2, with beta X and only a constant
+      # delta for the estimation of the measure effect
+      deltaEval <- 
+        estim_delta_MCO_unique_model_const(Z, Yobs, modes, "m1", "m2")
+      resEvalFull <- sum(phi) * deltaEval
+      resEvalHT <- 
+        as.vector(crossprod(phi[mask1],
+                            estimWeights[mask1]) * 
+                    deltaEval)
+      
+      
+      partialResults[c(row, row + 1L),] <- 
+        data.frame(parameter = "G-COMP_0_deg",
+                   trueEstimator = TRUE,
+                   probSelect = "null",
+                   invMatrices = "null",
+                   calculTotal = c("population", "sample"),
+                   estPhiBias = c(resEvalFull, resEvalHT))
+      
+      
+      row <- row + 2L
+      
+      
+      # G-COMP first degree estimation, <=> double MCO estimation
+      # tic()
+      # estimdelta <- estim_delta_MCO(sample$Z, sample$Yobs, sample$modes, 
+      #                   "m1", "m2", "MCO", "MCO", pi, NULL)
+      estMBs <- estim_delta_MCO(sample$Z, sample$Yobs, sample$modes, 
+                                "m1", "m2", "G-COMP", "G-COMP", pi, NULL, 
+                                returnMB = TRUE, order = 1L)
+      
+      resEvalFull <- crossprod(phi, estMBs) %>% as.vector()
+      
+      resEvalHT <- crossprod(phi[mask1] * estimWeights[mask1],
+                             estMBs[mask1]) %>% as.vector()
+      # toc() %>% print()
+      
+      
+      
+      partialResults[c(row, row + 1L),] <- 
+        data.frame(parameter = "G-COMP_1_deg", trueEstimator = TRUE,
+                   probSelect = "null", 
+                   invMatrices = "null", calculTotal = c("population", "sample"),
+                   estPhiBias = c(resEvalFull, resEvalHT))
+      
+      row <- row + 2L
+      
+      # G-COMP two degrees estimation
+      # tic()
+      estMBs <- estim_delta_MCO(sample$Z, sample$Yobs, sample$modes, 
+                                "m1", "m2", "G-COMP", "G-COMP", pi, NULL, 
+                                returnMB = TRUE, order = 2L)
+      
+      resEvalFull <- crossprod(phi, estMBs) %>% as.vector()
+      
+      resEvalHT <- crossprod(phi[mask1] * estimWeights[mask1],
+                             estMBs[mask1]) %>% as.vector()
+      # toc() %>% print()
+      
+      
+      
+      partialResults[c(row, row + 1L),] <- 
+        data.frame(parameter = "G-COMP_2_deg", trueEstimator = TRUE,
+                   probSelect = "null", 
+                   invMatrices = "null", calculTotal = c("population", "sample"),
+                   estPhiBias = c(resEvalFull, resEvalHT))
+      
+      row <- row + 2L
+      
+      
+      
+      # Full HT estimation, with full population matrix (Z^tZ)^-1 and
+      # unknown probabilities
+      # tic()
+      estimdelta <- 
+        estim_delta_MCO(sample$Z, sample$Yobs, sample$modes, 
+                        "m1", "m2", "HT", "HT", pi, 
+                        estimProbsSelect, sampleMatrix = FALSE)
+      
+      resEvalFull <- estimdelta %>% 
+        estim_MB_by_MCO(Z, phi = phi) %>% 
+        sum()
+      
+      resEvalHT <- estimdelta %>% 
+        estim_MB_by_MCO(Z, 
+                        phi = phi, 
+                        weights = estimWeights,
+                        mask = mask1) %>% 
+        sum()
+    
+      # toc() %>% print()
+     
+      
+      partialResults[c(row, row + 1L),] <- 
+        data.frame(parameter = "HT", trueEstimator = TRUE,
+                   probSelect = "estimation", invMatrices = "population", 
+                   calculTotal = c("population", "sample"), 
+                   estPhiBias = c(resEvalFull, resEvalHT))
+      
+      row <- row + 2L
+      
+      # Full HT estimation, with sample matrix (Z_S^TZ_S)^-1 and
+      # unknown probabilities
+      # tic()
+      estimdelta <- 
+        estim_delta_MCO(sample$Z, sample$Yobs, sample$modes, 
+                        "m1", "m2", "HT", "HT", pi, 
+                        estimProbsSelect, sampleMatrix = TRUE) 
+      
+      
+      resEvalFull <- estimdelta %>% 
+        estim_MB_by_MCO(Z, phi = phi) %>% 
+        sum()
+      
+      resEvalHT <- estimdelta %>% 
+        estim_MB_by_MCO(Z, 
+                        phi = phi, 
+                        weights = estimWeights, 
+                        mask = mask1) %>% 
+        sum()
+    
+      # toc() %>% print()
+      
+      partialResults[c(row, row + 1L),] <- 
+        data.frame(parameter = "HT", trueEstimator = TRUE,
+                   probSelect = "estimation", invMatrices = "samples", 
+                   calculTotal = c("population", "sample"), 
+                   estPhiBias = c(resEvalFull, resEvalHT))
+      
+      row <- row + 2L
+      
+      # Estimations of t_phi1 and t_phi2
+      # - With true weights
+      estTotPhiYintHTTrueMP <- 
+        phi[mask1] * 
+        trueWeights[mask1] * 
+        Yints[mask1]
+      
+      estTotPhiYintHTTrueMP <- sum(estTotPhiYintHTTrueMP)
+      
+      estTotPhiYtelHTTrueMP <- 
+        (1.0 - phi[mask2]) * 
+        trueWeights[mask2] * 
+        Ytels[mask2]
+      
+      # - With estimated weights
+      estTotPhiYtelHTTrueMP <- sum(estTotPhiYtelHTTrueMP)
+    
+      estTotPhiYintHTEstMP <-
+        phi[mask1] *
+        estimWeights[mask1] *
+        Yints[mask1]
+    
+      estTotPhiYintHTEstMP <- sum(estTotPhiYintHTEstMP)
+    
+      estTotPhiYtelHTEstmMP <-
+        (1.0 - phi[mask2]) *
+        estimWeights[mask2] *
+        Ytels[mask2]
+    
+      estTotPhiYtelHTEstmMP <- sum(estTotPhiYtelHTEstmMP)
+      
+      estPhiYtelEstMP <-
+        phi[mask2] *
+        estimWeights[mask2] *
+        Ytels[mask2]
+      
+      estPhiYtelEstMP <- sum(estPhiYtelEstMP)
+      
+      normEstPhiBiasDiffHT <-
+        (estTotPhiYintHTEstMP - estPhiYtelEstMP) / sum(phi)
+      
+      # Don't know why but some columns are
+      #  automatically converted as character
+      partialResults$estPhiBias <- as.numeric(partialResults$estPhiBias)
+      partialResults$trueEstimator <- as.logical(partialResults$trueEstimator)
+      # Value estimated only on telephone answers, with estimated selection probabilities
+      benchmark <- crossprod(estimWeights[mask2], Ytels[mask2]) %>% 
+        as.vector()
+      trueWeightsBenchmark <- crossprod(trueWeights[mask2], Ytels[mask2]) %>% 
+        as.vector()
+
+      
+      partialResults <- partialResults %>% 
+        add_column(.before = 1L, expn = sum(pi)) %>% 
+        add_column(.after = "expn", n = sum(I)) %>% 
+        add_column(.after = "n", nInt = nInt) %>% 
+        add_column(.after = "nInt", nTel = nTel) %>% 
+        add_column(.after = "nTel", expYint = expTotYint) %>% 
+        add_column(.after = "expYint", trueYtel = trueYtel) %>% 
+        add_column(.after = "trueYtel", expYtel = expTotYtel) %>% 
+        add_column(.before = "estPhiBias", truePhiBias = truePhiBias) %>% 
+        add_column(.adter = "estPhiBias", normEstPhiBiasDiffHT = normEstPhiBiasDiffHT) %>% 
+        add_column(.after = "truePhiBias", expPhiBias = expPhiBias) %>% 
+        add_column(.after = "expPhiBias", 
+                   estPhiYintTrueMP = estTotPhiYintHTTrueMP) %>% 
+        add_column(.after = "estPhiYintTrueMP", avgEstWeightsInt = mean(trueWeights[mask1])) %>% 
+        add_column(.after = "estPhiYintTrueMP", 
+                   estPhiYintEstMP = estTotPhiYintHTEstMP) %>% 
+        add_column(.after = "estPhiYintEstMP", avgEstWeightsTel = mean(trueWeights[mask2])) %>%
+        add_column(.after = "avgEstWeightsTel", estPhiYtelEstMP = estPhiYtelEstMP) %>% 
+        add_column(.after = "estPhiYtelEstMP", 
+                   estPhiBarYtelTrueMP = estTotPhiYtelHTTrueMP) %>% 
+        add_column(.after = "estPhiBarYtelTrueMP", 
+                   estPhiBarYtelEstMP = estTotPhiYtelHTEstmMP) %>% 
+        mutate(.after = "estPhiBarYtelEstMP",
+               estYtelTrueMP = estPhiYintTrueMP + 
+                 estPhiBarYtelTrueMP -
+                 estPhiBias) %>% 
+        mutate(.after = "estYtelTrueMP", 
+               estYtelEstMP = estPhiYintEstMP + 
+                 estPhiBarYtelEstMP -
+                 estPhiBias) %>% 
+        add_column(.after = "estYtelEstMP", benchmark = benchmark) %>% 
+        add_column(.after = "benchmark", TWBenchmark = trueWeightsBenchmark)
+        
+      #results <- rbind(results, partialResults)
+    }
+    
+    clusterExport(cluster, 
+                  varlist = "monoSim", 
+                  envir = environment())
+    
+    #results <- lapply(X = seq_len(M), FUN = monoSim)
+    results <- parLapply(cluster, X = seq_len(M), fun = monoSim)
+    
+    if (stopClusterAtEnd)
+      stopCluster(cluster)
+      
+
+    parameters <- results[[1L]] %>% 
+    select(parameter, probSelect, invMatrices, calculTotal)
+    
+    parameters[, c("expVar2", "expVarPhi1", "expVarPhi2", 
+                   "expCovarPhi12", "expVarPhiDelta", 
+                   "expCovarPhi1Delta", "expCovarPhi2Delta")] <- NA_real_
+  
+    for (l in seq_len(nrow(parameters)))
+    {
+      parameter <- parameters[l, ]
+      
+      if (parameter$parameter == "HT" && 
+          parameter$probSelect == "true" &&
+          parameter$invMatrices == "population" && 
+          parameter$calculTotal == "population")
+      {
+        expVars <- var_estim_tot_BM(modeTotBiased = "HT", modeTotRef = "HT",
+                                    calculTotal = "population",
+                                    expY1 = expY1, expY2 = expY2,
+                                    covarY1 = covarYint, covarY2 = covarYtel,
+                                    piMat = piMat,
+                                    pq1Mat = pq1Mat, pq2Mat = pq2Mat,
+                                    phi = phi,
+                                    subResults = TRUE)
+        
+        parameters[l, names(expVars)] <- expVars
+      }
+    }
+    
+    
+    results <- do.call("rbind", results)
+    
+    if (any((beta1 - beta2)[-1L] != 0.0))
+        MBtype <- "variable"
+      else
+        MBtype <- "constant"
+    
+    results <- results %>% 
+      add_column(.before = "n", sampling = sampling) %>% 
+      add_column(.before = "sampling", N = N) %>% 
+      add_column(.after = "n", Y2Law = factor(Y2Law)) %>% 
+      add_column(.after = "Y2Law", sd2 = sd2) %>% 
+      add_column(.after = "Y2Law", Y1Law = factor(Y1Law)) %>% 
+      add_column(.after = "Y1Law", sd1 = sd1) %>% 
+      add_column(.after = "sd1", rho = rho) %>% 
+      add_column(.after = "rho",
+                 MBtype = factor(MBtype)) %>% 
+      add_column(.after = "MBtype", phi = factor(phiType))
+    
+
+    suppressMessages(results <- results %>% inner_join(parameters, by = NULL))
+    
+      
+    # We calculate the real variance of the benchmark estimator
+    sdTWBenchmark <- var_HT_seq_phi2(expY2 = expY2, 
+                                     covarY2 = covarYtel,
+                                     piMat = piMat,
+                                     pq1Mat = pq1Mat,
+                                     pq2Mat = pq2Mat,
+                                     phi = numeric(N),
+                                     correcEstimWeights = FALSE) %>% sqrt()
+    
+    results <- results %>% 
+      mutate(expSDTWBenchmark = sdTWBenchmark)
+    
+    
+    results
+  }
+```
+
+-   `trueYtel`: $t_{tel} =\sum_{k \in U} y_{2k}$ for this iteration
+-   `expYtel` : $\mathbb{E}[t_{tel}]=\mathbb{E} [\sum_{k \in U} y_{2k}]$
+-   `estPhiBias` : $t_{\phi \hat{\Delta y}}$
+-   `estPhiBiasDiffHT` : $\hat{t}_{\hat{p},\phi y_1} - \hat{t}_{\hat{p},\phi y_2}$
+-   `truePhiBias` : $t_{\phi\Delta y}=\sum_{k\in U} \phi_k \Delta y_k$
+-   `expPhiBias` : $\mathbb{E}[t_{\phi\Delta y}]$
+-   `estPhiYintTrueMP` : $\hat{t}_{p,\phi y_1} = \sum_{k \in S_r}\frac{\phi_k y_{1k}}{\pi_k p_{1k}}$
+-   `estPhiYintEstMP` : $\hat{t}_{\hat{p},\phi y_1} = \sum_{k \in S_r}\frac{\phi_k y_{1k}}{\pi_k \hat{p}_{1k}}$
+-   `estYtelTrueMP` : $\hat{t}_{py_2}:= \hat{t}_{p,\phi y_1} + \hat{t}_{p,\bar{\phi} y_2} - t_{\phi \hat{\Delta y}}$
+-   `estYtelEstMP` : $\hat{t}_{\hat{p}y_2}:= \hat{t}_{\hat{p},\phi y_1} + \hat{t}_{\hat{p},\bar{\phi} y_2} - t_{\phi \hat{\Delta y}}$
+-   `expVar2` : $\mathbb{V}[\hat{t}_{\hat{p}y_2}]$ PAS ENCORE VRAI, À CONSIDÉRER
+-   `TWBenchmark` : $\sum_{k \in S_{mr}} \frac{y_{2k}}{\pi_k(1-p_{1k})p_{2k}}$
+-   `benchmark` : $\sum_{k \in S_{mr}} \frac{y_{2k}}{\pi_k(1-\hat{p}_{1k})\hat{p}_{2k}}$
+-   `sdTWBenchmark` : standard deviation of the benchmark
+-   `calculTotal` : `population` if we calculate $\hat{t}_{\phi \hat{\Delta y}}$ (imputation on the entire population), `sample` if it is $t_{\phi \hat{\Delta y}}$ (on $S_{r\bullet}$)
+
+```{r}
+#| echo: false
+loop_simulation <- function(parameters, M = 2000L)
+{
+  nbCores <- detectCores() - 1L
+  cluster <- makeCluster(nbCores)
+  
+  clusterExport(cluster, 
+                varlist = "Z",
+                envir = environment())
+
+  results <- NULL
+  nbResults <- 0L
+  
+  parameters <- parameters %>% distinct()
+  
+  beta2Minus <- beta2
+  beta1Minus <- beta1
+  
+  # Case when the sign a the age coefficient for telephone is positive
+  beta2Plus <- beta2
+  beta2Plus[-1L] <- -beta2[-1L]
+  beta1Plus <- beta1
+  beta1Plus[-1L] <- -beta1[-1L]
+  
+  bar <- progress_bar$new(total = nrow(parameters),
+                          format = "[:bar] :current/:total (:percent) eta: :eta")
+  
+  for (i in seq_len(nrow(parameters)))
+  {
+    tic()
+    expParams <- parameters[i, ]
+    #print(expParams)
+  
+    
+    if (expParams$signAge == "plus")
+    {
+      beta1Temp <- beta1Plus
+      beta2Temp <- beta2Plus
+    }
+    else if (expParams$signAge == "minus")
+    {
+      beta1Temp <- beta1Minus
+      beta2Temp <- beta2Minus
+    }
+    
+    if (expParams$constBias)
+      beta1Temp[-1L] <- beta2Temp[-1L]
+    
+    expResults <- simulationUncounf(N, M = M,
+                                    Z = Z,
+                                    sampling = expParams$sampling,
+                                    alpha1 = alpha1,
+                                    alpha2 = alpha2,
+                                    beta1 = beta1Temp,
+                                    beta2 = beta2Temp,
+                                    Y2Law = expParams$Y2Law,
+                                    Y1Law = expParams$Y1Law,
+                                    phi = expParams$phi,
+                                    sd1 = expParams$sdY,
+                                    sd2 = expParams$sdY,
+                                    seed = 200L,
+                                    cluster = cluster)
+    
+    expResults <- expResults %>% 
+      rename(sd = sd1) %>% 
+      select(-sd2) %>% 
+      mutate(signAge = expParams$signAge)
+  
+    if (i == 1L)
+      expNbResults <- nrow(expResults)
+    
+    nbResults <- nbResults + expNbResults
+    expResults <- expResults %>% 
+      add_column(.before = 1L, 
+                 experiment = factor(rep(nbResults + seq_len(M), 
+                                         each = expNbResults / M)))
+    
+    results <- rbind(results, expResults)
+    
+    #t <- toc(quiet = TRUE)
+    
+    #glue("{round(unname(t$toc - t$tic))}s ({i} / {nrow(parameters)})") %>% print()
+    bar$tick()
+  }
+  
+  stopCluster(cluster)
+  
+  results$signAge <- as.factor(results$signAge)
+  results$parameter <- as.factor(results$parameter)
+  results$probSelect <- as.factor(results$probSelect)
+  results$invMatrices <- as.factor(results$invMatrices)
+  results$calculTotal <- as.factor(results$calculTotal)
+  
+  results <- results %>% 
+    mutate(.after = "estPhiBias", diffPhiBias = estPhiBias - truePhiBias) %>% 
+    mutate(.after = "estPhiBarYtelEstMP", 
+           diffYtelEstMP = estYtelEstMP - trueYtel) %>% 
+    mutate(.after = "estPhiBarYtelTrueMP",
+           diffYtelTrueMP = estYtelTrueMP - trueYtel) %>% 
+    mutate(.after = "diffYtelTrueMP", 
+           diffWithoutCorrectionEstMP = estPhiYintEstMP + 
+             estPhiBarYtelEstMP - 
+             trueYtel) %>% 
+    mutate(.after = "diffYtelTrueMP", diffBenchmark = benchmark - trueYtel)
+  
+  results
+}
+```
+
+# measure effect evaluation
+
+Evaluation of $M$ experiments:
+
+```{r}
+M <- 1000L
+Kvec <- seq_len(M)
+```
+
+```{r}
+#| eval: false
+
+load(file = "../results.RData")
+```
+
+Here we evaluate our estimators on the simplest cases : Gaussian laws with $\phi_k \equiv \frac{1}{2}$, a few values for $\sigma$ and a changing sign for $\beta_{tel,age}$.
+
+```{r}
+#| eval: false
+# Grid of all evaluated parameters
+parameters <- expand_grid(constBias = c(TRUE, FALSE),
+                          sampling = "SRS",#c("SRS", "STSRS"),
+                          Y2Law = "gaussian",
+                          Y1Law = "gaussian",
+                          signAge = c("plus", "minus"),
+                          phi = "eq",
+                          sdY = 1.0) %>%
+  # If there is only exponential laws the parameter sdY is of no interest
+  mutate(sdY =
+           ifelse(Y2Law == "gaussian" |
+                    Y1Law == "gaussian", sdY, "null")) 
+
+resultsGaussian <- loop_simulation(parameters, M = M)
+```
+
+# Ex : Gaussian constant measure effect
+
+Results of each parameter for the case of SRS with **constant** measure effect, $\beta_{tel,age} > 0$ and Gaussian laws (with $\sigma =1$).
+
+## measure effect total
+
+$$\text{relError} = \frac{1}{M}\sum_{k=1}^M \frac{\hat{t}_{\phi\Delta y,k}-t_{\phi\Delta y,k}}{\mathbb{E}[t_{\phi\Delta y}]}$$
+
+$$\text{relRMSE} = \frac{\sqrt{\frac{1}{M}\sum_{k=1}^M (\hat{t}_{\phi\Delta y,k}-t_{\phi\Delta y,k})^2}}{|\mathbb{E}[t_{\phi\Delta y}]|}$$
+
+```{r}
+temp <- resultsGaussian %>% 
+  filter(Y2Law == "gaussian", Y1Law == "gaussian", 
+         sampling == "SRS", 
+         MBtype == "constant", signAge == "plus", 
+         trueEstimator) %>% 
+  select(-sampling, -MBtype, -probSelect) %>% 
+  group_by(parameter, invMatrices, calculTotal)
+
+temp %>% 
+  summarise(M = n(),
+            relErrorWithoutCorr = round(mean(diffWithoutCorrectionEstMP / abs(expYtel)), 4L),
+            relError = round(mean(diffPhiBias / abs(expPhiBias)), 4L), 
+            relRMSE = round(sqrt(mean(diffPhiBias^2L / expPhiBias^2L)), 4L)) %>% 
+  ungroup() %>% 
+  arrange(relRMSE)
+```
+
+The relative error `relError` is close to zero for each estimator. It is clear that it is an improvement compared to the estimator that totally neglect the bias, i.e. $\hat{t}_{pq\phi1}-\hat{t}_{pq\bar{\phi}2}$. RMSEs are about the same, being in \[0.13, 0.18\]. For the best RMSE we have the model that consider the bias constant (up to a centered noise): the G-COMP model with a simple constant $\delta$ for the MB consideration.
+
+## telephone total estimation
+
+Our different estimators are all approximately unbiased, so we focus on the RMSE appearing when we estimate the total $t_2$ with each estimator:
+
+```{r}
+temp %>% 
+  summarise(M = n(),
+            relEstRMSE = round(sqrt(mean(diffYtelEstMP^2L / expYtel^2L)), 4L),
+            relEstRMSEBenchmark = round(sqrt(mean(diffBenchmark^2L / expYtel^2L)), 4L),
+            relExpRMSETWBenchmark = mean(expSDTWBenchmark / abs(expYtel))) %>% 
+  ungroup() %>% 
+  arrange(relEstRMSE)
+
+rm(temp)
+```
+
+The `relEstRMSEBenchmark` variable is the estimated RMSE of the benchmark estimator. We can observe that among the different estimators, we have a few of them that offer a **lower RMSE than the benchmark**. We have, with $\phi \equiv \frac{1}{2}$ :
+
+-   G-COMPUTATION with 0, 1 or 2 degrees and a estimation of the total $\phi\Delta$ via the sample or the population
+
+-   The HT Thompson estimator with sample inverse matrices and a total on the sample or the population
+
+Summing the bias on exclusively $S_{r\bullet}$ seems to be effective (with `calculTotal = sample`), which is great because in that case we don't need to know the $z_k$ for units that didn't respond by internet.
+
+The case $\phi = \frac{1}{N}, \frac{2}{N}, \cdots$ gives a RMSE higher than the benchmark RMSE.
+
+With $\phi$ fixed, the other estimators give a RMSE nearly equal the benckmark.
+
+The `relExpRMSETWBenchmark` variable is the expected standard deviation of the benchmark calculated with the true selection probabilities. The bias is equal to zero with the true weights so the RMSE is equal to the standard deviation. Biases of the estimators are nearly zero so RMSE and standard deviations can be compared. We can observe that for every estimator the (estimated) RMSE is **clearly lower** than the standard deviation / RMSE of the benchmark with true probabilities.
+
+
+
+
+
+
+
+```{r}
+Mbis <- 10000L
+```
+
+Simulation with no measure effect:
+```{r}
+tic()
+pv <- profvis::profvis({
+resSimTotals <- simulation_tphi(M = Mbis,
+                                Z = Z,
+                                sampling = "SRS",
+                                alpha1 = alpha1,
+                                alpha2 = alpha2,
+                                beta1 = beta2,
+                                beta2 = beta2,
+                                Y1Law = "gaussian",
+                                Y2Law = "gaussian",
+                                phi = "eq",
+                                sd1 = 1.0,
+                                sd2 = 1.0,
+                                seed = 200L)
+})
+glue("{toc()}")
+```
+
 # Ex : Gaussian variable measure effect
 
 Results of each parameter for the case of SRS with **variable** measure effect and Gaussian laws and $\sigma = 1$. First we focus on the bias:
 
 ```{r}
 temp <- resultsGaussian %>% 
-  filter(YtelLaw == "gaussian", YintLaw == "gaussian", 
+  filter(Y2Law == "gaussian", Y1Law == "gaussian", 
          sampling == "SRS", MBtype == "variable", trueEstimator) %>% 
   select(-sampling, -MBtype, -probSelect) %>% 
   group_by(sd, signAge, parameter, invMatrices, calculTotal) %>% 
@@ -2644,8 +2445,8 @@ We focus on the impact of the standard deviation. Is there estimators that give 
 #| eval: false
 parameters <- expand_grid(constBias = FALSE,
                           sampling = "SRS",#c("SRS", "STSRS"),
-                          YtelLaw = "gaussian",
-                          YintLaw = "gaussian",
+                          Y2Law = "gaussian",
+                          Y1Law = "gaussian",
                           signAge = c("plus", "minus"),
                           phi = "eq",
                           sdY = c(0.1, 1.0, 2.0, 5.0, 10.0, 20.0, 40.0, 60.0))
@@ -2656,7 +2457,7 @@ resultsSD <- loop_simulation(parameters, M = M)
 ```{r}
 temp <- resultsSD %>% 
   filter(trueEstimator) %>% 
-  select(-YintLaw, -YtelLaw, -sampling, -MBtype, -probSelect) %>% 
+  select(-Y1Law, -Y2Law, -sampling, -MBtype, -probSelect) %>% 
   group_by(signAge, sd, phi, parameter, invMatrices, calculTotal) %>% 
   summarise(#reldiffTotalTrueMean = round(mean(diffYtelTrueMP / abs(expYtel)) , 4L), 
             relError = round(mean(diffYtelEstMP / abs(expYtel)) , 4L),
@@ -2752,8 +2553,8 @@ We propose different values for $\phi$, in the Gaussian case with variable bias 
 #| eval: false
 parameters <- expand_grid(constBias = FALSE,
                           sampling = "SRS",
-                          YtelLaw = "gaussian",
-                          YintLaw = "gaussian",
+                          Y2Law = "gaussian",
+                          Y1Law = "gaussian",
                           signAge = c("plus", "minus"),
                           phi = c("eq", "1/3", "2/3",
                                   "var", "linear", "split3"),
@@ -2765,7 +2566,7 @@ resultsPhi <- loop_simulation(parameters, M = M)
 ```{r}
 temp <- resultsPhi %>% 
   filter(trueEstimator) %>% 
-  select(-YintLaw, -YtelLaw, -sampling, -MBtype, -probSelect) %>% 
+  select(-Y1Law, -Y2Law, -sampling, -MBtype, -probSelect) %>% 
   group_by(signAge, sd, phi, parameter, invMatrices, calculTotal) %>% 
   summarise(#reldiffTotalTrueMean = round(mean(diffYtelTrueMP / abs(expYtel)) , 4L), 
             relError = round(mean(diffYtelEstMP / abs(expYtel)) , 4L),
@@ -2882,7 +2683,7 @@ Here we use the empirical standard deviation based on our $M$ observations.
 
 ```{r}
 temp <- resultsGaussian %>% 
-  filter(YtelLaw == "gaussian", YintLaw == "gaussian", 
+  filter(Y2Law == "gaussian", Y1Law == "gaussian", 
          sampling == "SRS", 
          MBtype == "variable", signAge == "plus", 
          trueEstimator) %>% 
@@ -2946,7 +2747,7 @@ With an important p-value the Kolmogorov-Smirnov test ensure that our estimator 
 Percentage of values for $z_k^T\beta_{tel}$ that are $< 0$ with `signAge=minus`:
 
 ```{r}
-glue("{sum(Z %*% betaTel < 0.0) * 100.0 / N} %")
+glue("{sum(Z %*% beta2 < 0.0) * 100.0 / N} %")
 ```
 
 ```{r}
@@ -2955,16 +2756,16 @@ glue("{sum(Z %*% betaTel < 0.0) * 100.0 / N} %")
 # Grid of all evaluated parameters
 parameters <- expand_grid(constBias = c(TRUE, FALSE),
                           sampling = "SRS",#c("SRS", "STSRS"),
-                          YtelLaw = c("gaussian", "exponential"),
-                          YintLaw = c("gaussian", "exponential", "split3"),
+                          Y2Law = c("gaussian", "exponential"),
+                          Y1Law = c("gaussian", "exponential", "split3"),
                           signAge = c("plus", "minus"),
                           phi = c("eq", "var"),
                           sdY = c(1.0, 2.0, 5.0)) %>%
   # If there is only exponential laws the parameter sdY is of no interest
   mutate(sdY =
-           ifelse(YtelLaw == "gaussian" |
-                    YintLaw == "gaussian", sdY, NA_real_)) %>% 
-  filter(YtelLaw != "gaussian" | YintLaw != "gaussian")
+           ifelse(Y2Law == "gaussian" |
+                    Y1Law == "gaussian", sdY, NA_real_)) %>% 
+  filter(Y2Law != "gaussian" | Y1Law != "gaussian")
 
 resultsGeneral <- loop_simulation(parameters)
 ```
@@ -2978,7 +2779,7 @@ Note : in the case of an exponential law for $Y_{int}$ or $Y_{tel}$, the standar
 ```{r}
 temp <- resultsGeneral %>% 
   filter(trueEstimator) %>% 
-  group_by(YintLaw, YtelLaw, sd, signAge, MBtype, phi,
+  group_by(Y1Law, Y2Law, sd, signAge, MBtype, phi,
            sampling, parameter, invMatrices, calculTotal)
 ```
 
@@ -2993,7 +2794,7 @@ temp <- temp %>%
   ungroup() 
 
 temp %>% 
-  group_by(sd, YintLaw, YtelLaw, signAge, MBtype, sampling) %>% 
+  group_by(sd, Y1Law, Y2Law, signAge, MBtype, sampling) %>% 
   slice_min(relRMSEParam)
 ```
 
@@ -3001,7 +2802,7 @@ Number of situations that possess a better RMSE with some parameter different th
 
 ```{r}
 tempBis <- temp %>% 
-  group_by(YtelLaw, sd, YintLaw, sampling, signAge, MBtype)
+  group_by(Y2Law, sd, Y1Law, sampling, signAge, MBtype)
 
 nbExperiments <- n_groups(tempBis)
 
@@ -3033,13 +2834,13 @@ Case when HT-sample-sample is the best:
 
 ```{r}
 temp %>% 
-  group_by(YtelLaw, sd, YintLaw, sampling, signAge, MBtype) %>% 
+  group_by(Y2Law, sd, Y1Law, sampling, signAge, MBtype) %>% 
   filter(relRMSEParam <= relEstRMSEBenchmark) %>% 
   slice_min(relRMSEParam) %>% 
   filter(parameter == "HT", 
          invMatrices == "samples",
          calculTotal == "sample") %>% 
-  distinct(YtelLaw, sd, YintLaw, sampling, signAge, MBtype)
+  distinct(Y2Law, sd, Y1Law, sampling, signAge, MBtype)
 ```
 
 This estimator seems to be optimal only is the measure effect is conditionally constant.
@@ -3048,13 +2849,13 @@ Case when HT-population-population is the best:
 
 ```{r}
 temp %>% 
-  group_by(YtelLaw, sd, YintLaw, sampling, signAge, MBtype) %>% 
+  group_by(Y2Law, sd, Y1Law, sampling, signAge, MBtype) %>% 
   filter(relRMSEParam <= relEstRMSEBenchmark) %>% 
   slice_min(relRMSEParam) %>% 
   filter(parameter == "HT", 
          invMatrices == "population",
          calculTotal == "population") %>% 
-  distinct(YtelLaw, sd, YintLaw, sampling, signAge, MBtype)
+  distinct(Y2Law, sd, Y1Law, sampling, signAge, MBtype)
 ```
 
 ```{r}
@@ -3073,7 +2874,7 @@ temp <- resultsGeneral %>%
 
 # tempBis <- temp %>% 
 #   filter(sampling == "SRS",
-#          YintLaw == "gaussian", YtelLaw == "gaussian",
+#          Y1Law == "gaussian", Y2Law == "gaussian",
 #          phi == "eq", sd == "1", MBtype == "variable",
 #          signAge == "plus")
 ```
@@ -3101,7 +2902,7 @@ Before comparison, we can observe on the Gaussian case (variable measure effect,
 
 ```{r}
 temp %>% 
-  group_by(sampling, YintLaw, YtelLaw, sd, MBtype, signAge, phi) %>% 
+  group_by(sampling, Y1Law, Y2Law, sd, MBtype, signAge, phi) %>% 
   summarise(M = n(),
             estSDEstimator = sd(estYtelTrueMP),
             expSDEstimator = sqrt(mean(expVar2)),

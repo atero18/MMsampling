@@ -102,7 +102,7 @@ estim_appr_var_seq_phi1 <- function(Yobs,
 
   args <- list(...)
 
-  maskSr <- modes == "int"
+  maskSr <- modes == "m1"
 
   # if ("pi" %in% names(args))
   #   pi <- args[["pi"]]
@@ -317,7 +317,7 @@ estim_appr_var_seq_phi2 <- function(Yobs,
 
   args <- list(...)
 
-  maskSmr <- modes == "tel"
+  maskSmr <- modes == "m2"
   nSmr <- sum(maskSmr)
 
   # if ("pi" %in% names(args))
@@ -417,7 +417,7 @@ estim_appr_var_seq_phi2 <- function(Yobs,
   #   alpha2 (the parameter of the logistic model for the mode-2 response)
   if (correcEstimWeights)
   {
-    bPhi22 <- .bPhi22(Yobs, pi, p1, p2, I & modes != "int", maskSmr, Z, phi)
+    bPhi22 <- .bPhi22(Yobs, pi, p1, p2, I & modes != "m1", maskSmr, Z, phi)
     correctedY2Smrq2 <- correctedY2Smrq2 - Z[maskSmr, ] %*% bPhi22
   }
 
@@ -837,9 +837,7 @@ var_estim_tot_BM <- function(modeTotBiased = "HT", modeTotRef = "HT",
     2.0 * covarPhi2Delta
 
   if (!subResults)
-  {
     return(varEstim)
-  }
   else
   {
     c(expVar2 = varEstim,

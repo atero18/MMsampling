@@ -10,16 +10,23 @@ estim_var_mean_phi1 <- function(Yobs,
                                 ...)
 {
 
-  maskInt <- modes == "int"
-  weightsWeb <- (diag(piMat)[maskInt] * diag(pq1Mat)[maskInt])^-1L
+  maskSr <- modes == "m1"
+
+  args <- list(...)
+
+  if ("p1" %in% names(args))
+    p1 <- args[["p1"]]
+  else
+    p1 <- diag(pq1Mat)
+
+  weightsWeb <- (diag(piMat)[maskSr] * p1[maskSr])^-1L
 
   # Estimator of the mean of y1 on the finite population U
-  HajekWeb <- sum(Yobs[maskInt] * weightsWeb) / sum(weightsWeb)
-
+  HajekWeb <- sum(Yobs[maskSr] * weightsWeb) / sum(weightsWeb)
 
 
   errTerms <- rep(NA_real_, length(Yobs))
-  errTerms[maskInt] <- Yobs[maskInt] - HajekWeb
+  errTerms[maskSr] <- Yobs[maskSr] - HajekWeb
 
 
   sumPhi <- sum(phi)
@@ -46,10 +53,22 @@ estim_var_mean_phi2 <- function(Yobs,
                                 independenceq2 = NULL,
                                 ...)
 {
-  maskSmr <- modes == "tel"
+  maskSmr <- modes == "m2"
+
+  args <- list(...)
+
+  if ("p1" %in% names(args))
+    p1 <- args[["p1"]]
+  else
+    p1 <- diag(pq1Mat)
+
+  if ("p2" %in% names(args))
+    p2 <- args[["p2"]]
+  else
+    p2 <- diag(pq2Mat)
+
   weightsTel <-
-    (diag(piMat)[maskSmr] * (1.0 - diag(pq1Mat)[maskSmr]) *
-       diag(pq2Mat)[maskSmr])^-1L
+    (diag(piMat)[maskSmr] * (1.0 - p1[maskSmr]) * p2[maskSmr])^-1L
 
   # Estimator of the mean of y2 on the finite population U
   HajekTel <- sum(Yobs[maskSmr] * weightsTel) / sum(weightsTel)
