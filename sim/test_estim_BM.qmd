@@ -1835,17 +1835,18 @@ paramVarSigma <-
 
 paramVarRatioSigma <- expand.grid(ratio_delta = ratioDeltas, ratio_n = nMin,
                                   sigma1 = sigmavec[1L],
-                                  sigma2 = sigmavec[1L] * ratiosigmavec,
+                                  ratiosigma = ratiosigmavec,
                                   rho = rhoRef)
-
+  
 parameters <- 
   rbind(paramVarn, paramVarRho, paramVarSigma) %>% 
-  mutate(sigma1 = sigma, sigma2 = sigma) %>% 
+  mutate(sigma1 = sigma, ratiosigma = 1.0, sigma2 = sigma) %>% 
   select(-sigma) %>% 
   rbind(paramVarRatioSigma) %>% 
   filter(sigma1 == sigmavec[1L] | !ratio_delta %in% c(0.1, 0.75)) %>% 
   mutate(delta = ratio_delta * abs(expMean2), .after = "ratio_delta") %>% 
   mutate(n = ratio_n * N, .after = "ratio_n") %>% 
+  mutate(sigma2 = sigma1 * ratiosigma, .after = "ratiosigma") %>% 
   distinct()
 
 rm(paramVarn, paramVarRho, paramVarSigma, paramVarRatioSigma)
@@ -1857,17 +1858,18 @@ parameters
 Msim <- 10000L
 ```
 
+The different lines of the grid have the same seed. It is useful to run in different orders the evaluations and because the results from different parameters are never mixed there is no independency issue.
+
+
 ```{r}
 resSimBiasDetection <- NULL
 
 pb <- progress::progress_bar$new(format = "[:bar] :percent eta: :eta",
                                  total = nrow(parameters))
 
-set.seed(200L)
+pb$tick(0L)
 for (k in seq_len(nrow(parameters)))
 {
-  pb$tick(0L)
-
   delta <- parameters[k, "delta"]
   betaIntTemp <- betaTel
   betaIntTemp[1L] <- betaIntTemp[1L] + delta
@@ -1887,7 +1889,7 @@ for (k in seq_len(nrow(parameters)))
                              sdTel = parameters[k, "sigma2"],
                              n = parameters[k, "n"],
                              rho = parameters[k, "rho"],
-                             seed = NULL,
+                             seed = 200L,
                              nCores = 20L)
   
   break
