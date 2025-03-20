@@ -688,12 +688,12 @@ temp <- resSimBiasDetection %>%
 Note : having sd1 = sd2 ensure to have only independent estimators.
 ```{r}
 resSimBiasDetection %>% 
-  filter(delta == 0.0,
+  filter(ratio_delta == 0.0,
          sd1 == sd2,
          estimand %in% c("phi1", "phi2"), 
          weights == "estimated") %>% 
-  group_by(n, sd1, rho) %>% 
-  summarise(shapiro = shapiro.test(estimation))
+  group_by(estimand, n, sd1, rho) %>% 
+  summarise(M = n(), shapiro.pval = shapiro.test(estimation)$p.value)
 
 
 for (sigm in sigmavec)
