@@ -103,10 +103,11 @@ rm(data)
 X <- Z <- as.matrix(X)
 ```
 
-Creating parameters for two modes : "m1" and "m2". `delta` is defined such that the average measure effect is equal to 1. It depends on `X`.
+Creating parameters for two modes : "m1" and "m2". $\beta_2$ is defined to have in average a counterfactual expectation for the second mode equal to one. `delta` is defined such that the average measure effect is equal to 1. It depends on `X`.
 
 ```{r}
-beta2 <- c(1.0, -0.1, 4.0)
+beta2 <- c(0.0, -0.1, 4.0)
+beta2[1L] <- 1.0 - mean(X %*% beta2)
 print(beta2)
 
 delta <- c(1.0, -2.0 * mean(X[, "age"])^-1L, 2.0 * N / sum(X[, "sex"]))
@@ -154,7 +155,7 @@ We simulate a mode selection MAR (Missing At Random) under a logistic model, wit
 alpha1 <- c(0.7, -0.02, -0.5)
 pInt <- gen_selection_probabilities(Z, alpha1)
 
-alpha2 <- c(0.3, 0.02, -0.5)
+alpha2 <- c(0.4, -0.01, -0.3)
 pTel <- gen_selection_probabilities(Z, alpha2)
 ```
 
@@ -617,7 +618,7 @@ parameters
 ```
 
 ```{r}
-Msim <- 1000L
+Msim <- 20000L
 ```
 
 The different lines of the grid have the same seed. It is useful to run in different orders the evaluations and because the results from different parameters are never mixed there is no independency issue.
@@ -853,7 +854,7 @@ temp <- resSimBiasDetection %>%
 
 temp <- temp %>% 
   # slice_head(n = nrow(temp) / 2L) %>% 
-  group_by(estimand, weights, n, sigma1, sigma2, rho) %>% 
+  group_by(estimand, weights, n, sd1, sd2, rho) %>% 
   summarize(M = n(),
             expEstimand = mean(expEstimand),
             mean = mean(estimation), 
