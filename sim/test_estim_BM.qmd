@@ -638,7 +638,7 @@ pb <- progress::progress_bar$new(format = "[:bar] :percent eta: :eta",
 
 pb$tick(0L)
 ##
-for (k in 19:30) #seq_len(nrow(parameters)))
+for (k in 31:45) #seq_len(nrow(parameters)))
 {
   # Change of the constant of the web conditional expectations
   delta <- parameters[k, "delta"]
@@ -666,7 +666,7 @@ for (k in 19:30) #seq_len(nrow(parameters)))
     cbind(parameters[k, ], resTemp, row.names = NULL) %>%
     rbind(resSimBiasDetection)
 
-  # pb$tick()
+  pb$tick()
   seed <- .Random.seed
 }
 
