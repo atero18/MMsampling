@@ -30,6 +30,7 @@ library(progress)
 library(mc2d)
 ```
 
+
 ```{r}
 #| message: false
 #| warning: false
@@ -220,6 +221,7 @@ expVarSa
 ```
 
 ```{r}
+rm(f, pCov, pi)
 rm(expSizeSr, expVarSr, 
    expSizeSmr, expVarSmr, 
    expSizeSa, expVarSa)
@@ -293,7 +295,6 @@ simulation_tphi <- function(Z,
   {
     q <- ncol(Z)
         
-      
     if (sampling == "SRS")
     {
       selectedSample <- sample(seq_len(N), size = n, replace = FALSE)
@@ -551,8 +552,9 @@ simulation_tphi <- function(Z,
   # pv <- profvis::profvis(lapply(seq_len(10L), FUN = monoSim))
   # pv <- microbenchmark::microbenchmark(monoSim(), times = 10L)
   # return(pv)
-  
+
   # res <- lapply(seq_len(M), FUN = monoSim)
+  
   res <- mclapply(seq_len(M), FUN = monoSim, mc.cores = nCores)
   do.call("rbind", res)
 }
@@ -578,6 +580,7 @@ For centered it is not really an estimation because it uses the empiracal mean o
 ```{r}
 ratiosn <- c(0.16, 0.25, 0.4)
 nvec <- ratiosn * N
+rationMin <- min(ratiosn)
 nMin <- min(nvec)
 sdvec <- c(1.0, 2.0, 5.0)
 ratiosdvec <- c(0.25, 0.5, 1.0, 2.0, 4.0)
@@ -589,14 +592,14 @@ paramVarn <-
               ratio_n = ratiosn, 
               sd = sdvec[1L], rho = rhoRef)
 paramVarRho <- 
-  expand.grid(ratio_delta = ratioDeltas, ratio_n = nMin, sd = sdvec[1L], 
+  expand.grid(ratio_delta = ratioDeltas, ratio_n = rationMin, sd = sdvec[1L], 
               rho = rhovec)
 paramVarSD <- 
-  expand.grid(ratio_delta = ratioDeltas, ratio_n = nMin,
+  expand.grid(ratio_delta = ratioDeltas, ratio_n = rationMin,
               sd = sdvec[-1L], 
               rho = rhoRef)
 
-paramVarRatioSD <- expand.grid(ratio_delta = ratioDeltas, ratio_n = nMin,
+paramVarRatioSD <- expand.grid(ratio_delta = ratioDeltas, ratio_n = rationMin,
                                sd1 = sdvec[1L],
                                ratiosd = ratiosdvec,
                                rho = rhoRef)
@@ -612,13 +615,13 @@ parameters <-
   mutate(sd2 = sd1 * ratiosd, .after = "ratiosd") %>% 
   distinct()
 
-rm(paramVarn, paramVarRho, paramVarSD, paramVarRatioSigma)
+rm(paramVarn, paramVarRho, paramVarSD, paramVarRatioSD)
 
 parameters
 ```
 
 ```{r}
-Msim <- 20000L
+Msim <- 5000L
 ```
 
 The different lines of the grid have the same seed. It is useful to run in different orders the evaluations and because the results from different parameters are never mixed there is no independency issue.
@@ -627,18 +630,20 @@ If the number of parallel cores changes, the results might be different.
 
 ```{r}
 resSimBiasDetection <- NULL
+```
 
+```{r}
 pb <- progress::progress_bar$new(format = "[:bar] :percent eta: :eta",
                                  total = nrow(parameters))
 
 pb$tick(0L)
-for (k in seq_len(nrow(parameters)))
+##
+for (k in 19:30) #seq_len(nrow(parameters)))
 {
   # Change of the constant of the web conditional expectations
   delta <- parameters[k, "delta"]
   beta1Temp <- beta2
   beta1Temp[1L] <- beta1Temp[1L] + delta
-  
   
   resTemp <- simulation_tphi(M = Msim,
                              Z = Z,
@@ -658,16 +663,14 @@ for (k in seq_len(nrow(parameters)))
                              nCores = 30L)
   
   resSimBiasDetection <-
-    cbind(parameters[k, ], resTemp) %>%
+    cbind(parameters[k, ], resTemp, row.names = NULL) %>%
     rbind(resSimBiasDetection)
 
-  pb$tick()
+  # pb$tick()
   seed <- .Random.seed
-  if (k >= 2L)
-    break
 }
 
-rm(resTemp)
+rm(resTemp, pb)
 
 resSimBiasDetection <-
   resSimBiasDetection %>%
@@ -675,7 +678,7 @@ resSimBiasDetection <-
 ```
 
 ```{r}
-rm(seed)
+rm(Msim, seed)
 ```
 
 
