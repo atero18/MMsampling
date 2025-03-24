@@ -638,7 +638,7 @@ pb <- progress::progress_bar$new(format = "[:bar] :percent eta: :eta",
 
 pb$tick(0L)
 ##
-for (k in 31:45) #seq_len(nrow(parameters)))
+for (k in seq_len(nrow(parameters)))
 {
   # Change of the constant of the web conditional expectations
   delta <- parameters[k, "delta"]
