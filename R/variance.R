@@ -45,8 +45,8 @@ Fisher_Information_Matrix <- function(prob, Z, maskSubset = !logical(nrow(Z)))
 }
 
 
-.bPhi22 <- function(Yobs, pi, p1, p2, maskSm, maskSmr, Z,
-                    phi = rep(1.0, length(expY1)))
+.estim_bPhi22 <- function(Yobs, pi, p1, p2, maskSm, maskSmr, Z,
+                          phi = rep(1.0, length(expY1)))
 
 {
 
@@ -133,7 +133,7 @@ estim_appr_var_seq_phi1 <- function(Yobs,
 #' of known selection probabilities. Using estimated values give an estimation
 #' The expected values of the m1 counterfactuals have to be given.
 #' The calculation will be correct under the additional strong assumption
-#' of independence between the sampling design p
+#' of conditional independence between the sampling design p
 #' and the mode selection mechanism q1.
 #' @export
 var_expansion_seq_phi1 <- function(expY1,
@@ -157,7 +157,7 @@ var_expansion_seq_phi1 <- function(expY1,
   covarPi <- pi2_to_covarInc(piMat)
   weightedY1 <- pi^-1L * phi * expY1
   varS <- t(weightedY1) %*% covarPi %*% weightedY1 +
-    sum(pi^-1L * (1.0 - pi)) * sd1^2L
+    sum(pi^-1L * (1.0 - pi) * phi^2L) * sd1^2L
 
   # q1 variability (R1)
   #  With the independence between p and q1
@@ -193,7 +193,6 @@ estim_appr_var_seq_phi2 <- function(Yobs,
   maskSmr <- modes == "m2"
 
   pi <- diag(piMat)
-
   piSmr <- pi[maskSmr]
 
   # if ("piMatSmr" %in% names(args))
@@ -248,10 +247,9 @@ estim_appr_var_seq_phi2 <- function(Yobs,
   #   alpha2 (the parameter of the logistic model for the mode-2 response)
   if (correcEstimWeights)
   {
-    bPhi22 <- .bPhi22(Yobs, pi, p1, p2, I & modes != "m1", maskSmr, Z, phi)
+    bPhi22 <- .estim_bPhi22(Yobs, pi, p1, p2, I & modes != "m1", maskSmr, Z, phi)
     correctedY2Smrq2 <- correctedY2Smrq2 + Z[maskSmr, ] %*% bPhi22
   }
-
 
   varq2Est <- sum((1.0 - p2Smr) * correctedY2Smrq2^2L)
 
@@ -264,22 +262,21 @@ estim_appr_var_seq_phi2 <- function(Yobs,
   varSEst + varq1Est + varq2Est + varY2Est
 }
 
-#' Calculate the true variance of the HT estimator of t_phi2
-#' (or t_2 as a special case) in the case of known selection probabilities.
-#' Using estimated values give an approximate variance in the case of
-#'  known selection probabilities.
+#' Calculate the true variance of the HT estimator of t_phi2 in the case
+#' of known selection probabilities. Using estimated values give an estimation
+#' The expected values of the m2 counterfactuals have to be given.
+#' The calculation will be correct under the additional strong assumptions
+#' of conditional independence between the sampling design p
+#' and the mode selection mechanism q1 and q2, plus the conditional independence
+#' between the mode selection mechanisms.
 #' @export
 var_expansion_seq_phi2 <- function(expY2, I,
-                            piMat,
-                            pq1Mat, pq2Mat,
-                            Z,
-                            biasedMode,
-                            refMode,
-                            modes,
-                            phi = rep(1.0, length(expY2)),
-                            correcEstimWeights = FALSE,
-                            constY2 = FALSE,
-                            covarY2 = NULL)
+                                   piMat,
+                                   pq1Mat, pq2Mat,
+                                   Z,
+                                   modes,
+                                   phi = rep(1.0, length(expY2)),
+                                   sd2 = 1.0)
 {
 
   if (all(phi == 0.0))
@@ -289,79 +286,36 @@ var_expansion_seq_phi2 <- function(expY2, I,
   pi <- diag(piMat)
 
   p1 <- diag(pq1Mat)
-
-  pq1BarMat <- 1.0 -
-    matrix(p1, nrow = N, ncol = N, byrow = TRUE) -
-    matrix(p1, nrow = N, ncol = N, byrow = FALSE) +
-    pq1Mat
-
   p1Bar <- 1.0 - p1
 
   p2 <- diag(pq2Mat)
 
-  maskSr <- as.numeric(modes == biasedMode)
-  R2 <- as.numeric(modes == refMode)
+  maskSr <- modes == "m1"
+  maskSmr <- modes == "m2"
 
-  weightedY2 <- phi * expY2
+  weightedY2 <- pi^-1L * phi * expY2
 
 
   # Sampling variability (S)
-
-  # If Y2 is considered as constant we can only estimate the sub-variance
-  # in Sr
-  if (constY2)
-  {
-    piSmr <- pi[R2]
-    weightedY2Smr <- weightedY2[R2]
-    piMatSmr <- piMat[R2, R2]
-    pq1BarMatSmr <- pq1BarMat[R2, R2]
-    pq2MatSmr <- pq2Mat[R2, R2]
-
-    varS <- weightedY2Smr / piSmr %*% t(weightedY2Smr / piSmr) *
-      covarPi[R2, R2] /
-      (piMatSmr * pq1BarMatSmr * pq2MatSmr)
-  }
-  # Otherwise we can do it on U
-  else
-  {
-    varS <- weightedY1 / pi %*% t(weightedY1 / pi) * covarPi
-  }
-
+  varS <- t(weightedY2) %*% covarPi %*% weightedY2 +
+    sum(pi^-1L * (1.0 - pi) * phi^2L) * sd2^2L
 
   # q1 variability (R1)
   # If we use estimated p_1k weights we have to do a correction.
 
   covarq1 <- pi2_to_covarInc(pq1Mat)
 
-  if (constY2)
+  correctedY2 <- weightedY2 / p1Bar
+
+  if (correcEstimWeights)
   {
-    correctedY2Smr <- weightedY2Smr / p1BarSmr
-
-
-    if (correcEstimWeights)
-    {
-      estbPhi21 <- .estim_bPhi21(expY2, I, p1, R2, p2, Z, phi, constY)
-      correctedY2Smr <- -correctedY2Smr +
-        crossprod(Z[R2, , drop = FALSE], estbPhi21)
-    }
-
-    varq1 <- (correctedY2Smr / piSmr) %*% t(correctedY2Smr / piSr) *
-      covarq1[R2, R2] /
-      pq1Mat[R2, R2]
+    estbPhi21 <- .estim_bPhi21(expY2, I, p1, R2, p2, Z, phi, constY)
+    correctedY2 <- correctedY2 - crossprod(Z, estbPhi21)
   }
-  else
-  {
-    correctedY2 <- weightedY2 / p1Bar
 
-    if (correcEstimWeights)
-    {
-      estbPhi21 <- .estim_bPhi21(expY2, I, p1, R2, p2, Z, phi, constY)
-      correctedY2 <- -correctedY2 + crossprod(Z, estbPhi21)
-    }
+  varq1 <- (correctedY2 / pi) %*% t(correctedY2 / pi) *
+    piMat * covarq1
 
-    varq1 <- (correctedY2 / pi) %*% t(correctedY2 / pi) *
-      piMat * covarq1
-  }
 
   # q2 variability (R2)
   # If we use estimated p_2k weights we have to do a correction.
@@ -369,53 +323,24 @@ var_expansion_seq_phi2 <- function(expY2, I,
 
   covarq2 <- pi2_to_covarInc(pq2Mat)
 
-  if (constY2)
+
+  correctedY2 <- weightedY2 / p2
+
+  if (correcEstimWeights)
   {
-    correctedY2Smr <- weightedY2Smr / p2Smr
-
-    if (correcEstimWeights)
-    {
-      bPhi22 <- .bPhi22(expY2, I, maskSr, p1, R2, p2, Z, phi, constY)
-      correctedY2Smr <- correctedY2Smr +
-        crossprod(Z[R2, , drop = FALSE], bPhi22)
-    }
-
-    varq2 <- (correctedY2Smr / (piSmr * p1BarSmr)) %*%
-      t(correctedY2Smr / (piSmr * p1BarSmr)) *
-      pq1BarMat[R2, R2] *
-      covarq2[R2, R2] /
-      pq1Mat[R2, R2]
-  }
-  else
-  {
-    correctedY2 <- weightedY2 / p2
-
-    if (correcEstimWeights)
-    {
-      bPhi22 <- .bPhi22(expY2, I, maskSr, p1, R2, p2, Z, phi, constY)
-      correctedY2 <- correctedY2 + crossprod(Z, bPhi22)
-    }
-
-    varq2 <- (correctedY2 / (pi * p1Bar)) %*% t(correctedY2 / (pi * p1Bar)) *
-      piMat * pq1BarMat * covarq2
+    bPhi22 <- .estim_bPhi22(Yobs, pi, p1, p2, I & modes != "m1", maskSmr, Z, phi)
+    correctedY2 <- correctedY2 + crossprod(Z, bPhi22)
   }
 
-  var <- sum(varS + varq1 + varq2)
+  varq2 <- (correctedY2 / (pi * p1Bar)) %*% t(correctedY2 / (pi * p1Bar)) *
+    piMat * pq1BarMat * covarq2
 
-  # If the y_2k are constants the complete
-  # variance has been calculated
-  # Otherwise is missing the part of variability from y_2k
-  if (constY2)
-    return(var)
+  <-
 
   # Y2 variability
+  varY2 <- sum(phi^2L) * sd2^2L
 
-  variables <- phi / (pi * p1Bar * p2)
-
-  varY2 <- variables %*% t(variables) * piMat * pq1Mat * pq2Mat * covarY1
-
-
-  var + sum(varY2)
+  varS + varq1 + varq2 + varY2
 
 }
 
