@@ -61,17 +61,17 @@ Fisher_Information_Matrix <- function(prob, Z, maskSubset = !logical(nrow(Z)))
 }
 
 #' Estimates the approximate variance of the HT estimator of t_phi1 with known
-#' or estimated mode selection probabilities. Homoscedasticity is assumed.
+#' or estimated mode selection probabilities. Homoscedasticity and independence
+#' in the m1 mode selection assumed.
 #' @export
 estim_appr_var_seq_phi1 <- function(Yobs,
                                     modes,
                                     I, piMat,
-                                    pq1Mat,
+                                    p1,
                                     Z,
                                     phi = rep(1.0, length(Yobs)),
-                                    sd1 = 0.0,
+                                    estSD1 = 0.0,
                                     correcEstimWeights = FALSE,
-                                    independenceq1 = NULL,
                                     ...)
 {
   if (all(phi == 0.0))
@@ -83,30 +83,18 @@ estim_appr_var_seq_phi1 <- function(Yobs,
 
   pi <- diag(piMat)
 
-  piSr <- pi[maskSr]
-
-  # if ("piMatSr" %in% names(args))
-  #   piMatSr <- args[["piMatSr"]]
-  # else
-  piMatSr <- piMat[maskSr, maskSr]
-
-  if ("p1" %in% names(args))
-    p1 <- args[["p1"]]
-  else
-    p1 <- diag(pq1Mat)
-
-  p1Sr <- p1[maskSr]
-
-  if ("pq1MatSr" %in% names(args))
-    pq1MatSr <- args[["pq1MatSr"]]
-  else
-    pq1MatSr <- pq1Mat[maskSr, maskSr]
-
   # The y_1k are weighted with the phi_k
-  weightedY1Sr <- phi[maskSr] * Yobs[maskSr]
+  weightedY1Sr <-
+    (pi[maskSr] * p1[maskSr])^-1L *
+    phi[maskSr] * Yobs[maskSr]
 
   # Sampling variability (S)
   # There is no correction needed for probabilities estimation
+
+  if ("piMatSr" %in% names(args))
+    piMatSr <- args[["piMatSr"]]
+  else
+    piMatSr <- piMat[maskSr, maskSr]
 
   if ("covarpSr" %in% names(args))
     covarpSr <- args[["covarpSr"]]
@@ -114,73 +102,46 @@ estim_appr_var_seq_phi1 <- function(Yobs,
     covarpSr <- pi2_to_covarInc(piMatSr)
 
   varSEst <-
-    t(weightedY1Sr / piSr) %*%
-    (covarpSr / (piMatSr * pq1MatSr)) %*%
-    (weightedY1Sr / piSr) %>%
+    t(weightedY1Sr) %*%
+    (covarpSr / piMatSr) %*%
+    weightedY1Sr %>%
     as.numeric()
-
-  # N <- length(Yobs)
-  # weightedY1 <- numeric(N)
-  # weightedY1[maskSr] <- phi[maskSr] * Yobs[maskSr]
-  # covarp <- pi2_to_covarInc(piMat)
-  # varSEst <-
-  #   t(weightedY1 / pi) %*%
-  #   (covarp / (piMat * pq1Mat)) %*%
-  #   (weightedY1 / pi) %>%
-  #   as.numeric()
 
   # q1 variability (R1)
   # If we use estimated p_1k weights we have to make a correction
-  correctedY1Sr <- weightedY1Sr / p1Sr
+  correctedY1Sr <- weightedY1Sr
 
-  #   If the probabilities p_1k are estimations we add a term
-  #   that uses the covariates used by the regression estimators
+  #   If the probabilities p_1k are estimations we add a linearisation term
   if (correcEstimWeights)
   {
     estbPhi11 <- .estim_bPhi11(Yobs, I, pi, p1, maskSr, Z, phi)
     correctedY1Sr <- correctedY1Sr + Z[maskSr, , drop = FALSE] %*% estbPhi11
   }
 
-  independenceq1 <- isTRUE(independenceq1)
-  if (independenceq1)
-    varq1Est <- sum(correctedY1Sr^2L * (1.0 - p1Sr) / piSr^2L)
-  else
-  {
-    if ("covarq1Sr" %in% names(args))
-      covarq1Sr <- args[["covarq1Sr"]]
-    else
-      covarq1Sr <- pi2_to_covarInc(pq1MatSr)
-
-    varq1Est <- t(correctedY1Sr / piSr) %*%
-      (covarq1Sr / pq1MatSr) %*%
-      (correctedY1Sr / piSr) %>%
-      as.numeric()
-  }
+  varq1Est <- sum((1.0 - p1Sr) * correctedY1Sr^2L)
 
 
   # Y1 variability
-  # We suppose we have an estimator of the variance
-  # of the Y1
-  varY1Est <- sum(phi^2L) * sd1^2L
+  # We suppose the potential outcomes homoscedastic and
+  # we have an estimator of the variance of the Y1
+  varY1Est <- sum(phi^2L) * estSD1^2L
 
   varSEst + varq1Est + varY1Est
 }
 
 #' Calculate the true variance of the HT estimator of t_phi1 in the case
-#' of known selection probabilities. Using estimated values give an approximate
-#' variance.
+#' of known selection probabilities. Using estimated values give an estimation
+#' The expected values of the m1 counterfactuals have to be given.
+#' The calculation will be correct under the additional strong assumption
+#' of independence between the sampling design p
+#' and the mode selection mechanism q1.
 #' @export
-var_HT_seq_phi1 <- function(expY1,
-                            I,
-                            piMat,
-                            pq1Mat,
-                            Z,
-                            biasedMode,
-                            modes,
-                            phi = rep(1.0, length(expY1)),
-                            correcEstimWeights = FALSE,
-                            constY1 = FALSE,
-                            covarY1 = NULL)
+var_expansion_seq_phi1 <- function(expY1,
+                                   piMat,
+                                   p1,
+                                   modes,
+                                   phi = rep(1.0, length(expY1)),
+                                   sd1 = 1.0)
 {
 
   if (all(phi == 0.0))
@@ -189,85 +150,24 @@ var_HT_seq_phi1 <- function(expY1,
   pi <- diag(piMat)
   piMatSr <- piMat[maskSr, maskSr]
 
-  p1 <- diag(pq1Mat)
-  invP1Mat <- (p1 %*% t(p1))^-1L
-
-  maskSr <- as.numeric(modes == biasedMode)
-
-  covarPi <- pi2_to_covarInc(piMat)
-
-  pq1MatSr <- pq1Mat[maskSr, maskSr]
-
-  weightedY1 <- phi * expY1
+  maskSr <- modes == "m1"
 
 
-  ## constY1 : important sachant que l'on a une fonction qui estime la variance approchée?
   # Sampling variability (S)
-
-  # If Y1 is considered as constant we can only estimate the sub-variance
-  # in Sr
-  if (constY1)
-  {
-    piSr <- pi[maskSr]
-    weightedY1Sr <- weightedY1[maskSr]
-    varS <- weightedY1Sr / piSr %*% t(weightedY1Sr / piSr) *
-      covarPi[maskSr, maskSr] /
-      (piMatSr * pq1MatSr)
-  }
-  # Otherwise we can do it on U
-  else
-    varS <- weightedY1 / pi %*% t(weightedY1 / pi) * covarPi
+  covarPi <- pi2_to_covarInc(piMat)
+  weightedY1 <- pi^-1L * phi * expY1
+  varS <- t(weightedY1) %*% covarPi %*% weightedY1 +
+    sum(pi^-1L * (1.0 - pi)) * sd1^2L
 
   # q1 variability (R1)
-  # If we use estimated p_1k weights we have to do a correction.
+  #  With the independence between p and q1
+  varq1 <- sum(pi^-1L * p1^-1L * (1.0 - p1) * phi^2L * (sd1^2L + expY1^2L))
 
-  covarq1 <- pi2_to_covarInc(pq1Mat)
-
-  if (constY1)
-  {
-    correctedY1Sr <- weightedY1Sr / p1Sr
-
-    if (correcEstimWeights)
-    {
-      estbPhi11 <- .estim_bPhi11(expY1, I, p1, maskSr, Z, phi, constY)
-      correctedY1Sr <- correctedY1Sr +
-        crossprod(Z[maskSr, , drop = FALSE], estbPhi11)
-    }
-
-    varq1 <- (correctedY1Sr / piSr) %*% t(correctedY1Sr / piSr) *
-      covarq1[maskSr, maskSr] / pq1MatSr
-  }
-  else
-  {
-    correctedY1 <- weightedY1 / p1
-
-    if (correcEstimWeights)
-    {
-      estbPhi11 <- .estim_bPhi11(expY1, I, maskSr, p1, Z, phi, constY)
-      correctedY1 <- correctedY1Sr + crossprod(Z, estbPhi11)
-    }
-
-    varq1 <- (correctedY1 / pi) %*% t(correctedY1 / pi) *
-      piMat * covarq1
-  }
-
-  var <- sum(varS + varq1)
-
-  # If the y_1k are constants the complete
-  # variance has been calculated
-  # Otherwise is missing the part of variability from y_1k
-  if (constY1)
-    return(var)
 
   # Y1 variability
+  varY1 <- sum(phi^2L) * sd1^2L
 
-  # Can be calculated on the entire population U
-  variables <- phi / (pi * p1)
-
-  varY1 <- variables %*% t(variables) * piMat * pq1Mat * covarY1
-
-
-  var + sum(varY1)
+  varS + varq1 + varY1
 }
 
 #' Estimates the approximate variance of the HT estimator of t_phi2 with known
@@ -652,7 +552,7 @@ var_difference_HT <- function(expY1, expY2, I,
                               covarY1 = NULL,
                               covarY2 = NULL)
 {
-  var_HT_seq_phi1(expY1, I, piMat, pq1Mat, Z, biasedMode,
+  var_expansion_seq_phi1(expY1, I, piMat, pq1Mat, Z, biasedMode,
                   modes, phi, correcEstimWeights, constY1, covarY1) -
     2.0 * covar_difference_HT(expY1, expY2, I,
                               piMat,
@@ -742,7 +642,7 @@ var_estim_tot_BM <- function(modeTotBiased = "HT", modeTotRef = "HT",
 
   phiBar <- 1.0 - phi
 
-  varPhi1 <- var_HT_seq_phi1(expY1, covarY1, piMat, pq1Mat, phi)
+  varPhi1 <- var_expansion_seq_phi1(expY1, covarY1, piMat, pq1Mat, phi)
   varPhi2 <- var_HT_seq_phi2(expY2, covarY2, piMat, pq1Mat, pq2Mat, phi)
   covarPhi12 <- covar_HT_seq_phi1_phi2(expY1, expY2, piMat, pq1Mat, pq2Mat, phi)
 
