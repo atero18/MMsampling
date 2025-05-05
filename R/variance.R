@@ -29,7 +29,7 @@ Fisher_Information_Matrix <- function(prob, Z, maskSubset = !logical(nrow(Z)))
 
 
 .estim_bPhi21 <- function(Yobs, I, pi, p1, p2, maskSmr, Z,
-                    phi = rep(1.0, length(expY1)))
+                          phi = rep(1.0, length(expY1)))
 {
 
   p1Smr <- p1[maskSmr]
@@ -62,7 +62,7 @@ Fisher_Information_Matrix <- function(prob, Z, maskSubset = !logical(nrow(Z)))
 
 #' Estimates the approximate variance of the HT estimator of t_phi1 with known
 #' or estimated mode selection probabilities. Homoscedasticity and independence
-#' in the m1 mode selection assumed.
+#' in the m1 mode selection mechanism assumed.
 #' @export
 estim_appr_var_seq_phi1 <- function(Yobs,
                                     modes,
@@ -171,19 +171,18 @@ var_expansion_seq_phi1 <- function(expY1,
 }
 
 #' Estimates the approximate variance of the HT estimator of t_phi2 with known
-#' or estimated mode selection probabilities. Homoscedasticity is assumed.
+#' or estimated mode selection probabilities. Homoscedasticity and independence
+#' in the m1 and m2 mode selection mechanisms assumed.
 #' @export
 estim_appr_var_seq_phi2 <- function(Yobs,
                                     modes,
                                     I, piMat,
-                                    pq1Mat,
-                                    pq2Mat,
+                                    p1,
+                                    p2,
                                     Z,
                                     phi = rep(1.0, length(Yobs)),
                                     sd2 = 0.0,
                                     correcEstimWeights = FALSE,
-                                    independenceq1 = NULL,
-                                    independenceq2 = NULL,
                                     ...)
 {
   if (all(phi == 0.0))
@@ -192,11 +191,7 @@ estim_appr_var_seq_phi2 <- function(Yobs,
   args <- list(...)
 
   maskSmr <- modes == "m2"
-  nSmr <- sum(maskSmr)
 
-  # if ("pi" %in% names(args))
-  #   pi <- args[["pi"]]
-  # else
   pi <- diag(piMat)
 
   piSmr <- pi[maskSmr]
@@ -206,35 +201,10 @@ estim_appr_var_seq_phi2 <- function(Yobs,
   # else
   piMatSmr <- piMat[maskSmr, maskSmr]
 
-  if ("p1" %in% names(args))
-    p1 <- args[["p1"]]
-  else
-    p1 <- diag(pq1Mat)
-
   p1Smr <- p1[maskSmr]
   p1Smrbar <- 1.0 - p1Smr
 
-  if ("pq1MatSmr" %in% names(args))
-    pq1MatSmr <- args[["pq1MatSmr"]]
-  else
-    pq1MatSmr <- pq1Mat[maskSmr, maskSmr]
-
-  pq1BarMatSmr <- 1.0 -
-    matrix(p1Smr, nrow = nSmr, ncol = nSmr, byrow = TRUE) -
-    matrix(p1Smr, nrow = nSmr, ncol = nSmr, byrow = FALSE) +
-    pq1MatSmr
-
-  if ("p2" %in% names(args))
-    p2 <- args[["p2"]]
-  else
-    p2 <- diag(pq2Mat)
-
   p2Smr <- p2[maskSmr]
-
-  if ("pq2MatSmr" %in% names(args))
-    pq2MatSmr <- args[["pq2MatSmr"]]
-  else
-    pq2MatSmr <- pq2Mat[maskSmr, maskSmr]
 
   # The y_2k are weighted with the phi_k
   weightedY2Smr <- phi[maskSmr] * Yobs[maskSmr]
@@ -246,45 +216,32 @@ estim_appr_var_seq_phi2 <- function(Yobs,
   else
     covarpSmr <- pi2_to_covarInc(piMatSmr)
 
+  correctedY2Smrp <- (piSmr * p1Smrbar * p2Smr)^-1L * weightedY2Smr
   varSEst <-
-    t(weightedY2Smr / piSmr) %*%
-    (covarpSmr / (piMatSmr * pq1BarMatSmr * pq2MatSmr)) %*%
-    (weightedY2Smr / piSmr) %>%
+    t(correctedY2Smrp) %*%
+    (covarpSmr / piMatSmr) %*%
+    correctedY2Smrp %>%
     as.numeric()
 
 
 
   # q1 variability (R1)
-  correctedY2Smrq1 <- weightedY2Smr / p1Smrbar
+  correctedY2Smrq1 <- (piSmr * p1Smrbar)^-1L * weightedY2Smr
 
   #   If the probabilities p_1k are estimations we add a term
   #   that uses the covariates used by the regression estimators of
-  #   alpha1 (the parameter of the logistic model for the mode-1 response)
+  #   alpha1 (the parameter of the logistic model for the m1 response)
   if (correcEstimWeights)
   {
     estbPhi21 <- .estim_bPhi21(Yobs, I, pi, p1, p2, maskSmr, Z, phi)
-    correctedY2Smrq1 <- -correctedY2Smrq1 + Z[maskSmr, ] %*% estbPhi21
+    correctedY2Smrq1 <- correctedY2Smrq1 - Z[maskSmr, ] %*% estbPhi21
   }
 
-  independenceq1 <- isTRUE(independenceq1)
+  varq1Est <- sum(p1Smr * p2Smr^-1L * correctedY2Smrq1^2L)
 
-  if (independenceq1)
-    varq1Est <- sum(correctedY2Smrq1^2L * p1Smr / (piSmr^2L * p2Smr))
-  else
-  {
-    if ("covarq1Smr" %in% names(args))
-      covarq1Smr <- args[["covarq1Smr"]]
-    else
-      covarq1Smr <- pi2_to_covarInc(covarq1Smr)
-
-    varq1Est <- t(correctedY2Smrq1 / piSmr) %*%
-      (covarq1Smr / (pq1BarMatSmr * pq2MatSmr)) %*%
-      (correctedY2Smrq1 / piSmr) %>%
-      as.numeric()
-  }
 
   # q2 variability (R2)
-  correctedY2Smrq2 <- weightedY2Smr / p2[maskSmr]
+  correctedY2Smrq2 <- correctedY2Smrp
 
   #   If the probabilities p_1k are estimations we add a term
   #   that uses the covariates used by the regression estimators of
@@ -295,23 +252,9 @@ estim_appr_var_seq_phi2 <- function(Yobs,
     correctedY2Smrq2 <- correctedY2Smrq2 + Z[maskSmr, ] %*% bPhi22
   }
 
-  independenceq2 <- isTRUE(independenceq2)
 
-  if (independenceq2)
-    varq2Est <- sum(correctedY2Smrq2^2L * (1.0 - p2Smr) / (piSmr * p1Smrbar)^2L)
-  else
-  {
+  varq2Est <- sum((1.0 - p2Smr) * correctedY2Smrq2^2L)
 
-    if ("covarq2Smr" %in% names(args))
-      covarq2Smr <- args[["covarq2Smr"]]
-    else
-      covarq2Smr <- pi2_to_covarInc(pq2MatSmr)
-
-    varq2Est <- t(correctedY2Smrq2 / (piSmr * p1Smrbar)) %*%
-      (covarq2Smr / pq2MatSmr) %*%
-      (correctedY2Smrq2 / (piSmr * p1Smrbar)) %>%
-      as.numeric()
-  }
 
   # Y2 variability
   # We suppose we have an estimator of the variance
@@ -326,7 +269,7 @@ estim_appr_var_seq_phi2 <- function(Yobs,
 #' Using estimated values give an approximate variance in the case of
 #'  known selection probabilities.
 #' @export
-var_HT_seq_phi2 <- function(expY2, I,
+var_expansion_seq_phi2 <- function(expY2, I,
                             piMat,
                             pq1Mat, pq2Mat,
                             Z,
@@ -566,7 +509,7 @@ var_difference_HT <- function(expY1, expY2, I,
                               constY,
                               covarY1,
                               covarY2) +
-    var_HT_seq_phi2(expY2, I, piMat, pq1Mat, pq2Mat, Z, biasedMode,
+    var_expansion_seq_phi2(expY2, I, piMat, pq1Mat, pq2Mat, Z, biasedMode,
                     refMode, modes, phi, correcEstimWeights,
                     constY2, covarY2)
 }
@@ -643,7 +586,7 @@ var_estim_tot_BM <- function(modeTotBiased = "HT", modeTotRef = "HT",
   phiBar <- 1.0 - phi
 
   varPhi1 <- var_expansion_seq_phi1(expY1, covarY1, piMat, pq1Mat, phi)
-  varPhi2 <- var_HT_seq_phi2(expY2, covarY2, piMat, pq1Mat, pq2Mat, phi)
+  varPhi2 <- var_expansion_seq_phi2(expY2, covarY2, piMat, pq1Mat, pq2Mat, phi)
   covarPhi12 <- covar_HT_seq_phi1_phi2(expY1, expY2, piMat, pq1Mat, pq2Mat, phi)
 
   # Variance of the total MB estimator

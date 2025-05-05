@@ -2094,7 +2094,7 @@ simulationUncounf <-
     
       
     # We calculate the real variance of the benchmark estimator
-    sdTWBenchmark <- var_HT_seq_phi2(expY2 = expY2, 
+    sdTWBenchmark <- var_expansion_seq_phi2(expY2 = expY2, 
                                      covarY2 = covarYtel,
                                      piMat = piMat,
                                      pq1Mat = pq1Mat,
