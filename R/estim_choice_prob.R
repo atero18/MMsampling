@@ -59,15 +59,15 @@ estim_response_prob_global <- function(I, modes, Z,
     fittedProbs
 }
 
-#' @describeIn proba_mode_estim Estimation sequentialy with conditional
-#' probabilities (interesting particularly with sequential mixed-modes protocoles)
+#' @describeIn proba_mode_estim Estimation sequentially with conditional
+#' probabilities (interesting particularly with sequential mixed-mode protocols)
 #' @param orderModes the order modes are considered. The first mode will have
 #' an absolute probability of selection, the second a probability a selection
-#' conditionaly to the non-selection of the first one, etc.
+#' conditionally to the non-selection of the first one, etc.
 #' @importFrom stats glm binomial predict.glm predict
 #' @importFrom checkmate assertFlag assertVector
 #' @export
-estim_response_prob_sequential <- function(I, pi, Z, modes, orderModes,
+estim_response_prob_sequential <- function(I, Z, modes, orderModes,
                                            RGH = NULL, constRGH = FALSE,
                                            link = "logit",
                                            chosenOnly = TRUE)
@@ -171,8 +171,6 @@ estim_response_prob_sequential <- function(I, pi, Z, modes, orderModes,
           suppressWarnings({
           modelGroup <-
             fastglm::fastglm(x = subZ, y = subResponse,
-                             weights =
-                               (pi * unconditionalVec)[subset & maskGroup]^-1L,
                              family = binomial, link = link)
           })
 
@@ -181,8 +179,7 @@ estim_response_prob_sequential <- function(I, pi, Z, modes, orderModes,
         else
         {
           modelGroup <- glm(response ~ Z, family = binomial,
-                            subset = subset & maskGroup,
-                            weights = (pi * unconditionalVec)^-1L, link = link)
+                            subset = subset & maskGroup, link = link)
         }
 
         fittedProbsGroup <- predict(modelGroup,
