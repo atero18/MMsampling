@@ -12,10 +12,6 @@ Fisher_Information_Matrix <- function(prob, Z, maskSubset = !logical(nrow(Z)))
   crossprod(ZSubset, probSubset * (1.0 - probSubset) * ZSubset)
 }
 
-.Fisher_Information_Matrix_m1 <- function(p1, Z, I)
-{
-  Fisher_Information_Matrix(prob = p1, Z = Z, maskSubset = I)
-}
 
 .estim_bPhi11 <- function(Yobs, I, pi, p1, maskSr, Z,
                     phi = rep(1.0, length(Yobs)))
@@ -24,16 +20,11 @@ Fisher_Information_Matrix <- function(prob, Z, maskSubset = !logical(nrow(Z)))
 
   # Estimation of the expected value of the derivative of the total estimator
   estVPhi11 <- -crossprod(Z[maskSr, , drop = FALSE],
-                          phi[maskSr] * Yobs[maskSr] *
-                            (1.0 - p1Sr) / (pi[maskSr] * p1Sr))
+                          (pi[maskSr] * p1Sr)^-1L *
+                            phi[maskSr] * Yobs[maskSr] * (1.0 - p1Sr))
 
 
-  solve(.Fisher_Information_Matrix_m1(p1, Z, I)) %*% estVPhi11
-}
-
-.Fisher_Information_Matrix_m2 <- function(p2, Z, I, R1)
-{
-  Fisher_Information_Matrix(p2, Z, I & !R)
+  solve(Fisher_Information_Matrix(p1, Z, I)) %*% estVPhi11
 }
 
 
@@ -49,7 +40,7 @@ Fisher_Information_Matrix <- function(prob, Z, maskSubset = !logical(nrow(Z)))
 
 
 
-  solve(.Fisher_Information_Matrix_m1(p1, Z, I)) %*% estVPhi21
+  solve(Fisher_Information_Matrix(p1, Z, I)) %*% estVPhi21
 
 }
 
@@ -59,23 +50,14 @@ Fisher_Information_Matrix <- function(prob, Z, maskSubset = !logical(nrow(Z)))
 
 {
 
-  p1Smr <- p1[maskSmr]
   p2Smr <- p2[maskSmr]
 
   estVPhi22 <- -crossprod(Z[maskSmr, , drop = FALSE],
-                          phi[maskSmr] * Yobs[maskSmr] * (1.0 - p2Smr)
-                          / (pi[maskSmr] * (1.0 - p1Smr) * p2Smr))
+                          (pi[maskSmr] * (1.0 - p1[maskSmr]) * p2Smr)^-1L *
+                            phi[maskSmr] * Yobs[maskSmr] * (1.0 - p2Smr))
 
 
-  # Estimation of the partial derivative expectation of the logistic score
-  # function for alpha2
-  lambda2Sm <- p2[maskSm] * (1.0 - p2[maskSm]) /
-    (pi[maskSm] * (1.0 - p1[maskSm]))
-  partialW2 <-
-    crossprod(Z[maskSm, , drop = FALSE], lambda2Sm * Z[maskSm, , drop = FALSE])
-
-  solve(partialW2) %*% muPhi22
-
+  solve(Fisher_Information_Matrix(p2, Z, maskSm)) %*% estVPhi22
 }
 
 #' Estimates the approximate variance of the HT estimator of t_phi1 with known
@@ -99,9 +81,6 @@ estim_appr_var_seq_phi1 <- function(Yobs,
 
   maskSr <- modes == "m1"
 
-  # if ("pi" %in% names(args))
-  #   pi <- args[["pi"]]
-  # else
   pi <- diag(piMat)
 
   piSr <- pi[maskSr]
@@ -159,7 +138,7 @@ estim_appr_var_seq_phi1 <- function(Yobs,
   if (correcEstimWeights)
   {
     estbPhi11 <- .estim_bPhi11(Yobs, I, pi, p1, maskSr, Z, phi)
-    correctedY1Sr <- correctedY1Sr - Z[maskSr, , drop = FALSE] %*% estbPhi11
+    correctedY1Sr <- correctedY1Sr + Z[maskSr, , drop = FALSE] %*% estbPhi11
   }
 
   independenceq1 <- isTRUE(independenceq1)
@@ -251,7 +230,7 @@ var_HT_seq_phi1 <- function(expY1,
     if (correcEstimWeights)
     {
       estbPhi11 <- .estim_bPhi11(expY1, I, p1, maskSr, Z, phi, constY)
-      correctedY1Sr <- correctedY1Sr -
+      correctedY1Sr <- correctedY1Sr +
         crossprod(Z[maskSr, , drop = FALSE], estbPhi11)
     }
 
@@ -265,7 +244,7 @@ var_HT_seq_phi1 <- function(expY1,
     if (correcEstimWeights)
     {
       estbPhi11 <- .estim_bPhi11(expY1, I, maskSr, p1, Z, phi, constY)
-      correctedY1 <- correctedY1Sr - crossprod(Z, estbPhi11)
+      correctedY1 <- correctedY1Sr + crossprod(Z, estbPhi11)
     }
 
     varq1 <- (correctedY1 / pi) %*% t(correctedY1 / pi) *
@@ -384,7 +363,7 @@ estim_appr_var_seq_phi2 <- function(Yobs,
   if (correcEstimWeights)
   {
     estbPhi21 <- .estim_bPhi21(Yobs, I, pi, p1, p2, maskSmr, Z, phi)
-    correctedY2Smrq1 <- -correctedY2Smrq1 - Z[maskSmr, ] %*% estbPhi21
+    correctedY2Smrq1 <- -correctedY2Smrq1 + Z[maskSmr, ] %*% estbPhi21
   }
 
   independenceq1 <- isTRUE(independenceq1)
@@ -413,7 +392,7 @@ estim_appr_var_seq_phi2 <- function(Yobs,
   if (correcEstimWeights)
   {
     bPhi22 <- .bPhi22(Yobs, pi, p1, p2, I & modes != "m1", maskSmr, Z, phi)
-    correctedY2Smrq2 <- correctedY2Smrq2 - Z[maskSmr, ] %*% bPhi22
+    correctedY2Smrq2 <- correctedY2Smrq2 + Z[maskSmr, ] %*% bPhi22
   }
 
   independenceq2 <- isTRUE(independenceq2)
@@ -519,7 +498,7 @@ var_HT_seq_phi2 <- function(expY2, I,
     if (correcEstimWeights)
     {
       estbPhi21 <- .estim_bPhi21(expY2, I, p1, R2, p2, Z, phi, constY)
-      correctedY2Smr <- correctedY2Smr +
+      correctedY2Smr <- -correctedY2Smr +
         crossprod(Z[R2, , drop = FALSE], estbPhi21)
     }
 
@@ -534,7 +513,7 @@ var_HT_seq_phi2 <- function(expY2, I,
     if (correcEstimWeights)
     {
       estbPhi21 <- .estim_bPhi21(expY2, I, p1, R2, p2, Z, phi, constY)
-      correctedY2 <- correctedY2 + crossprod(Z, estbPhi21)
+      correctedY2 <- -correctedY2 + crossprod(Z, estbPhi21)
     }
 
     varq1 <- (correctedY2 / pi) %*% t(correctedY2 / pi) *
@@ -554,7 +533,7 @@ var_HT_seq_phi2 <- function(expY2, I,
     if (correcEstimWeights)
     {
       bPhi22 <- .bPhi22(expY2, I, maskSr, p1, R2, p2, Z, phi, constY)
-      correctedY2Smr <- correctedY2Smr -
+      correctedY2Smr <- correctedY2Smr +
         crossprod(Z[R2, , drop = FALSE], bPhi22)
     }
 
@@ -571,7 +550,7 @@ var_HT_seq_phi2 <- function(expY2, I,
     if (correcEstimWeights)
     {
       bPhi22 <- .bPhi22(expY2, I, maskSr, p1, R2, p2, Z, phi, constY)
-      correctedY2 <- correctedY2 - crossprod(Z, bPhi22)
+      correctedY2 <- correctedY2 + crossprod(Z, bPhi22)
     }
 
     varq2 <- (correctedY2 / (pi * p1Bar)) %*% t(correctedY2 / (pi * p1Bar)) *
