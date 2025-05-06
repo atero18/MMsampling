@@ -141,7 +141,7 @@ var_expansion_seq_phi1 <- function(expY1,
                                    p1,
                                    modes,
                                    phi = rep(1.0, length(expY1)),
-                                   sd1 = 1.0)
+                                   sd1 = 0.0)
 {
 
   if (all(phi == 0.0))
@@ -155,13 +155,13 @@ var_expansion_seq_phi1 <- function(expY1,
 
   # Sampling variability (S)
   covarPi <- pi2_to_covarInc(piMat)
-  weightedY1 <- pi^-1L * phi * expY1
-  varS <- t(weightedY1) %*% covarPi %*% weightedY1 +
+  correctedY1p <- pi^-1L * phi * expY1
+  varS <- t(correctedY1p) %*% covarPi %*% correctedY1p +
     sum(pi^-1L * (1.0 - pi) * phi^2L) * sd1^2L
 
   # q1 variability (R1)
   #  With the independence between p and q1
-  varq1 <- sum(pi^-1L * p1^-1L * (1.0 - p1) * phi^2L * (sd1^2L + expY1^2L))
+  varq1 <- sum((pi * p1)^-1L * (1.0 - p1) * phi^2L * (sd1^2L + expY1^2L))
 
 
   # Y1 variability
@@ -195,9 +195,6 @@ estim_appr_var_seq_phi2 <- function(Yobs,
   pi <- diag(piMat)
   piSmr <- pi[maskSmr]
 
-  # if ("piMatSmr" %in% names(args))
-  #   piMatSmr <- args[["piMatSmr"]]
-  # else
   piMatSmr <- piMat[maskSmr, maskSmr]
 
   p1Smr <- p1[maskSmr]
@@ -209,7 +206,6 @@ estim_appr_var_seq_phi2 <- function(Yobs,
   weightedY2Smr <- phi[maskSmr] * Yobs[maskSmr]
 
   # Sampling variability (S)
-  # There is no correction needed for probabilities estimation
   if ("covarpSmr" %in% names(args))
     covarpSmr <- args[["covarpSmr"]]
   else
@@ -221,7 +217,6 @@ estim_appr_var_seq_phi2 <- function(Yobs,
     (covarpSmr / piMatSmr) %*%
     correctedY2Smrp %>%
     as.numeric()
-
 
 
   # q1 variability (R1)
@@ -247,7 +242,8 @@ estim_appr_var_seq_phi2 <- function(Yobs,
   #   alpha2 (the parameter of the logistic model for the mode-2 response)
   if (correcEstimWeights)
   {
-    bPhi22 <- .estim_bPhi22(Yobs, pi, p1, p2, I & modes != "m1", maskSmr, Z, phi)
+    bPhi22 <- .estim_bPhi22(Yobs, pi, p1, p2,
+                            I & modes != "m1", maskSmr, Z, phi)
     correctedY2Smrq2 <- correctedY2Smrq2 + Z[maskSmr, ] %*% bPhi22
   }
 
@@ -272,76 +268,41 @@ estim_appr_var_seq_phi2 <- function(Yobs,
 #' @export
 var_expansion_seq_phi2 <- function(expY2, I,
                                    piMat,
-                                   pq1Mat, pq2Mat,
+                                   p1, p2,
                                    Z,
                                    modes,
                                    phi = rep(1.0, length(expY2)),
-                                   sd2 = 1.0)
+                                   sd2 = 0.0)
 {
 
   if (all(phi == 0.0))
     return(0.0)
 
-
   pi <- diag(piMat)
-
-  p1 <- diag(pq1Mat)
   p1Bar <- 1.0 - p1
-
   p2 <- diag(pq2Mat)
 
   maskSr <- modes == "m1"
   maskSmr <- modes == "m2"
 
-  weightedY2 <- pi^-1L * phi * expY2
-
 
   # Sampling variability (S)
-  varS <- t(weightedY2) %*% covarPi %*% weightedY2 +
+  covarPi <- pi2_to_covarInc(piMat)
+  correctedY2p <- pi^-1L * phi * expY2
+  varS <- t(correctedY2p) %*% covarPi %*% correctedY2p +
     sum(pi^-1L * (1.0 - pi) * phi^2L) * sd2^2L
 
   # q1 variability (R1)
-  # If we use estimated p_1k weights we have to do a correction.
-
-  covarq1 <- pi2_to_covarInc(pq1Mat)
-
-  correctedY2 <- weightedY2 / p1Bar
-
-  if (correcEstimWeights)
-  {
-    estbPhi21 <- .estim_bPhi21(expY2, I, p1, R2, p2, Z, phi, constY)
-    correctedY2 <- correctedY2 - crossprod(Z, estbPhi21)
-  }
-
-  varq1 <- (correctedY2 / pi) %*% t(correctedY2 / pi) *
-    piMat * covarq1
-
+  varPhiY2 <- phi^2L * (sd2^2L + expY2^2L) # Variance of each phi_k y_2k
+  varq1 <- sum((pi * p1Bar)^-1L * p1 * varPhiY2)
 
   # q2 variability (R2)
-  # If we use estimated p_2k weights we have to do a correction.
-
-
-  covarq2 <- pi2_to_covarInc(pq2Mat)
-
-
-  correctedY2 <- weightedY2 / p2
-
-  if (correcEstimWeights)
-  {
-    bPhi22 <- .estim_bPhi22(Yobs, pi, p1, p2, I & modes != "m1", maskSmr, Z, phi)
-    correctedY2 <- correctedY2 + crossprod(Z, bPhi22)
-  }
-
-  varq2 <- (correctedY2 / (pi * p1Bar)) %*% t(correctedY2 / (pi * p1Bar)) *
-    piMat * pq1BarMat * covarq2
-
-  <-
+  varq2 <- sum((pi * p1Bar * p2)^-1L * (1.0 - p2) * varPhiY2)
 
   # Y2 variability
   varY2 <- sum(phi^2L) * sd2^2L
 
   varS + varq1 + varq2 + varY2
-
 }
 
 covar_difference_HT <- function(expY1, expY2, I,
