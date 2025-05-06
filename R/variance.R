@@ -74,7 +74,6 @@ estim_appr_var_seq_phi1 <- function(Yobs,
                                     correcEstimWeights = FALSE,
                                     ...)
 {
-  browser()
 
   if (all(phi == 0.0))
     return(0.0)
@@ -84,10 +83,12 @@ estim_appr_var_seq_phi1 <- function(Yobs,
   maskSr <- modes == "m1"
 
   pi <- diag(piMat)
+  piSr <- pi[maskSr]
   p1Sr <- p1[maskSr]
 
   # The y_1k are weighted with the phi_k
-  weightedY1Sr <- (pi[maskSr] * p1Sr)^-1L * phi[maskSr] * Yobs[maskSr]
+
+  weightedY1Sr <- phi[maskSr] * Yobs[maskSr]
 
   # Sampling variability (S)
   # There is no correction needed for probabilities estimation
@@ -102,24 +103,28 @@ estim_appr_var_seq_phi1 <- function(Yobs,
   else
     covarpSr <- pi2_to_covarInc(piMatSr)
 
+  correctedY1Srp <- (piSr * p1Sr)^-1L * weightedY1Sr
   varSEst <-
-    t(weightedY1Sr) %*%
+    t(correctedY1Srp) %*%
     (covarpSr / piMatSr) %*%
-    weightedY1Sr %>%
+    correctedY1Srp %>%
     as.numeric()
+  varSEst <- varSEst +
+    sum((1.0 - piSr) * piSr^-2L * p1Sr^-1L * (1.0 - p1Sr^-1L) *
+          weightedY1Sr^2L)
 
   # q1 variability (R1)
   # If we use estimated p_1k weights we have to make a correction
-  correctedY1Sr <- weightedY1Sr
+  correctedY1Srq1 <- correctedY1Srp
 
   #   If the probabilities p_1k are estimations we add a linearisation term
   if (correcEstimWeights)
   {
     estbPhi11 <- .estim_bPhi11(Yobs, I, pi, p1, maskSr, Z, phi)
-    correctedY1Sr <- correctedY1Sr + Z[maskSr, , drop = FALSE] %*% estbPhi11
+    correctedY1Srq1 <- correctedY1Srq1 + Z[maskSr, , drop = FALSE] %*% estbPhi11
   }
 
-  varq1Est <- sum((1.0 - p1Sr) * correctedY1Sr^2L)
+  varq1Est <- sum((1.0 - p1Sr) * correctedY1Srq1^2L)
 
 
   # Y1 variability
