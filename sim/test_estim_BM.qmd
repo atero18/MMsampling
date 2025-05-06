@@ -321,7 +321,7 @@ simulation_tphi <- function(Z,
   
     # Estimation of mode selection probabilities
     estimProbsData <-
-      MMsampling::estim_response_prob_sequential(I, pi, Z,
+      MMsampling::estim_response_prob_sequential(I, Z,
                                                  modes,
                                                  c("m1", "m2"),
                                                  chosenOnly = FALSE)
@@ -348,9 +348,6 @@ simulation_tphi <- function(Z,
     # Estimations with Y1
       # Estimation of the internet design covariance matrix
     estimpq1 <- estimProbsData$conditional[, "m1"]
-    # estimpq1Mat <- pi_to_pi2(estimpq1)
-    estimpq1MatSr <- pi_to_pi2(estimpq1[mask1])
-    estimpq1MatSmr <- pi_to_pi2(estimpq1[mask2])
     
      # Total of phi_k y_1k with true probabilities
     expPhi1 <- sum(phi * expY1)
@@ -381,14 +378,11 @@ simulation_tphi <- function(Z,
                                           modes,
                                           I,
                                           piMat,
-                                          estimpq1MatSr,
+                                          estimpq1,
                                           Z,
                                           phi,
-                                          sd1 = sd1,
-                                          correcEstimWeights = TRUE,
-                                          independenceq1 = TRUE,
-                                          p1 = estimpq1,
-                                          pq1MatSr = estimpq1MatSr)
+                                          estSD1 = sd1,
+                                          correcEstimWeights = TRUE)
      
     # apprVarPhi1EW <- NA_real_
       # parameter equal to
@@ -418,13 +412,10 @@ simulation_tphi <- function(Z,
                                       modes,
                                       I,
                                       piMat,
-                                      estimpq1MatSr,
+                                      estimpq1,
                                       Z,
                                       phi,
-                                      correcEstimWeights = TRUE,
-                                      independenceq1 = TRUE,
-                                      p1 = estimpq1,
-                                      pq1MatSr = estimpq1MatSr)
+                                      correcEstimWeights = TRUE)
     
     # apprVarMeanPhi1EW <- NA_real_
     
@@ -432,8 +423,6 @@ simulation_tphi <- function(Z,
     
       # Estimation of the internet design covariance matrix
     estimpq2 <-  estimProbsData$conditional[, "m2"]
-    # estimpq2Mat <- pi_to_pi2(estimpq2)
-    estimpq2MatSmr <- pi_to_pi2(estimpq2[mask2])
 
     
       # Total of phi_k y_2k with true probabilities
@@ -469,18 +458,11 @@ simulation_tphi <- function(Z,
                                           modes,
                                           I,
                                           piMat,
-                                          estimpq1MatSmr, # pq1Mat,
-                                          estimpq2MatSmr, #pq2Mat,
+                                          estimpq1,
+                                          estimpq2, #pq2Mat,
                                           Z,
                                           phi,
-                                          sd2 = sd2,
-                                          correcEstimWeights = TRUE,
-                                          independenceq1 = TRUE,
-                                          independenceq2 = TRUE,
-                                          p1 = estimpq1,
-                                          p2 = estimpq2,
-                                          pq1MatSmr = estimpq1MatSmr,
-                                          pq2MatSmr = estimpq2MatSmr)
+                                          estSD2 = sd2)
     
     # apprVarPhi2EW <- NA_real_
     
@@ -511,17 +493,11 @@ simulation_tphi <- function(Z,
                                       modes,
                                       I,
                                       piMat,
-                                      estimpq1MatSmr,
-                                      estimpq2MatSmr,
+                                      estimpq1,
+                                      estimpq2,
                                       Z,
                                       phi,
-                                      correcEstimWeights = TRUE,
-                                      independenceq1 = TRUE,
-                                      independenceq2 = TRUE,
-                                      p1 = estimpq1,
-                                      p2 = estimpq2,
-                                      pq1MatSmr = estimpq1MatSmr,
-                                      pq2MatSmr = estimpq2MatSmr)
+                                      correcEstimWeights = TRUE)
     
     # apprVarMeanPhi2EW <- NA_real_
     
@@ -553,9 +529,9 @@ simulation_tphi <- function(Z,
   # pv <- microbenchmark::microbenchmark(monoSim(), times = 10L)
   # return(pv)
 
-  # res <- lapply(seq_len(M), FUN = monoSim)
+  res <- lapply(seq_len(M), FUN = monoSim)
   
-  res <- mclapply(seq_len(M), FUN = monoSim, mc.cores = nCores)
+  # res <- mclapply(seq_len(M), FUN = monoSim, mc.cores = nCores)
   do.call("rbind", res)
 }
 ```
@@ -621,7 +597,7 @@ parameters
 ```
 
 ```{r}
-Msim <- 1000L
+Msim <- 500L
 ```
 
 The different lines of the grid have the same seed. It is useful to run in different orders the evaluations and because the results from different parameters are never mixed there is no independency issue.
@@ -1722,7 +1698,7 @@ simulationUncounf <-
     
       # Estimation of mode selection probabilities
       estimProbsSelect <- 
-        MMsampling::estim_response_prob_sequential(I, pi, Z,
+        MMsampling::estim_response_prob_sequential(I, Z,
                                                    modes, 
                                                    c("m1", "m2"))$unconditional
     

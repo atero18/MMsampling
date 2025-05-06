@@ -29,7 +29,7 @@ Fisher_Information_Matrix <- function(prob, Z, maskSubset = !logical(nrow(Z)))
 
 
 .estim_bPhi21 <- function(Yobs, I, pi, p1, p2, maskSmr, Z,
-                          phi = rep(1.0, length(expY1)))
+                          phi = rep(1.0, length(Y1exp)))
 {
 
   p1Smr <- p1[maskSmr]
@@ -46,7 +46,7 @@ Fisher_Information_Matrix <- function(prob, Z, maskSubset = !logical(nrow(Z)))
 
 
 .estim_bPhi22 <- function(Yobs, pi, p1, p2, maskSm, maskSmr, Z,
-                          phi = rep(1.0, length(expY1)))
+                          phi = rep(1.0, length(Y1exp)))
 
 {
 
@@ -74,6 +74,8 @@ estim_appr_var_seq_phi1 <- function(Yobs,
                                     correcEstimWeights = FALSE,
                                     ...)
 {
+  browser()
+
   if (all(phi == 0.0))
     return(0.0)
 
@@ -82,11 +84,10 @@ estim_appr_var_seq_phi1 <- function(Yobs,
   maskSr <- modes == "m1"
 
   pi <- diag(piMat)
+  p1Sr <- p1[maskSr]
 
   # The y_1k are weighted with the phi_k
-  weightedY1Sr <-
-    (pi[maskSr] * p1[maskSr])^-1L *
-    phi[maskSr] * Yobs[maskSr]
+  weightedY1Sr <- (pi[maskSr] * p1Sr)^-1L * phi[maskSr] * Yobs[maskSr]
 
   # Sampling variability (S)
   # There is no correction needed for probabilities estimation
@@ -136,11 +137,11 @@ estim_appr_var_seq_phi1 <- function(Yobs,
 #' of conditional independence between the sampling design p
 #' and the mode selection mechanism q1.
 #' @export
-var_expansion_seq_phi1 <- function(expY1,
+var_expansion_seq_phi1 <- function(Y1exp,
                                    piMat,
                                    p1,
                                    modes,
-                                   phi = rep(1.0, length(expY1)),
+                                   phi = rep(1.0, length(Y1exp)),
                                    sd1 = 0.0)
 {
 
@@ -152,16 +153,15 @@ var_expansion_seq_phi1 <- function(expY1,
 
   maskSr <- modes == "m1"
 
-
   # Sampling variability (S)
   covarPi <- pi2_to_covarInc(piMat)
-  correctedY1p <- pi^-1L * phi * expY1
+  correctedY1p <- pi^-1L * phi * Y1exp
   varS <- t(correctedY1p) %*% covarPi %*% correctedY1p +
     sum(pi^-1L * (1.0 - pi) * phi^2L) * sd1^2L
 
   # q1 variability (R1)
   #  With the independence between p and q1
-  varq1 <- sum((pi * p1)^-1L * (1.0 - p1) * phi^2L * (sd1^2L + expY1^2L))
+  varq1 <- sum((pi * p1)^-1L * (1.0 - p1) * phi^2L * (sd1^2L + Y1exp^2L))
 
 
   # Y1 variability
@@ -266,12 +266,12 @@ estim_appr_var_seq_phi2 <- function(Yobs,
 #' and the mode selection mechanism q1 and q2, plus the conditional independence
 #' between the mode selection mechanisms.
 #' @export
-var_expansion_seq_phi2 <- function(expY2, I,
+var_expansion_seq_phi2 <- function(Y2exp, I,
                                    piMat,
                                    p1, p2,
                                    Z,
                                    modes,
-                                   phi = rep(1.0, length(expY2)),
+                                   phi = rep(1.0, length(Y2exp)),
                                    sd2 = 0.0)
 {
 
@@ -288,12 +288,12 @@ var_expansion_seq_phi2 <- function(expY2, I,
 
   # Sampling variability (S)
   covarPi <- pi2_to_covarInc(piMat)
-  correctedY2p <- pi^-1L * phi * expY2
+  correctedY2p <- pi^-1L * phi * Y2exp
   varS <- t(correctedY2p) %*% covarPi %*% correctedY2p +
     sum(pi^-1L * (1.0 - pi) * phi^2L) * sd2^2L
 
   # q1 variability (R1)
-  varPhiY2 <- phi^2L * (sd2^2L + expY2^2L) # Variance of each phi_k y_2k
+  varPhiY2 <- phi^2L * (sd2^2L + Y2exp^2L) # Variance of each phi_k y_2k
   varq1 <- sum((pi * p1Bar)^-1L * p1 * varPhiY2)
 
   # q2 variability (R2)
@@ -305,14 +305,14 @@ var_expansion_seq_phi2 <- function(expY2, I,
   varS + varq1 + varq2 + varY2
 }
 
-covar_difference_HT <- function(expY1, expY2, I,
+covar_difference_HT <- function(Y1exp, Y2exp, I,
                                 piMat,
                                 pq1Mat, pq2Mat,
                                 Z,
                                 biasedMode,
                                 refMode,
                                 modes,
-                                phi = rep(1.0, length(expY1)),
+                                phi = rep(1.0, length(Y1exp)),
                                 correcEstimWeights = FALSE,
                                 constY = FALSE,
                                 covarY1 = NULL,
@@ -321,8 +321,8 @@ covar_difference_HT <- function(expY1, expY2, I,
   if (all(phi == 0.0))
     return(0.0)
 
-  weightedY1 <- phi * expY1
-  weightedY2 <- phi * expY2
+  weightedY1 <- phi * Y1exp
+  weightedY2 <- phi * Y2exp
 
   # Sampling variability (S)
   covarPi <- pi2_to_covarInc(piMat)
@@ -349,7 +349,7 @@ covar_difference_HT <- function(expY1, expY2, I,
 
     if (correcEstimWeights)
     {
-      estbPhi11 <- .estim_bPhi11(expY1, I, maskSr, p1, Z, phi, constY)
+      estbPhi11 <- .estim_bPhi11(Y1exp, I, maskSr, p1, Z, phi, constY)
       correctedY1 <- correctedY1Sr - crossprod(Z, estbPhi11)
     }
 
@@ -357,7 +357,7 @@ covar_difference_HT <- function(expY1, expY2, I,
 
     if (correcEstimWeights)
     {
-      estbPhi21 <- .estim_bPhi21(expY2, I, p1, R2, p2, Z, phi, constY)
+      estbPhi21 <- .estim_bPhi21(Y2exp, I, p1, R2, p2, Z, phi, constY)
       correctedY2 <- correctedY2 + crossprod(Z, estbPhi21)
     }
 
@@ -368,22 +368,22 @@ covar_difference_HT <- function(expY1, expY2, I,
   sum(varS + varq1)
 }
 
-var_difference_HT <- function(expY1, expY2, I,
+var_difference_HT <- function(Y1exp, Y2exp, I,
                               piMat,
                               pq1Mat, pq2Mat,
                               Z,
                               biasedMode,
                               refMode,
                               modes,
-                              phi = rep(1.0, length(expY2)),
+                              phi = rep(1.0, length(Y2exp)),
                               correcEstimWeights = FALSE,
                               constY = FALSE,
                               covarY1 = NULL,
                               covarY2 = NULL)
 {
-  var_expansion_seq_phi1(expY1, I, piMat, pq1Mat, Z, biasedMode,
+  var_expansion_seq_phi1(Y1exp, I, piMat, pq1Mat, Z, biasedMode,
                   modes, phi, correcEstimWeights, constY1, covarY1) -
-    2.0 * covar_difference_HT(expY1, expY2, I,
+    2.0 * covar_difference_HT(Y1exp, Y2exp, I,
                               piMat,
                               pq1Mat, pq2Mat,
                               Z,
@@ -395,16 +395,16 @@ var_difference_HT <- function(expY1, expY2, I,
                               constY,
                               covarY1,
                               covarY2) +
-    var_expansion_seq_phi2(expY2, I, piMat, pq1Mat, pq2Mat, Z, biasedMode,
+    var_expansion_seq_phi2(Y2exp, I, piMat, pq1Mat, pq2Mat, Z, biasedMode,
                     refMode, modes, phi, correcEstimWeights,
                     constY2, covarY2)
 }
 
 #' @export
-covar_HT_seq_phi1_phi2 <- function(expY1, expY2,
+covar_HT_seq_phi1_phi2 <- function(Y1exp, Y2exp,
                                    piMat,
                                    pq1Mat, pq2Mat,
-                                   phi = numeric(length(expY2)))
+                                   phi = numeric(length(Y2exp)))
 {
 
   if (all(phi == 0.0) || all(phi == 1.0))
@@ -413,7 +413,7 @@ covar_HT_seq_phi1_phi2 <- function(expY1, expY2,
   pi <- diag(piMat)
   p1 <- diag(pq1Mat)
 
-  prodexpY12Mat <- expY1 %*% t(expY2)
+  prodexpY12Mat <- Y1exp %*% t(Y2exp)
 
   # mode 1 selection variability
   covarq1 <- pi2_to_covarInc(pq1Mat)
@@ -432,16 +432,16 @@ covar_HT_seq_phi1_phi2 <- function(expY1, expY2,
 #' @export
 var_estim_tot_BM <- function(modeTotBiased = "HT", modeTotRef = "HT",
                              calculTotal = "population",
-                             expY1, expY2,
+                             Y1exp, Y2exp,
                              covarY1, covarY2,
                              piMat,
                              pq1Mat, pq2Mat,
-                             phi = numeric(length(expY2)),
+                             phi = numeric(length(Y2exp)),
                              subResults = FALSE)
 {
 
   return(NA_real_)
-  N <- length(expY2)
+  N <- length(Y2exp)
 
   pi <- diag(piMat)
   covarPi <- pi2_to_covarInc(piMat)
@@ -463,17 +463,17 @@ var_estim_tot_BM <- function(modeTotBiased = "HT", modeTotRef = "HT",
 
   invProbsMatSelecMat <- invp1BarMat * (p2 %*% t(p2))^-1L
 
-  prodexpY1Mat <- expY1 %*% t(expY1)
+  prodexpY1Mat <- Y1exp %*% t(Y1exp)
 
-  prodexpY2Mat <- expY2 %*% t(expY2)
+  prodexpY2Mat <- Y2exp %*% t(Y2exp)
 
-  expDeltas <- expY1 - expY2
+  expDeltas <- Y1exp - Y2exp
 
   phiBar <- 1.0 - phi
 
-  varPhi1 <- var_expansion_seq_phi1(expY1, covarY1, piMat, pq1Mat, phi)
-  varPhi2 <- var_expansion_seq_phi2(expY2, covarY2, piMat, pq1Mat, pq2Mat, phi)
-  covarPhi12 <- covar_HT_seq_phi1_phi2(expY1, expY2, piMat, pq1Mat, pq2Mat, phi)
+  varPhi1 <- var_expansion_seq_phi1(Y1exp, covarY1, piMat, pq1Mat, phi)
+  varPhi2 <- var_expansion_seq_phi2(Y2exp, covarY2, piMat, pq1Mat, pq2Mat, phi)
+  covarPhi12 <- covar_HT_seq_phi1_phi2(Y1exp, Y2exp, piMat, pq1Mat, pq2Mat, phi)
 
   # Variance of the total MB estimator
   if (modeTotBiased == "HT" && modeTotRef == "HT" && calculTotal == "population")
@@ -484,7 +484,7 @@ var_estim_tot_BM <- function(modeTotBiased = "HT", modeTotRef = "HT",
 
     varq2 <- prodexpY2Mat * piMat * pq1BarMat * covarq2 * invProbsMatSelecMat
 
-    sumY1Y2 <- expY1 / p1 + expY2 / p1Bar
+    sumY1Y2 <- Y1exp / p1 + Y2exp / p1Bar
     varq1 <- sumY1Y2 %*% t(sumY1Y2) * piMat * covarq1
 
     varS <- expDeltas %*% t(expDeltas) * covarPi
@@ -501,10 +501,10 @@ var_estim_tot_BM <- function(modeTotBiased = "HT", modeTotRef = "HT",
   {
     varY1 <- piMat * pq1Mat * covarY1 * invp1Mat
 
-    weightedY1 <- expY1 / p1
-    varq1 <- weightedY1 %*% t(weightedY1 + expY2 / p1Bar) * piMat * covarq1
+    weightedY1 <- Y1exp / p1
+    varq1 <- weightedY1 %*% t(weightedY1 + Y2exp / p1Bar) * piMat * covarq1
 
-    varS <- expY1 %*% t(expDeltas) * covarPi
+    varS <- Y1exp %*% t(expDeltas) * covarPi
 
     v1Delta <- varY1 + varq1 + varS
 
@@ -520,10 +520,10 @@ var_estim_tot_BM <- function(modeTotBiased = "HT", modeTotRef = "HT",
 
     varq2 <- prodexpY2Mat * piMat * pq1BarMat * covarq2 * invProbsMatSelecMat
 
-    weightedY2 <- expY2 / p1Bar
-    varq1 <- weightedY2 %*% t(expY1 / p1 + weightedY2) * piMat * covarq1
+    weightedY2 <- Y2exp / p1Bar
+    varq1 <- weightedY2 %*% t(Y1exp / p1 + weightedY2) * piMat * covarq1
 
-    varS <- -expY2 %*% t(expDeltas) * covarPi
+    varS <- -Y2exp %*% t(expDeltas) * covarPi
 
     v2Delta <- varY2 + varq2 + varq1 + varS
 
