@@ -526,13 +526,13 @@ simulation_tphi <- function(Z,
   
   # pv <- profvis::profvis(lapply(seq_len(M), FUN = monoSim))
   # return(profvis::profvis(lapply(seq_len(10L), FUN = monoSim))) #prof_output = "test.res"))
-  pv <- profvis::profvis(lapply(seq_len(10L), FUN = monoSim))
+  # pv <- profvis::profvis(lapply(seq_len(10L), FUN = monoSim))
   # pv <- microbenchmark::microbenchmark(monoSim(), times = 10L)
-  return(pv)
+  # return(pv)
 
-  # res <- lapply(seq_len(M), FUN = monoSim)
+  res <- lapply(seq_len(M), FUN = monoSim)
   
-  res <- mclapply(seq_len(M), FUN = monoSim, mc.cores = nCores)
+  # res <- mclapply(seq_len(M), FUN = monoSim, mc.cores = nCores)
   do.call("rbind", res)
 }
 ```
@@ -635,9 +635,7 @@ for (k in seq_len(nrow(parameters)))
                              rho = parameters[k, "rho"],
                              seed = 200L,
                              nCores = 30L)
-  
-  ##
-  resTemp
+
   
   resSimBiasDetection <-
     cbind(parameters[k, ], resTemp, row.names = NULL) %>%
@@ -646,7 +644,7 @@ for (k in seq_len(nrow(parameters)))
   
 
   pb$tick()
-  seed <- .Random.seed
+  ## seed <- .Random.seed
 }
 
 rm(resTemp, pb)
