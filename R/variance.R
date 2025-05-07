@@ -13,6 +13,11 @@ Fisher_Information_Matrix <- function(prob, Z, maskSubset = !logical(nrow(Z)))
 }
 
 
+.estim_b1 <- function(estV, I, p1, Z)
+{
+  solve(Fisher_Information_Matrix(p1, Z, I)) %*% estV
+}
+
 .estim_bPhi11 <- function(Yobs, I, pi, p1, maskSr, Z,
                     phi = rep(1.0, length(Yobs)))
 {
@@ -24,7 +29,7 @@ Fisher_Information_Matrix <- function(prob, Z, maskSubset = !logical(nrow(Z)))
                             phi[maskSr] * Yobs[maskSr] * (1.0 - p1Sr))
 
 
-  solve(Fisher_Information_Matrix(p1, Z, I)) %*% estVPhi11
+  .estim_b1(estVPhi11, I, p1, Z)
 }
 
 
@@ -40,8 +45,7 @@ Fisher_Information_Matrix <- function(prob, Z, maskSubset = !logical(nrow(Z)))
 
 
 
-  solve(Fisher_Information_Matrix(p1, Z, I)) %*% estVPhi21
-
+  .estim_b1(estVPhi21, I, p1, Z)
 }
 
 
@@ -54,7 +58,7 @@ Fisher_Information_Matrix <- function(prob, Z, maskSubset = !logical(nrow(Z)))
 
   estVPhi22 <- -crossprod(Z[maskSmr, , drop = FALSE],
                           (pi[maskSmr] * (1.0 - p1[maskSmr]) * p2Smr)^-1L *
-                            phi[maskSmr] * Yobs[maskSmr] * (1.0 - p2Smr))
+                            (1.0 - p2Smr) * phi[maskSmr] * Yobs[maskSmr])
 
 
   solve(Fisher_Information_Matrix(p2, Z, maskSm)) %*% estVPhi22
@@ -186,7 +190,7 @@ estim_appr_var_seq_phi2 <- function(Yobs,
                                     p2,
                                     Z,
                                     phi = rep(1.0, length(Yobs)),
-                                    sd2 = 0.0,
+                                    estSD2 = 0.0,
                                     correcEstimWeights = FALSE,
                                     ...)
 {
@@ -222,6 +226,9 @@ estim_appr_var_seq_phi2 <- function(Yobs,
     (covarpSmr / piMatSmr) %*%
     correctedY2Smrp %>%
     as.numeric()
+  varSEst <- varSEst +
+    sum((1.0 - piSmr) * piSmr^-2L * (p1Smrbar * p2Smr)^-1L *
+          (1.0 - (p1Smrbar * p2Smr)^-1L) * weightedY2Smr^2L)
 
 
   # q1 variability (R1)
@@ -258,7 +265,7 @@ estim_appr_var_seq_phi2 <- function(Yobs,
   # Y2 variability
   # We suppose we have an estimator of the variance
   # of the Y2
-  varY2Est <- sum(phi^2L) * sd2^2L
+  varY2Est <- sum(phi^2L) * estSD2^2L
 
   varSEst + varq1Est + varq2Est + varY2Est
 }

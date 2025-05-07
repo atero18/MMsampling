@@ -462,7 +462,8 @@ simulation_tphi <- function(Z,
                                           estimpq2, #pq2Mat,
                                           Z,
                                           phi,
-                                          estSD2 = sd2)
+                                          estSD2 = sd2,
+                                          correcEstimWeights = TRUE)
     
     # apprVarPhi2EW <- NA_real_
     
@@ -525,13 +526,13 @@ simulation_tphi <- function(Z,
   
   # pv <- profvis::profvis(lapply(seq_len(M), FUN = monoSim))
   # return(profvis::profvis(lapply(seq_len(10L), FUN = monoSim))) #prof_output = "test.res"))
-  # pv <- profvis::profvis(lapply(seq_len(10L), FUN = monoSim))
+  pv <- profvis::profvis(lapply(seq_len(10L), FUN = monoSim))
   # pv <- microbenchmark::microbenchmark(monoSim(), times = 10L)
-  # return(pv)
+  return(pv)
 
-  res <- lapply(seq_len(M), FUN = monoSim)
+  # res <- lapply(seq_len(M), FUN = monoSim)
   
-  # res <- mclapply(seq_len(M), FUN = monoSim, mc.cores = nCores)
+  res <- mclapply(seq_len(M), FUN = monoSim, mc.cores = nCores)
   do.call("rbind", res)
 }
 ```
@@ -597,7 +598,7 @@ parameters
 ```
 
 ```{r}
-Msim <- 500L
+Msim <- 5000L
 ```
 
 The different lines of the grid have the same seed. It is useful to run in different orders the evaluations and because the results from different parameters are never mixed there is no independency issue.
@@ -606,9 +607,7 @@ If the number of parallel cores changes, the results might be different.
 
 ```{r}
 resSimBiasDetection <- NULL
-```
 
-```{r}
 pb <- progress::progress_bar$new(format = "[:bar] :percent eta: :eta",
                                  total = nrow(parameters))
 
@@ -617,9 +616,8 @@ pb$tick(0L)
 for (k in seq_len(nrow(parameters)))
 {
   # Change of the constant of the web conditional expectations
-  delta <- parameters[k, "delta"]
   beta1Temp <- beta2
-  beta1Temp[1L] <- beta1Temp[1L] + delta
+  beta1Temp[1L] <- beta2[1L] + parameters[k, "delta"]
   
   resTemp <- simulation_tphi(M = Msim,
                              Z = Z,
@@ -638,9 +636,14 @@ for (k in seq_len(nrow(parameters)))
                              seed = 200L,
                              nCores = 30L)
   
+  ##
+  resTemp
+  
   resSimBiasDetection <-
     cbind(parameters[k, ], resTemp, row.names = NULL) %>%
     rbind(resSimBiasDetection)
+  
+  
 
   pb$tick()
   seed <- .Random.seed
