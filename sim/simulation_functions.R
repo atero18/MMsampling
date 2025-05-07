@@ -65,7 +65,7 @@ gen_expY <- function(X,
   if (Y1Law == "gaussian")
   {
 
-    expY1 <- as.vector(X %*% beta1)
+    Y1exp <- as.vector(X %*% beta1)
 
     sd1 <- as.numeric(sd1)
     sdY1 <- rep(sd1, N)
@@ -74,35 +74,35 @@ gen_expY <- function(X,
   else if (Y1Law == "exponential")
   {
     sd1 <- "null"
-    expY1 <- as.vector(abs(X %*% beta1))
+    Y1exp <- as.vector(abs(X %*% beta1))
 
-    sdY1 <- expY1
+    sdY1 <- Y1exp
   }
 
   ## UTILE ?
   else if (Y1Law == "split3")
   {
-    if (is.null(expY1))
-      expY1 <- as.vector(abs(X %*% beta1))
+    if (is.null(Y1exp))
+      Y1exp <- as.vector(abs(X %*% beta1))
 
-    quantiles1 <- quantile(expY1, probs = c(1.0 / 3.0, 2.0 / 3.0))
+    quantiles1 <- quantile(Y1exp, probs = c(1.0 / 3.0, 2.0 / 3.0))
 
     sd1 <- as.numeric(sd1)
     sdY1 <- rep(as.numeric(sd1), N)
 
     # Between first and second quantile of 3rd degree we add one
-    expY1[expY1 > quantiles1[1L]] <-
-      expY1[expY1 > quantiles1[1L]] + 1.0
+    Y1exp[Y1exp > quantiles1[1L]] <-
+      Y1exp[Y1exp > quantiles1[1L]] + 1.0
 
     # After the second quantile of 3rd degree we add one more
-    expY1[expY1 > quantiles1[2L]] <-
-      expY1[expY1 > quantiles1[2L]] + 1.0
+    Y1exp[Y1exp > quantiles1[2L]] <-
+      Y1exp[Y1exp > quantiles1[2L]] + 1.0
   }
 
   if (Y2Law == "gaussian")
   {
 
-    expY2 <- as.vector(X %*% beta2)
+    Y2exp <- as.vector(X %*% beta2)
 
     sd2 <- as.numeric(sd2)
     sdY2 <- rep(sd2, N)
@@ -111,13 +111,13 @@ gen_expY <- function(X,
   {
     sd2 <- "null"
 
-    expY2 <- as.vector(abs(X %*% beta2))
+    Y2exp <- as.vector(abs(X %*% beta2))
 
-    sdY2 <- expY2
+    sdY2 <- Y2exp
   }
 
-  list(expY1 = expY1, sdY1 = sdY1,
-       expY2 = expY2, sdY2 = sdY2)
+  list(Y1exp = Y1exp, sdY1 = sdY1,
+       Y2exp = Y2exp, sdY2 = sdY2)
 }
 
 
@@ -125,24 +125,24 @@ gen_expY <- function(X,
 gen_Y <- function(X,
                   beta1, sd1, Y1Law = "gaussian",
                   beta2, sd2 = sd1, Y2Law = "gaussian",
-                  expY1 = NULL, expY2 = NULL,
+                  Y1exp = NULL, Y2exp = NULL,
                   rho = 0.0)
 {
 
   N <- nrow(X)
 
   # If the expectations have not been generated yet
-  recExpY <- is.null(expY1) || is.null(expY2)
+  recExpY <- is.null(Y1exp) || is.null(Y2exp)
   if (recExpY)
   {
     dataY <- gen_expY(X,
                       beta1, Y1Law, sd1,
                       beta2, Y2Law, sd2)
 
-    expY1 <- dataY$expY1
+    Y1exp <- dataY$Y1exp
     sdY1 <- dataY$sdY1
 
-    expY2 <- dataY$expY2
+    Y2exp <- dataY$Y2exp
     sdY2 <- dataY$sdY2
   }
   else
@@ -150,26 +150,26 @@ gen_Y <- function(X,
     if (Y1Law == "gaussian")
       sdY1 <- rep(sd1, N)
     else if (Y1Law == "exponential")
-      sdY1 <- expY1
+      sdY1 <- Y1exp
 
     if (Y2Law == "gaussian")
       sdY2 <- rep(sd2, N)
     else if (Y2Law == "exponential")
-      sdY2 <- expY2
+      sdY2 <- Y2exp
   }
 
   # Affecting values to Y1 and Y2
   if (Y1Law %in% c("gaussian", "split3"))
-    Y1 <- expY1 + rnorm(n = N, sd = sdY1)
+    Y1 <- Y1exp + rnorm(n = N, sd = sdY1)
 
   else if (Y1Law == "exponential")
-    Y1 <- rexp(n = N, rate = expY1^-1L)
+    Y1 <- rexp(n = N, rate = Y1exp^-1L)
 
   if (Y2Law == "gaussian")
-    Y2 <- expY2 + rnorm(n = N, sd = sdY2)
+    Y2 <- Y2exp + rnorm(n = N, sd = sdY2)
 
   else if (Y2Law == "exponential")
-    Y2 <- rexp(n = N, rate = expY2^-1L)
+    Y2 <- rexp(n = N, rate = Y2exp^-1L)
 
   # Consider the case of inter-mode correlation
   # (use of the Iman and Conover method)
@@ -191,8 +191,8 @@ gen_Y <- function(X,
   if (recExpY)
   {
     results <- results %>%
-      mutate(expY1 = expY1, .before = "Y1") %>%
-      mutate(expY2 = expY2, .before = "Y2")
+      mutate(Y1exp = Y1exp, .before = "Y1") %>%
+      mutate(Y2exp = Y2exp, .before = "Y2")
   }
 
   results

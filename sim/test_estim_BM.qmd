@@ -279,10 +279,10 @@ simulation_tphi <- function(Z,
                        beta1, Y1Law, sd1,
                        beta2, Y2Law, sd2)
   
-  expY1 <- dataExpY$expY1
+  Y1exp <- dataExpY$Y1exp
   sd1s <- dataExpY$sd1s
   
-  expY2 <- dataExpY$expY2
+  Y2exp <- dataExpY$Y2exp
   sd2s <- dataExpY$sd2s
   
   rm(dataExpY)
@@ -333,7 +333,7 @@ simulation_tphi <- function(Z,
     dataY <- gen_Y(Z, 
                    beta1, sd1, Y1Law,
                    beta2, sd2, Y2Law,
-                   expY1 = expY1, expY2 = expY2,
+                   Y1exp = Y1exp, Y2exp = Y2exp,
                    rho = rho)
     
     Y1 <- dataY$Y1
@@ -349,7 +349,7 @@ simulation_tphi <- function(Z,
     estimp1 <- estimProbsData$conditional[, "m1"]
     
      # Total of phi_k y_1k with true probabilities
-    expPhi1 <- sum(phi * expY1)
+    expPhi1 <- sum(phi * Y1exp)
     totPhi1TW <- sum(phi[mask1] * trueWeights[mask1] * Yobs[mask1])
     
         # Unbiased estimation of the variance of the total estimator
@@ -452,7 +452,7 @@ simulation_tphi <- function(Z,
     apprVarPhi2TW <- NA_real_
     
       # Total of phi_k y_2k with estimated probabilities
-    expPhi2 <- sum(phi * expY2)
+    expPhi2 <- sum(phi * Y2exp)
     totPhi2EW <- sum(phi[mask2] * estimWeights[mask2] * Yobs[mask2])
     # totPhi2EW <- NA_real_
     
@@ -649,8 +649,8 @@ for (k in seq_len(nrow(parameters)))
                     calcVariance = calcVariance)
   }
   
-  resTempWithVar <- simFun(calcVariance = TRUE)
-  resTempWithoutVar <- simFun(calcVariance = FALSE)
+  resTempWithVar <- simFun(calcVariance = TRUE) %>% mutate(subset = 1L)
+  resTempWithoutVar <- simFun(calcVariance = FALSE) %>% mutate(subset = 2L)
   
   resSimBiasDetection <-
     cbind(parameters[k, ], 
@@ -851,13 +851,14 @@ temp <- resSimBiasDetection %>%
 
 temp <- temp %>% 
   # slice_head(n = nrow(temp) / 2L) %>% 
+  mutate(estimation = if_else(subset == 1L, estimation, NA_real_))
   group_by(estimand, weights, n, sd1, sd2, rho) %>% 
-  summarize(M = n(),
-            expEstimand = mean(expEstimand),
-            mean = mean(estimation), 
+  summarize(M = n() / 2L,
+            expEstimand = first(expEstimand),
+            mean = mean(estimation, na.rm = TRUE), 
             avg_AV = mean(apprVar, na.rm = TRUE),
-            var = var(estimation)) %>% 
-  mutate(ratioVar = avg_AV / var)
+            MC_var = var(estimation, na.rm = TRUE)) %>% 
+  mutate(ratioVar = avg_AV / MC_var)
 
 temp
 ```
@@ -873,12 +874,12 @@ resSimBiasDetection %>%
   select(-weights)
 
 
-expY2 <- Z %*% beta2
+Y2exp <- Z %*% beta2
 
 # List of the expected values of the web counterfactuals for each delta
-expY1_list <- list("0" = expY2)
+Y1exp_list <- list("0" = Y2exp)
 for (delta in unique(temp$delta))
-  expY1_list[[as.character(delta)]] <- expY2 + delta
+  Y1exp_list[[as.character(delta)]] <- Y2exp + delta
 
 covarSRS <- covar_SRS(n, N)
 
@@ -887,7 +888,7 @@ vartotphi2TW_list <- list()
 for (sigma in unique(temp$sigma))
 {
   vartotphi2TW_list[[as.character(sigma)]] <- 
-    true_variance_tephi2(expY2,
+    true_variance_tephi2(Y2exp,
                          pi, covarSRS, 
                          p1, p2, 
                          phi, 
@@ -905,7 +906,7 @@ for (k in seq_len(nrow(temp) / 2L))
   #                     beta2 = beta2, sd2 = sigma)
 
   n <- temp[k, "n"]
-  vartotphi1TW <- true_variance_tephi1(expY1_list[[as.character(delta)]], 
+  vartotphi1TW <- true_variance_tephi1(Y1exp_list[[as.character(delta)]], 
                                        pi, covarSRS, 
                                        p1,
                                        phi, 
@@ -1542,10 +1543,10 @@ simulationUncounf <-
                          beta1, Y1Law, sd1,
                          beta2, Y2Law, sd2)
     
-    expY1 <- dataExpY$expY1
+    Y1exp <- dataExpY$Y1exp
     sd1s <- dataExpY$sd1s
     
-    expY2 <- dataExpY$expY2
+    Y2exp <- dataExpY$Y2exp
     sd2s <- dataExpY$sd2s
     
     rm(dataExpY)
@@ -1553,28 +1554,28 @@ simulationUncounf <-
     
     # if (Y2Law == "gaussian")
     # {
-    #   expY2 <- as.vector(Z %*% beta2)
+    #   Y2exp <- as.vector(Z %*% beta2)
     # }
     # else if (Y2Law == "exponential")
     # {
     #   sd2 <- "null"
-    #   expY2 <- as.vector(abs(X %*% beta2))
+    #   Y2exp <- as.vector(abs(X %*% beta2))
     # }
     # 
-    # expTotTel <- sum(expY2)
+    # expTotTel <- sum(Y2exp)
     # 
     # if (Y1Law == "gaussian")
-    #   expY1 <- as.vector(X %*% beta1)
+    #   Y1exp <- as.vector(X %*% beta1)
     #   
     # else if (Y1Law == "exponential")
     # {
     #   sd1 <- "null"
-    #   expY1 <- as.vector(abs(X %*% beta1))
+    #   Y1exp <- as.vector(abs(X %*% beta1))
     # }
     # else if (Y1Law == "split3")
     # {
-    #   expY1 <- as.vector(X %*% beta1)
-    #   quantilesInt <- quantile(expY1, probs = c(1.0 / 3.0, 2.0 / 3.0))
+    #   Y1exp <- as.vector(X %*% beta1)
+    #   quantilesInt <- quantile(Y1exp, probs = c(1.0 / 3.0, 2.0 / 3.0))
     #   
     # 
     #   sd1 <- as.numeric(sd1)
@@ -1582,20 +1583,20 @@ simulationUncounf <-
     #   covarYint <- diag(sd1s^2L)
     #   
     #   # Between first and second quantile of 3rd degree we add one
-    #   expY1[expY1 > quantilesInt[1L]] <- 
-    #     expY1[expY1 > quantilesInt[1L]] + 1.0
+    #   Y1exp[Y1exp > quantilesInt[1L]] <- 
+    #     Y1exp[Y1exp > quantilesInt[1L]] + 1.0
     #   
     #   # After the second quantile of 3rd degree we add one more
-    #   expY1[expY1 > quantilesInt[2L]] <- 
-    #     expY1[expY1 > quantilesInt[2L]] + 1.0
+    #   Y1exp[Y1exp > quantilesInt[2L]] <- 
+    #     Y1exp[Y1exp > quantilesInt[2L]] + 1.0
     # }
     
-    expTotYtel <- sum(expY2)
-    expTotYint <- sum(expY1)
+    expTotYtel <- sum(Y2exp)
+    expTotYint <- sum(Y1exp)
     
     clusterExport(cluster,
-                  varlist = c("expY2", "expTotYtel",
-                              "expY1", "expTotYint",
+                  varlist = c("Y2exp", "expTotYtel",
+                              "Y1exp", "expTotYint",
                               "sd1s", "sd2s", "rho"),
                   envir = environment())
     
@@ -1632,13 +1633,13 @@ simulationUncounf <-
     # # (it gives more weights to the unbiased value)
     # else if (phi == "linear")
     # {
-    #   expDeltas <- expY1 - expY2
+    #   expDeltas <- Y1exp - Y2exp
     #   maxBias <- max(abs(expDeltas))
     #   phi <- 0.5 - 0.5 * abs(expDeltas) / maxBias
     # }
     # else if (phi == "split3")
     # {
-    #   expDeltas <- expY1 - expY2
+    #   expDeltas <- Y1exp - Y2exp
     #   absExpDeltas <- abs(expDeltas)
     #   quantiles <- quantile(absExpDeltas, c(1.0 / 3.0, 2.0 / 3.0))
     #   phi <- rep(0.5, N)
@@ -1726,7 +1727,7 @@ simulationUncounf <-
       dataY <- gen_Y(X, 
                      beta1, sd1, Y1Law,
                      beta2, sd2, Y2Law,
-                     expY1 = expY1, expY2 = expY2,
+                     Y1exp = Y1exp, Y2exp = Y2exp,
                      rho = rho)
       
       Yints <- dataY$Yint
@@ -1740,28 +1741,28 @@ simulationUncounf <-
       #  # Affecting values to Y_int and Y_tel
       # if (Y2Law == "gaussian")
       # {
-      #   Ytels <- expY2 + rnorm(n = N, sd = sd2s)
+      #   Ytels <- Y2exp + rnorm(n = N, sd = sd2s)
       # }
       #   
       # 
       # else if (Y2Law == "exponential")
-      #   Ytels <- rexp(n = N, rate = expY2^-1L)
+      #   Ytels <- rexp(n = N, rate = Y2exp^-1L)
       # 
-      # expTotYtel <- sum(expY2)
+      # expTotYtel <- sum(Y2exp)
       # trueYtel <- sum(Ytels)
       # 
       # if (Y1Law %in% c("gaussian", "split3"))
-      #   Yints <- expY1 + rnorm(n = N, sd = sd1s)
+      #   Yints <- Y1exp + rnorm(n = N, sd = sd1s)
       # 
       # else if (Y1Law == "exponential")
-      #   Yints <- rexp(n = N, rate = expY1^-1L)
+      #   Yints <- rexp(n = N, rate = Y1exp^-1L)
       
       trueYtel <- sum(Ytels)
       deltas <- Yints - Ytels
       
       # Evaluating the measure effect total (random value)
       truePhiBias <- crossprod(phi, deltas) %>% as.vector()
-      expPhiBias <- crossprod(phi, expY1 - expY2) %>% as.vector()
+      expPhiBias <- crossprod(phi, Y1exp - Y2exp) %>% as.vector()
       
       # Creating the observed outcome vector
       # Yobs <- rep(NA_real_, N)
@@ -2052,7 +2053,7 @@ simulationUncounf <-
       {
         expVars <- var_estim_tot_BM(modeTotBiased = "HT", modeTotRef = "HT",
                                     calculTotal = "population",
-                                    expY1 = expY1, expY2 = expY2,
+                                    Y1exp = Y1exp, Y2exp = Y2exp,
                                     covarY1 = covarYint, covarY2 = covarYtel,
                                     piMat = piMat,
                                     pq1Mat = pq1Mat, pq2Mat = pq2Mat,
@@ -2088,7 +2089,7 @@ simulationUncounf <-
     
       
     # We calculate the real variance of the benchmark estimator
-    sdTWBenchmark <- var_expansion_seq_phi2(expY2 = expY2, 
+    sdTWBenchmark <- var_expansion_seq_phi2(Y2exp = Y2exp, 
                                      covarY2 = covarYtel,
                                      piMat = piMat,
                                      pq1Mat = pq1Mat,

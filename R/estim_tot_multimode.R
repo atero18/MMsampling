@@ -204,14 +204,14 @@
 
 
 
-test_absence_measure_bias <- function(expY1, expY2, I,
+test_absence_measure_bias <- function(Y1exp, Y2exp, I,
                                       piMat,
                                       pq1Mat, pq2Mat,
                                       Z,
                                       biasedMode,
                                       refMode,
                                       modes,
-                                      phi = rep(1.0, length(expY2)),
+                                      phi = rep(1.0, length(Y2exp)),
                                       correcEstimWeights = FALSE,
                                       constY = FALSE,
                                       covarY1 = NULL,
@@ -225,16 +225,16 @@ test_absence_measure_bias <- function(expY1, expY2, I,
   maskInt <- as.numeric(modes == biasedMode)
   p1 <- diag(pq1Mat)
 
-  tPhi1 <- sum(phi[maskInt] * expY1[maskInt] / (pi[maskInt] * p1[maskInt]))
+  tPhi1 <- sum(phi[maskInt] * Y1exp[maskInt] / (pi[maskInt] * p1[maskInt]))
 
   R2 <- as.numeric(modes == refMode)
   p2 <- diag(pq2Mat)
 
-  tPhi2 <- sum(phi[R2] * expY2[R2] / (pi[R2] * (1.0 - p1[R2]) * p2[R2]))
+  tPhi2 <- sum(phi[R2] * Y2exp[R2] / (pi[R2] * (1.0 - p1[R2]) * p2[R2]))
 
   delta <- tPhi1 - tPhi2
 
-  varDelta <- var_difference_HT(expY1, expY2, I,
+  varDelta <- var_difference_HT(Y1exp, Y2exp, I,
                                 piMat,
                                 pq1Mat, pq2Mat,
                                 Z,

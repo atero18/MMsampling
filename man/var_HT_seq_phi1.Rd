@@ -7,14 +7,14 @@ of known selection probabilities. Using estimated values give an approximate
 variance.}
 \usage{
 var_expansion_seq_phi1(
-  expY1,
+  Y1exp,
   I,
   piMat,
   pq1Mat,
   Z,
   biasedMode,
   modes,
-  phi = rep(1, length(expY1)),
+  phi = rep(1, length(Y1exp)),
   correcEstimWeights = FALSE,
   constY1 = FALSE,
   covarY1 = NULL
