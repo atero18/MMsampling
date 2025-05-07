@@ -352,21 +352,24 @@ simulation_tphi <- function(Z,
     expPhi1 <- sum(phi * Y1exp)
     totPhi1TW <- sum(phi[mask1] * trueWeights[mask1] * Yobs[mask1])
     
-        # Unbiased estimation of the variance of the total estimator
-        # the variance of Y1 is assumed known. Used in the
-        # calculation of the true probabilities
-    # apprVarPhi1TW <-
-    #   MMsampling::estim_appr_var_seq_phi1(Yobs,
-    #                                       modes,
-    #                                       I,
-    #                                       piMat,
-    #                                       p1,
-    #                                       Z,
-    #                                       phi,
-    #                                       estSD1 = sd1,
-    #                                       correcEstimWeights = FALSE)
-    
-    apprVarPhi1TW <- NA_real_
+        # Unbiased estimation of the variance of the total estimator.
+        # The variance of Y1 is assumed known. The true probabilities are
+        # used in the calculation.
+    if (calcVariance)
+    {
+      apprVarPhi1TW <-
+        MMsampling::estim_appr_var_seq_phi1(Yobs,
+                                            modes,
+                                            I,
+                                            piMat,
+                                            p1,
+                                            Z,
+                                            phi,
+                                            estSD1 = sd1,
+                                            correcEstimWeights = FALSE)
+    }
+    else
+      apprVarPhi1TW <- NA_real_
     
       # Total of phi_k y_1k with estimated probabilities
     totPhi1EW <- sum(phi[mask1] * estimWeights[mask1] * Yobs[mask1])
@@ -393,18 +396,20 @@ simulation_tphi <- function(Z,
     expMeanPhi1 <- expPhi1 / sum(phi)
     meanPhi1TW <- totPhi1TW / sum(phi[mask1] * trueWeights[mask1])
     
-    # apprVarMeanPhi1TW <-
-    #   MMsampling::estim_var_mean_phi1(Yobs,
-    #                                   modes,
-    #                                   I,
-    #                                   piMat,
-    #                                   p1,
-    #                                   Z,
-    #                                   phi,
-    #                                   correcEstimWeights = FALSE)
-
-    
-    apprVarMeanPhi1TW <- NA_real_ 
+    if (calcVariance)
+    {
+      apprVarMeanPhi1TW <-
+        MMsampling::estim_var_mean_phi1(Yobs,
+                                        modes,
+                                        I,
+                                        piMat,
+                                        p1,
+                                        Z,
+                                        phi,
+                                        correcEstimWeights = FALSE)
+    }
+    else
+      apprVarMeanPhi1TW <- NA_real_ 
     
     meanPhi1EW <- totPhi1EW / sum(phi[mask1] * estimWeights[mask1])
       
@@ -435,21 +440,25 @@ simulation_tphi <- function(Z,
     totPhi2TW <- sum(phi[mask2] * trueWeights[mask2] * Yobs[mask2])
     
     
-        # Estimation of the approximate variance of the total estimator
-        # the variance of Y2 is assumed known and homoscedastic for simplicity
-    # apprVarPhi2TW <-
-    #   MMsampling::estim_appr_var_seq_phi2(Yobs,
-    #                                       modes,
-    #                                       I,
-    #                                       piMat,
-    #                                       p1,
-    #                                       p2,
-    #                                       Z,
-    #                                       phi,
-    #                                       sd2 = sd2,
-    #                                       correcEstimWeights = FALSE)
-
-    apprVarPhi2TW <- NA_real_
+        # Unbiased estimation of the variance of the total estimator.
+        # The variance of Y2 is assumed known. The true probabilities are
+        # used in the calculation.
+    if (calcVariance)
+    {
+      apprVarPhi2TW <-
+        MMsampling::estim_appr_var_seq_phi2(Yobs,
+                                            modes,
+                                            I,
+                                            piMat,
+                                            p1,
+                                            p2,
+                                            Z,
+                                            phi,
+                                            sd2 = sd2,
+                                            correcEstimWeights = FALSE)
+    }
+    else
+      apprVarPhi2TW <- NA_real_
     
       # Total of phi_k y_2k with estimated probabilities
     expPhi2 <- sum(phi * Y2exp)
@@ -479,18 +488,22 @@ simulation_tphi <- function(Z,
     meanPhi2TW <- totPhi2TW / sum(phi[mask2] * trueWeights[mask2])
     # meanPhi2TW <- NA_real_
     
-    # apprVarMeanPhi2TW <-
-    #   MMsampling::estim_var_mean_phi2(Yobs,
-    #                                   modes,
-    #                                   I,
-    #                                   piMat,
-    #                                   p1,
-    #                                   p2,
-    #                                   Z,
-    #                                   phi,
-    #                                   correcEstimWeights = FALSE)
+    if (calcVariance)
+    {
+      apprVarMeanPhi2TW <-
+        MMsampling::estim_var_mean_phi2(Yobs,
+                                        modes,
+                                        I,
+                                        piMat,
+                                        p1,
+                                        p2,
+                                        Z,
+                                        phi,
+                                        correcEstimWeights = FALSE)
+    }
+    else
+      apprVarMeanPhi2TW <- NA_real_
     
-    apprVarMeanPhi2TW <- NA_real_
     
     meanPhi2EW <- totPhi2EW / sum(phi[mask2] * estimWeights[mask2])
     # meanPhi2EW <- NA_real_
@@ -542,7 +555,23 @@ simulation_tphi <- function(Z,
   # res <- lapply(seq_len(M), FUN = monoSim)
   
   res <- mclapply(seq_len(M), FUN = monoSim, mc.cores = nCores)
-  do.call("rbind", res)
+  
+  res <- do.call("rbind", res)
+  
+  trueVarPhi1TW <- var_expansion_seq_phi1(Y1exp, piMat, p1, phi, sd1)
+  
+  trueVarPhi2TW <- var_expansion_seq_phi2(Y2exp, I, piMat, 
+                                          p1, p2, Z, phi, sd2)
+  
+  trueVar <- rep.int(c(trueVarPhi1TW, NA_real_, 
+                       NA_real_, NA_real_,
+                       trueVarPhi2TW, NA_real_, 
+                       NA_real_, NA_real_),
+                     times = M)
+  
+  res <- res %>% mutate(trueVar = trueVar)
+  
+  res
 }
 ```
 
@@ -607,7 +636,7 @@ parameters
 ```
 
 ```{r}
-Msim <- 3000L
+Msim <- 100L
 ```
 
 The different lines of the grid have the same seed. It is useful to run in different orders the evaluations and because the results from different parameters are never mixed there is no independency issue.
@@ -621,7 +650,7 @@ pb <- progress::progress_bar$new(format = "[:bar] :percent eta: :eta",
                                  total = nrow(parameters))
 
 pb$tick(0L)
-##
+
 for (k in seq_len(nrow(parameters)))
 {
   # Change of the constant of the web conditional expectations
@@ -851,14 +880,16 @@ temp <- resSimBiasDetection %>%
 
 temp <- temp %>% 
   # slice_head(n = nrow(temp) / 2L) %>% 
-  mutate(estimation = if_else(subset == 1L, estimation, NA_real_))
+  mutate(estimation = if_else(subset == 1L, estimation, NA_real_)) %>% 
   group_by(estimand, weights, n, sd1, sd2, rho) %>% 
   summarize(M = n() / 2L,
             expEstimand = first(expEstimand),
             mean = mean(estimation, na.rm = TRUE), 
             avg_AV = mean(apprVar, na.rm = TRUE),
-            MC_var = var(estimation, na.rm = TRUE)) %>% 
-  mutate(ratioVar = avg_AV / MC_var)
+            MC_var = var(estimation, na.rm = TRUE),
+            true_var = first(trueVar)) %>% 
+  mutate(ratioVar = avg_AV / MC_var) %>% 
+  ungroup()
 
 temp
 ```

@@ -149,7 +149,6 @@ estim_appr_var_seq_phi1 <- function(Yobs,
 var_expansion_seq_phi1 <- function(Y1exp,
                                    piMat,
                                    p1,
-                                   modes,
                                    phi = rep(1.0, length(Y1exp)),
                                    sd1 = 0.0)
 {
@@ -158,9 +157,6 @@ var_expansion_seq_phi1 <- function(Y1exp,
     return(0.0)
 
   pi <- diag(piMat)
-  piMatSr <- piMat[maskSr, maskSr]
-
-  maskSr <- modes == "m1"
 
   # Sampling variability (S)
   covarPi <- pi2_to_covarInc(piMat)
@@ -282,7 +278,6 @@ var_expansion_seq_phi2 <- function(Y2exp, I,
                                    piMat,
                                    p1, p2,
                                    Z,
-                                   modes,
                                    phi = rep(1.0, length(Y2exp)),
                                    sd2 = 0.0)
 {
@@ -292,11 +287,6 @@ var_expansion_seq_phi2 <- function(Y2exp, I,
 
   pi <- diag(piMat)
   p1Bar <- 1.0 - p1
-  p2 <- diag(pq2Mat)
-
-  maskSr <- modes == "m1"
-  maskSmr <- modes == "m2"
-
 
   # Sampling variability (S)
   covarPi <- pi2_to_covarInc(piMat)
