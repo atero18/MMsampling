@@ -468,16 +468,16 @@ simulation_tphi <- function(Z,
     if (calcVariance)
     {
       apprVarPhi2EW <-
-      MMsampling::estim_appr_var_seq_phi2(Yobs,
-                                          modes,
-                                          I,
-                                          piMat,
-                                          estimp1,
-                                          estimp2,
-                                          Z,
-                                          phi,
-                                          estSD2 = sd2,
-                                          correcEstimWeights = TRUE)
+        MMsampling::estim_appr_var_seq_phi2(Yobs,
+                                            modes,
+                                            I,
+                                            piMat,
+                                            estimp1,
+                                            estimp2,
+                                            Z,
+                                            phi,
+                                            estSD2 = sd2,
+                                            correcEstimWeights = TRUE)
     }
     else
       apprVarPhi2EW <- NA_real_
@@ -511,15 +511,15 @@ simulation_tphi <- function(Z,
     if (calcVariance)
     {
       apprVarMeanPhi2EW <-
-      MMsampling::estim_var_mean_phi2(Yobs,
-                                      modes,
-                                      I,
-                                      piMat,
-                                      estimp1,
-                                      estimp2,
-                                      Z,
-                                      phi,
-                                      correcEstimWeights = TRUE)
+        MMsampling::estim_var_mean_phi2(Yobs,
+                                        modes,
+                                        I,
+                                        piMat,
+                                        estimp1,
+                                        estimp2,
+                                        Z,
+                                        phi,
+                                        correcEstimWeights = TRUE)
     }
     else
       apprVarMeanPhi2EW <- NA_real_
@@ -636,7 +636,7 @@ parameters
 ```
 
 ```{r}
-Msim <- 100L
+Msim <- 10000L
 ```
 
 The different lines of the grid have the same seed. It is useful to run in different orders the evaluations and because the results from different parameters are never mixed there is no independency issue.
