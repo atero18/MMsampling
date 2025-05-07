@@ -154,23 +154,23 @@ We simulate a mode selection MAR (Missing At Random) under a logistic model, wit
 
 ```{r}
 alpha1 <- c(0.7, -0.02, -0.5)
-pInt <- gen_selection_probabilities(Z, alpha1)
+p1 <- gen_selection_probabilities(Z, alpha1)
 
 alpha2 <- c(0.4, -0.01, -0.3)
-pTel <- gen_selection_probabilities(Z, alpha2)
+p2 <- gen_selection_probabilities(Z, alpha2)
 ```
 
 Here are some details about the $p_{int}$ and $p_{tel}$:
 
 ```{r}
 glue("internet probabilities:\n")
-summary(pInt) %>% print()
+summary(p1) %>% print()
 glue("telephone probabilities:\n")
-summary(pTel) %>% print()
+summary(p2) %>% print()
 ```
 
 ```{r}
-pRepTel <- (1.0 - pInt) * pTel
+pRepTel <- (1.0 - p1) * p2
 summary(pRepTel)
 ```
 
@@ -179,14 +179,14 @@ About $S_{r\bullet}$ (case of SRS with $f = \frac{1}{10}$):
 ```{r}
 f <- 1.0 / 10.0
 n <- f * N
-expSizeSr <- f * sum(pInt)
+expSizeSr <- f * sum(p1)
 
 pi <- rep(f, N)
 piMat <- matrix(n * (n - 1L) / (N * (N - 1L)), nrow = N, ncol = N)
 diag(piMat) <- f
 pCov <- pi2_to_covarInc(piMat)
-expVarSr <- f * sum(pInt * (1.0 - pInt)) + 
-  t(pInt) %*% pCov %*% pInt %>% 
+expVarSr <- f * sum(p1 * (1.0 - p1)) + 
+  t(p1) %*% pCov %*% p1 %>% 
   as.numeric()
 
 expSizeSr
@@ -197,8 +197,8 @@ About $S_{mr}$ (case of SRS with $f = \frac{1}{10}$):
 ```{r}
 expSizeSmr <- f * sum(pRepTel)
 
-expVarSmr <- f * sum(pRepTel * (1.0 - pTel)) + 
-  f * sum(pRepTel * (1.0 - pInt)) +
+expVarSmr <- f * sum(pRepTel * (1.0 - p2)) + 
+  f * sum(pRepTel * (1.0 - p1)) +
   t(pRepTel) %*% pCov %*% pRepTel %>% 
   as.numeric()
 
@@ -211,9 +211,9 @@ About $S_a$ (case of SRS with $f = \frac{1}{10}$):
 ```{r}
 expSizeSa <- expSizeSr + expSizeSmr
 
-expVarSa <- f * sum(pRepTel * (1.0 - pTel)) + 
-  f * sum(pInt * (1.0 - pInt) * (1.0 - pTel)) +
-  t(pInt + pRepTel) %*% pCov %*% (pInt + pRepTel) %>% 
+expVarSa <- f * sum(pRepTel * (1.0 - p2)) + 
+  f * sum(p1 * (1.0 - p1) * (1.0 - p2)) +
+  t(p1 + pRepTel) %*% pCov %*% (p1 + pRepTel) %>% 
   as.numeric()
 
 expSizeSa
@@ -230,7 +230,7 @@ rm(expSizeSr, expVarSr,
 
 ```{r}
 data.frame(mode = factor(rep(c("web", "telephone"), each = N)), 
-           prob = c(pInt, pTel)) %>% 
+           prob = c(p1, p2)) %>% 
   ggplot() + 
   geom_density(aes(x = prob, color = mode)) +
   ggtitle("Distribution of p1 and p2") +
@@ -238,8 +238,8 @@ data.frame(mode = factor(rep(c("web", "telephone"), each = N)),
 ```
 
 ```{r}
-pInt[sex == "Man"] %>% summary()
-pInt[sex == "Woman"] %>% summary()
+p1[sex == "Man"] %>% summary()
+p1[sex == "Woman"] %>% summary()
 ```
 
 # Bias detection
@@ -255,7 +255,8 @@ simulation_tphi <- function(Z,
                             phi = rep(0.5, N), M = 10000L,
                             n = ceiling(N / 10L),
                             seed = 123L,
-                            nCores = detectCores() - 1L)
+                            nCores = detectCores() - 1L,
+                            calcVariance = TRUE)
 {
   set.seed(seed)
   
@@ -263,11 +264,9 @@ simulation_tphi <- function(Z,
   
   expit <- function(x) 1.0 / (1.0 + exp(-x))
 
-  pInt <- expit(Z %*% alpha1) %>% as.numeric()
-  pq1Mat <- pi_to_pi2(pInt)
+  p1 <- expit(Z %*% alpha1) %>% as.numeric()
   
-  pTel <- expit(Z %*% alpha2) %>% as.numeric()
-  pq2Mat <- pi_to_pi2(pTel)
+  p2 <- expit(Z %*% alpha2) %>% as.numeric()
 
   if (sampling == "SRS")
   {
@@ -305,7 +304,7 @@ simulation_tphi <- function(Z,
     }
     
     
-    dataModes <-  gen_choice_bimode(I, pInt, pTel, Z)
+    dataModes <-  gen_choice_bimode(I, p1, p2, Z)
     modes <- dataModes$mode
     
     mask1 <- modes == "m1"
@@ -347,25 +346,25 @@ simulation_tphi <- function(Z,
     
     # Estimations with Y1
       # Estimation of the internet design covariance matrix
-    estimpq1 <- estimProbsData$conditional[, "m1"]
+    estimp1 <- estimProbsData$conditional[, "m1"]
     
      # Total of phi_k y_1k with true probabilities
     expPhi1 <- sum(phi * expY1)
     totPhi1TW <- sum(phi[mask1] * trueWeights[mask1] * Yobs[mask1])
     
-        # Estimation of the approximate variance of the total estimator
-        # the variance of Y1 is assumed known and homoscedastic for simplicity
-    # apprVarPhi1TW <- 
+        # Unbiased estimation of the variance of the total estimator
+        # the variance of Y1 is assumed known. Used in the
+        # calculation of the true probabilities
+    # apprVarPhi1TW <-
     #   MMsampling::estim_appr_var_seq_phi1(Yobs,
-    #                                       modes, 
+    #                                       modes,
     #                                       I,
     #                                       piMat,
-    #                                       pq1Mat,
+    #                                       p1,
     #                                       Z,
-    #                                       phi, 
-    #                                       sd1 = sd1,
-    #                                       correcEstimWeights = FALSE,
-    #                                       independenceq1 = TRUE)
+    #                                       phi,
+    #                                       estSD1 = sd1,
+    #                                       correcEstimWeights = FALSE)
     
     apprVarPhi1TW <- NA_real_
     
@@ -373,33 +372,37 @@ simulation_tphi <- function(Z,
     totPhi1EW <- sum(phi[mask1] * estimWeights[mask1] * Yobs[mask1])
     # totPhi1EW <- NA_real_
     
-    apprVarPhi1EW <-
-      MMsampling::estim_appr_var_seq_phi1(Yobs,
-                                          modes,
-                                          I,
-                                          piMat,
-                                          estimpq1,
-                                          Z,
-                                          phi,
-                                          estSD1 = sd1,
-                                          correcEstimWeights = TRUE)
-     
-    # apprVarPhi1EW <- NA_real_
+    if (calcVariance)
+    {
+      apprVarPhi1EW <-
+        MMsampling::estim_appr_var_seq_phi1(Yobs,
+                                            modes,
+                                            I,
+                                            piMat,
+                                            estimp1,
+                                            Z,
+                                            phi,
+                                            estSD1 = sd1,
+                                            correcEstimWeights = TRUE)
+    }
+    else
+      apprVarPhi1EW <- NA_real_
+    
       # parameter equal to
       #  phi_k y_1k / sum of the phi_k on U
     expMeanPhi1 <- expPhi1 / sum(phi)
     meanPhi1TW <- totPhi1TW / sum(phi[mask1] * trueWeights[mask1])
     
-    # apprVarMeanPhi1TW <- 
+    # apprVarMeanPhi1TW <-
     #   MMsampling::estim_var_mean_phi1(Yobs,
-    #                                   modes, 
+    #                                   modes,
     #                                   I,
     #                                   piMat,
-    #                                   pq1Mat,
+    #                                   p1,
     #                                   Z,
-    #                                   phi, 
+    #                                   phi,
     #                                   correcEstimWeights = FALSE)
-    # 
+
     
     apprVarMeanPhi1TW <- NA_real_ 
     
@@ -407,22 +410,25 @@ simulation_tphi <- function(Z,
       
     # meanPhi1EW <- NA_real_
     
-    apprVarMeanPhi1EW <-
+    if (calcVariance)
+    {
+      apprVarMeanPhi1EW <-
       MMsampling::estim_var_mean_phi1(Yobs,
                                       modes,
                                       I,
                                       piMat,
-                                      estimpq1,
+                                      estimp1,
                                       Z,
                                       phi,
                                       correcEstimWeights = TRUE)
-    
-    # apprVarMeanPhi1EW <- NA_real_
+    }
+    else
+      apprVarMeanPhi1EW <- NA_real_
     
     # Estimations with Y2
     
       # Estimation of the internet design covariance matrix
-    estimpq2 <-  estimProbsData$conditional[, "m2"]
+    estimp2 <-  estimProbsData$conditional[, "m2"]
 
     
       # Total of phi_k y_2k with true probabilities
@@ -436,14 +442,12 @@ simulation_tphi <- function(Z,
     #                                       modes,
     #                                       I,
     #                                       piMat,
-    #                                       pq1Mat,
-    #                                       pq2Mat,
+    #                                       p1,
+    #                                       p2,
     #                                       Z,
     #                                       phi,
     #                                       sd2 = sd2,
-    #                                       correcEstimWeights = FALSE,
-    #                                       independenceq1 = TRUE,
-    #                                       independenceq2 = TRUE)
+    #                                       correcEstimWeights = FALSE)
 
     apprVarPhi2TW <- NA_real_
     
@@ -452,20 +456,22 @@ simulation_tphi <- function(Z,
     totPhi2EW <- sum(phi[mask2] * estimWeights[mask2] * Yobs[mask2])
     # totPhi2EW <- NA_real_
     
-    
-    apprVarPhi2EW <-
+    if (calcVariance)
+    {
+      apprVarPhi2EW <-
       MMsampling::estim_appr_var_seq_phi2(Yobs,
                                           modes,
                                           I,
                                           piMat,
-                                          estimpq1,
-                                          estimpq2, #pq2Mat,
+                                          estimp1,
+                                          estimp2,
                                           Z,
                                           phi,
                                           estSD2 = sd2,
                                           correcEstimWeights = TRUE)
-    
-    # apprVarPhi2EW <- NA_real_
+    }
+    else
+      apprVarPhi2EW <- NA_real_
     
       # parameter equal to
       #  phi_k y_2k / sum of the phi_k on U,
@@ -475,32 +481,35 @@ simulation_tphi <- function(Z,
     
     # apprVarMeanPhi2TW <-
     #   MMsampling::estim_var_mean_phi2(Yobs,
-    #                       modes,
-    #                       I,
-    #                       piMat,
-    #                       pq1Mat,
-    #                       pq2Mat,
-    #                       Z,
-    #                       phi,
-    #                       correcEstimWeights = FALSE)
+    #                                   modes,
+    #                                   I,
+    #                                   piMat,
+    #                                   p1,
+    #                                   p2,
+    #                                   Z,
+    #                                   phi,
+    #                                   correcEstimWeights = FALSE)
     
     apprVarMeanPhi2TW <- NA_real_
     
     meanPhi2EW <- totPhi2EW / sum(phi[mask2] * estimWeights[mask2])
     # meanPhi2EW <- NA_real_
     
-    apprVarMeanPhi2EW <-
+    if (calcVariance)
+    {
+      apprVarMeanPhi2EW <-
       MMsampling::estim_var_mean_phi2(Yobs,
                                       modes,
                                       I,
                                       piMat,
-                                      estimpq1,
-                                      estimpq2,
+                                      estimp1,
+                                      estimp2,
                                       Z,
                                       phi,
                                       correcEstimWeights = TRUE)
-    
-    # apprVarMeanPhi2EW <- NA_real_
+    }
+    else
+      apprVarMeanPhi2EW <- NA_real_
     
     # rm(estimpq1Mat, estimpq2Mat)
     
@@ -530,9 +539,9 @@ simulation_tphi <- function(Z,
   # pv <- microbenchmark::microbenchmark(monoSim(), times = 10L)
   # return(pv)
 
-  res <- lapply(seq_len(M), FUN = monoSim)
+  # res <- lapply(seq_len(M), FUN = monoSim)
   
-  # res <- mclapply(seq_len(M), FUN = monoSim, mc.cores = nCores)
+  res <- mclapply(seq_len(M), FUN = monoSim, mc.cores = nCores)
   do.call("rbind", res)
 }
 ```
@@ -598,7 +607,7 @@ parameters
 ```
 
 ```{r}
-Msim <- 5000L
+Msim <- 3000L
 ```
 
 The different lines of the grid have the same seed. It is useful to run in different orders the evaluations and because the results from different parameters are never mixed there is no independency issue.
@@ -619,26 +628,34 @@ for (k in seq_len(nrow(parameters)))
   beta1Temp <- beta2
   beta1Temp[1L] <- beta2[1L] + parameters[k, "delta"]
   
-  resTemp <- simulation_tphi(M = Msim,
-                             Z = Z,
-                             sampling = "SRS",
-                             alpha1 = alpha1,
-                             alpha2 = alpha2,
-                             beta1 = beta1Temp,
-                             beta2 = beta2,
-                             Y1Law = "gaussian",
-                             Y2Law = "gaussian",
-                             phi = "eq",
-                             sd1 = parameters[k, "sd1"],
-                             sd2 = parameters[k, "sd2"],
-                             n = parameters[k, "n"],
-                             rho = parameters[k, "rho"],
-                             seed = 200L,
-                             nCores = 30L)
-
+  simFun <- function(calcVariance = TRUE)
+  {
+    simulation_tphi(M = Msim,
+                    Z = Z,
+                    sampling = "SRS",
+                    alpha1 = alpha1,
+                    alpha2 = alpha2,
+                    beta1 = beta1Temp,
+                    beta2 = beta2,
+                    Y1Law = "gaussian",
+                    Y2Law = "gaussian",
+                    phi = "eq",
+                    sd1 = parameters[k, "sd1"],
+                    sd2 = parameters[k, "sd2"],
+                    n = parameters[k, "n"],
+                    rho = parameters[k, "rho"],
+                    seed = 200L,
+                    nCores = 30L,
+                    calcVariance = calcVariance)
+  }
+  
+  resTempWithVar <- simFun(calcVariance = TRUE)
+  resTempWithoutVar <- simFun(calcVariance = FALSE)
   
   resSimBiasDetection <-
-    cbind(parameters[k, ], resTemp, row.names = NULL) %>%
+    cbind(parameters[k, ], 
+          rbind(resTempWithVar, resTempWithoutVar), 
+          row.names = NULL) %>%
     rbind(resSimBiasDetection)
   
   
@@ -838,7 +855,7 @@ temp <- temp %>%
   summarize(M = n(),
             expEstimand = mean(expEstimand),
             mean = mean(estimation), 
-            avg_AV = mean(apprVar),
+            avg_AV = mean(apprVar, na.rm = TRUE),
             var = var(estimation)) %>% 
   mutate(ratioVar = avg_AV / var)
 
@@ -872,7 +889,7 @@ for (sigma in unique(temp$sigma))
   vartotphi2TW_list[[as.character(sigma)]] <- 
     true_variance_tephi2(expY2,
                          pi, covarSRS, 
-                         pInt, pTel, 
+                         p1, p2, 
                          phi, 
                          sd2 = sigma)
 }
@@ -890,7 +907,7 @@ for (k in seq_len(nrow(temp) / 2L))
   n <- temp[k, "n"]
   vartotphi1TW <- true_variance_tephi1(expY1_list[[as.character(delta)]], 
                                        pi, covarSRS, 
-                                       pInt,
+                                       p1,
                                        phi, 
                                        sd1 = sigma)
 
@@ -1497,16 +1514,16 @@ simulationUncounf <-
     
     expit <- function(x) 1.0 / (1.0 + exp(-x))
 
-    pInt <- expit(X %*% alpha1) %>% as.numeric()
-    pq1Mat <- pInt %*% t(pInt)
-    diag(pq1Mat) <- pInt
+    p1 <- expit(X %*% alpha1) %>% as.numeric()
+    pq1Mat <- p1 %*% t(p1)
+    diag(pq1Mat) <- p1
     
-    pTel <- expit(X %*% alpha2) %>% as.numeric()
-    pq2Mat <- pTel %*% t(pTel)
-    diag(pq2Mat) <- pTel
+    p2 <- expit(X %*% alpha2) %>% as.numeric()
+    pq2Mat <- p2 %*% t(p2)
+    diag(pq2Mat) <- p2
     
     clusterExport(cluster, 
-                  varlist = c("pInt", "pq1Mat", "pTel", "pq2Mat"),
+                  varlist = c("p1", "pq1Mat", "p2", "pq2Mat"),
                   envir = environment())
     
 
@@ -1667,7 +1684,7 @@ simulationUncounf <-
       # {
       #   # modeChoiceOK <- TRUE
       #   
-      #   dataModes <- gen_choice_bimode(I, pInt, pTel)
+      #   dataModes <- gen_choice_bimode(I, p1, p2)
       #   modes <- dataModes$mode
       #   mask1 <- modes == "m1"
       #   nInt <- sum(mask1)
@@ -1683,7 +1700,7 @@ simulationUncounf <-
       #   
       # }
       
-      dataModes <- gen_choice_bimode(I, pInt, pTel)
+      dataModes <- gen_choice_bimode(I, p1, p2)
       modes <- dataModes$mode
       
       mask1 <- modes == "m1"

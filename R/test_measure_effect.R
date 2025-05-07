@@ -4,7 +4,7 @@ estim_var_mean_phi1 <- function(Yobs,
                                 piMat,
                                 p1, Z,
                                 phi = rep(1.0, length(Yobs)),
-                                correcEstimWeights = TRUE)
+                                correcEstimWeights = FALSE)
 {
 
   maskSr <- modes == "m1"
@@ -37,7 +37,7 @@ estim_var_mean_phi2 <- function(Yobs,
                                 p1,
                                 p2, Z,
                                 phi = rep(1.0, length(Yobs)),
-                                correcEstimWeights = TRUE)
+                                correcEstimWeights = FALSE)
 {
   maskSmr <- modes == "m2"
 
