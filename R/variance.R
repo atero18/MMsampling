@@ -12,12 +12,6 @@ Fisher_Information_Matrix <- function(prob, Z, maskSubset = !logical(nrow(Z)))
   crossprod(ZSubset, probSubset * (1.0 - probSubset) * ZSubset)
 }
 
-
-.estim_b1 <- function(estV, I, p1, Z)
-{
-  solve(Fisher_Information_Matrix(p1, Z, I)) %*% estV
-}
-
 .estim_bPhi11 <- function(Yobs, I, pi, p1, maskSr, Z,
                     phi = rep(1.0, length(Yobs)))
 {
@@ -29,7 +23,7 @@ Fisher_Information_Matrix <- function(prob, Z, maskSubset = !logical(nrow(Z)))
                             phi[maskSr] * Yobs[maskSr] * (1.0 - p1Sr))
 
 
-  .estim_b1(estVPhi11, I, p1, Z)
+  solve(Fisher_Information_Matrix(p1, Z, I)) %*% estVPhi11
 }
 
 
@@ -45,7 +39,7 @@ Fisher_Information_Matrix <- function(prob, Z, maskSubset = !logical(nrow(Z)))
 
 
 
-  .estim_b1(estVPhi21, I, p1, Z)
+  solve(Fisher_Information_Matrix(p1, Z, I)) %*% estVPhi21
 }
 
 
@@ -75,8 +69,7 @@ estim_appr_var_seq_phi1 <- function(Yobs,
                                     Z,
                                     phi = rep(1.0, length(Yobs)),
                                     estSD1 = 0.0,
-                                    correcEstimWeights = FALSE,
-                                    ...)
+                                    correcEstimWeights = FALSE)
 {
 
   if (all(phi == 0.0))
@@ -96,16 +89,9 @@ estim_appr_var_seq_phi1 <- function(Yobs,
 
   # Sampling variability (S)
   # There is no correction needed for probabilities estimation
+  piMatSr <- piMat[maskSr, maskSr]
 
-  if ("piMatSr" %in% names(args))
-    piMatSr <- args[["piMatSr"]]
-  else
-    piMatSr <- piMat[maskSr, maskSr]
-
-  if ("covarpSr" %in% names(args))
-    covarpSr <- args[["covarpSr"]]
-  else
-    covarpSr <- pi2_to_covarInc(piMatSr)
+  covarpSr <- pi2_to_covarInc(piMatSr)
 
   correctedY1Srp <- (piSr * p1Sr)^-1L * weightedY1Sr
   varSEst <-
@@ -187,8 +173,7 @@ estim_appr_var_seq_phi2 <- function(Yobs,
                                     Z,
                                     phi = rep(1.0, length(Yobs)),
                                     estSD2 = 0.0,
-                                    correcEstimWeights = FALSE,
-                                    ...)
+                                    correcEstimWeights = FALSE)
 {
   if (all(phi == 0.0))
     return(0.0)
@@ -211,10 +196,7 @@ estim_appr_var_seq_phi2 <- function(Yobs,
   weightedY2Smr <- phi[maskSmr] * Yobs[maskSmr]
 
   # Sampling variability (S)
-  if ("covarpSmr" %in% names(args))
-    covarpSmr <- args[["covarpSmr"]]
-  else
-    covarpSmr <- pi2_to_covarInc(piMatSmr)
+  covarpSmr <- pi2_to_covarInc(piMatSmr)
 
   correctedY2Smrp <- (piSmr * p1Smrbar * p2Smr)^-1L * weightedY2Smr
   varSEst <-
