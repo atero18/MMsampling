@@ -260,6 +260,7 @@ simulation_tphi <- function(Z,
   set.seed(seed)
   
   N <- nrow(Z)
+  q <- ncol(Z)
   
   expit <- function(x) 1.0 / (1.0 + exp(-x))
 
@@ -291,8 +292,6 @@ simulation_tphi <- function(Z,
   
   monoSim <- function(...)
   {
-    q <- ncol(Z)
-        
     if (sampling == "SRS")
     {
       selectedSample <- sample(seq_len(N), size = n, replace = FALSE)
