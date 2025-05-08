@@ -68,7 +68,7 @@ estim_appr_var_seq_phi1 <- function(Yobs,
                                     p1,
                                     Z,
                                     phi = rep(1.0, length(Yobs)),
-                                    estSD1 = 0.0,
+                                    sd1 = 0.0,
                                     correcEstimWeights = FALSE)
 {
 
@@ -118,9 +118,7 @@ estim_appr_var_seq_phi1 <- function(Yobs,
 
 
   # Y1 variability
-  # We suppose the potential outcomes homoscedastic and
-  # we have an estimator of the variance of the Y1
-  varY1Est <- sum(phi^2L) * estSD1^2L
+  varY1Est <- sum(phi^2L) * sd1^2L
 
   varSEst + varq1Est + varY1Est
 }
@@ -172,7 +170,7 @@ estim_appr_var_seq_phi2 <- function(Yobs,
                                     p2,
                                     Z,
                                     phi = rep(1.0, length(Yobs)),
-                                    estSD2 = 0.0,
+                                    sd2 = 0.0,
                                     correcEstimWeights = FALSE)
 {
   if (all(phi == 0.0))
@@ -232,18 +230,16 @@ estim_appr_var_seq_phi2 <- function(Yobs,
   #   alpha2 (the parameter of the logistic model for the mode-2 response)
   if (correcEstimWeights)
   {
-    bPhi22 <- .estim_bPhi22(Yobs, pi, p1, p2,
+    estbPhi22 <- .estim_bPhi22(Yobs, pi, p1, p2,
                             I & modes != "m1", maskSmr, Z, phi)
-    correctedY2Smrq2 <- correctedY2Smrq2 + Z[maskSmr, ] %*% bPhi22
+    correctedY2Smrq2 <- correctedY2Smrq2 + Z[maskSmr, ] %*% estbPhi22
   }
 
   varq2Est <- sum((1.0 - p2Smr) * correctedY2Smrq2^2L)
 
 
   # Y2 variability
-  # We suppose we have an estimator of the variance
-  # of the Y2
-  varY2Est <- sum(phi^2L) * estSD2^2L
+  varY2Est <- sum(phi^2L) * sd2^2L
 
   varSEst + varq1Est + varq2Est + varY2Est
 }
@@ -256,10 +252,9 @@ estim_appr_var_seq_phi2 <- function(Yobs,
 #' and the mode selection mechanism q1 and q2, plus the conditional independence
 #' between the mode selection mechanisms.
 #' @export
-var_expansion_seq_phi2 <- function(Y2exp, I,
+var_expansion_seq_phi2 <- function(Y2exp,
                                    piMat,
                                    p1, p2,
-                                   Z,
                                    phi = rep(1.0, length(Y2exp)),
                                    sd2 = 0.0)
 {
@@ -379,7 +374,7 @@ var_difference_HT <- function(Y1exp, Y2exp, I,
                               constY,
                               covarY1,
                               covarY2) +
-    var_expansion_seq_phi2(Y2exp, I, piMat, pq1Mat, pq2Mat, Z, biasedMode,
+    var_expansion_seq_phi2(Y2exp,piMat, pq1Mat, pq2Mat, biasedMode,
                     refMode, modes, phi, correcEstimWeights,
                     constY2, covarY2)
 }

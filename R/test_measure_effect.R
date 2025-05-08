@@ -26,7 +26,7 @@ estim_var_mean_phi1 <- function(Yobs,
   # phi_k (y_1k - average on U of the y_1l) / sum of the phi_k on U
   estim_appr_var_seq_phi1(errTerms, modes, I, piMat,
                           p1, Z, phi,
-                          estSD1 = 0.0,
+                          sd1 = 0.0,
                           correcEstimWeights = correcEstimWeights) / sumPhi^2L
 }
 
@@ -57,6 +57,6 @@ estim_var_mean_phi2 <- function(Yobs,
   # phi_k (y_2k - average on U of the y_2l) / sum of the phi_k on U
   estim_appr_var_seq_phi2(errTerms, modes, I, piMat,
                           p1, p2, Z, phi,
-                          estSD2 = 0.0,
+                          sd2 = 0.0,
                           correcEstimWeights = correcEstimWeights) / sumPhi^2L
 }

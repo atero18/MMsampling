@@ -73,7 +73,7 @@ summary(Z[, -1L])
 ```
 
 ```{r}
-data <- X[, c("sex", "age")]
+data <- Z[, c("sex", "age")]
 data$sex <- sex
 ggplot(data) + 
   geom_density(aes(x = age, colour = sex)) +
@@ -262,7 +262,7 @@ estim_tot_a <- function(Yobs, modes, pi, pa, phi = rep(1.0, len(Yobs)))
 }
 ```
 
-## Variances estimators
+## Approximate variance estimators
 
 Fisher Information Matrix with a logistic model and weights equal to 1.
 
@@ -283,7 +283,7 @@ estim_appr_var_seq_phi1 <- function(Yobs,
                                     p1,
                                     Z,
                                     phi = rep(1.0, length(Yobs)),
-                                    estSD1 = 0.0,
+                                    sd1 = 0.0,
                                     correcEstimWeights = FALSE)
 {
 
@@ -340,12 +340,212 @@ estim_appr_var_seq_phi1 <- function(Yobs,
   # Y1 variability
   # We suppose the potential outcomes homoscedastic and
   # we have an estimator of the variance of the Y1
-  varY1Est <- sum(phi^2L) * estSD1^2L
+  varY1Est <- sum(phi^2L) * sd1^2L
 
   varSEst + varq1Est + varY1Est
 }
 ```
 
+```{r}
+estim_appr_var_seq_phi2 <- function(Yobs,
+                                    modes,
+                                    I, piMat,
+                                    p1,
+                                    p2,
+                                    Z,
+                                    phi = rep(1.0, length(Yobs)),
+                                    sd2 = 0.0,
+                                    correcEstimWeights = FALSE)
+{
+  if (all(phi == 0.0))
+    return(0.0)
+
+  args <- list(...)
+
+  maskSmr <- modes == "m2"
+
+  pi <- diag(piMat)
+  piSmr <- pi[maskSmr]
+
+  piMatSmr <- piMat[maskSmr, maskSmr]
+
+  p1Smr <- p1[maskSmr]
+  p1Smrbar <- 1.0 - p1Smr
+
+  p2Smr <- p2[maskSmr]
+
+  # The y_2k are weighted with the phi_k
+  weightedY2Smr <- phi[maskSmr] * Yobs[maskSmr]
+
+  # Sampling variability (S)
+  covarpSmr <- pi2_to_covarInc(piMatSmr)
+
+  correctedY2Smrp <- (piSmr * p1Smrbar * p2Smr)^-1L * weightedY2Smr
+  varSEst <-
+    t(correctedY2Smrp) %*%
+    (covarpSmr / piMatSmr) %*%
+    correctedY2Smrp %>%
+    as.numeric()
+  varSEst <- varSEst +
+    sum((1.0 - piSmr) * piSmr^-2L * (p1Smrbar * p2Smr)^-1L *
+          (1.0 - (p1Smrbar * p2Smr)^-1L) * weightedY2Smr^2L)
+
+
+  # q1 variability (R1)
+  correctedY2Smrq1 <- (piSmr * p1Smrbar)^-1L * weightedY2Smr
+
+  #   If the probabilities p_1k are estimations we add a term
+  #   that uses the covariates used by the regression estimators of
+  #   alpha1 (the parameter of the logistic model for the m1 response)
+  if (correcEstimWeights)
+  {
+    estVPhi11 <- -crossprod(Z[maskSr, , drop = FALSE],
+                          (pi[maskSr] * p1Sr)^-1L *
+                            phi[maskSr] * Yobs[maskSr] * (1.0 - p1Sr))
+
+
+    estbPhi21 <- solve(Fisher_Information_Matrix(p1, Z, I)) %*% estVPhi11
+    correctedY2Smrq1 <- correctedY2Smrq1 - Z[maskSmr, ] %*% estbPhi21
+  }
+
+  varq1Est <- sum(p1Smr * p2Smr^-1L * correctedY2Smrq1^2L)
+
+
+  # q2 variability (R2)
+  correctedY2Smrq2 <- correctedY2Smrp
+
+  #   If the probabilities p_1k are estimations we add a term
+  #   that uses the covariates used by the regression estimators of
+  #   alpha2 (the parameter of the logistic model for the mode-2 response)
+  if (correcEstimWeights)
+  {
+    estVPhi22 <- -crossprod(Z[maskSmr, , drop = FALSE],
+                          (pi[maskSmr] * (1.0 - p1[maskSmr]) * p2Smr)^-1L *
+                            (1.0 - p2Smr) * phi[maskSmr] * Yobs[maskSmr])
+
+
+    estbPhi22 <- solve(Fisher_Information_Matrix(p2, Z, maskSm)) %*% estVPhi22
+    
+    correctedY2Smrq2 <- correctedY2Smrq2 + Z[maskSmr, ] %*% estbPhi22
+  }
+
+  varq2Est <- sum((1.0 - p2Smr) * correctedY2Smrq2^2L)
+
+
+  # Y2 variability
+  varY2Est <- sum(phi^2L) * sd2^2L
+
+  varSEst + varq1Est + varq2Est + varY2Est
+}
+```
+
+##Expansion estimators true variance
+
+```{r}
+var_expansion_m1 <- function(Y1exp,
+                             piMat,
+                             p1,
+                             phi = rep(1.0, length(Y1exp)),
+                             sd1 = 0.0)
+{
+  pi <- diag(piMat)
+
+  # Sampling variability (S)
+  covarPi <- pi2_to_covarInc(piMat)
+  correctedY1p <- pi^-1L * phi * Y1exp
+  varS <- t(correctedY1p) %*% covarPi %*% correctedY1p +
+    sum(pi^-1L * (1.0 - pi) * phi^2L) * sd1^2L
+
+  # q1 variability (R1)
+  #  With the independence between p and q1
+  varq1 <- sum((pi * p1)^-1L * (1.0 - p1) * phi^2L * (sd1^2L + Y1exp^2L))
+
+  # Y1 variability
+  varY1 <- sum(phi^2L) * sd1^2L
+
+  varS + varq1 + varY1
+}
+```
+
+```{r}
+var_expansion_m2 <- function(Y2exp,
+                             piMat,
+                             p1, p2,
+                             phi = rep(1.0, length(Y2exp)),
+                             sd2 = 0.0)
+{
+  pi <- diag(piMat)
+  p1Bar <- 1.0 - p1
+
+  # Sampling variability (S)
+  covarPi <- pi2_to_covarInc(piMat)
+  correctedY2p <- pi^-1L * phi * Y2exp
+  varS <- t(correctedY2p) %*% covarPi %*% correctedY2p +
+    sum(pi^-1L * (1.0 - pi) * phi^2L) * sd2^2L
+
+  # q1 variability (R1)
+  varPhiY2 <- phi^2L * (sd2^2L + Y2exp^2L) # Variance of each phi_k y_2k
+  varq1 <- sum((pi * p1Bar)^-1L * p1 * varPhiY2)
+
+  # q2 variability (R2)
+  varq2 <- sum((pi * p1Bar * p2)^-1L * (1.0 - p2) * varPhiY2)
+
+  # Y2 variability
+  varY2 <- sum(phi^2L) * sd2^2L
+
+  varS + varq1 + varq2 + varY2
+}
+```
+
+
+
+# Simulation
+## Grid of parameters
+
+```{r}
+ratio_n_vec <- c(0.16, 0.25, 0.4)
+ratio_n_ref <- min(ratio_n_vec)
+n_vec <- as.integer(ratio_n_vec * N)
+n_ref <- integer(ratio_n_ref * N)
+sd1_vec <- c(1.0, 2.0, 5.0)
+sd1_ref <- sd1_vec[1L]
+ratio_sd_vec <- c(0.25, 0.5, 1.0, 2.0, 4.0)
+rho_vec <- c(0.8, 0.9)
+rho_ref <- rho_vec[1L]
+
+# Variation of the sample fraction n / N and sd1 with sd1 = sd2 
+# and correlation rho between Y1 and Y2 fixed
+paramVar_n <- 
+  expand.grid(ratio_n = ratio_n_vec, 
+              sd1 = sd1_vec, ratio_sd = 1.0, 
+              rho = rho_ref)
+
+# Variation of sd1 and sd2 with correlation rho between Y1 and Y2 fixed
+paramVar_sd <- 
+  expand.grid(ratio_n = ratio_n_ref, 
+              sd1 = sd1_vec, ratio_sd = ratio_sd_vec,
+              rho = rho_ref)
+
+# Variation of the correlation between Y1 and Y2 (rho) with 
+# sd1 = sd2 fixed
+paramVar_rho <- 
+  expand.grid(ratio_n = ratio_n_ref, 
+              sd1 = sd1_ref, ratio_sd = 1.0,
+              rho = rho_vec)
+
+parameters <- rbind(paramVar_n, paramVar_sd, paramVar_rho)
+
+parameters <- parameters %>% 
+  distinct() %>% 
+  mutate(n = as.integer(ratio_n * N), .after = "ratio_n") %>% 
+  mutate(sd2 = sd1 * ratio_sd, .after = "ratio_sd")
+```
+
+```{r}
+head(parameters)
+```
+
+## Simulation function
 
 ```{r}
 simulation_tphi <- function(Z,
@@ -377,20 +577,13 @@ simulation_tphi <- function(Z,
   }
   
   
-  dataExpY <- gen_expY(Z, 
-                       beta1, Y1Law, sd1,
-                       beta2, Y2Law, sd2)
+  Yexp <- Z %*% beta
   
-  Yexp <- NULL ## TO DO
-  Y1exp <- dataExpY$Y1exp
-  sd1s <- dataExpY$sd1s
-  
-  Y2exp <- dataExpY$Y2exp
-  sd2s <- dataExpY$sd2s
   
   rm(dataExpY)
   
   phi <- set_phi(phi, N)
+  YPhiexp <- sum(phi * Yexp)
   
   
   monoSim <- function(...)
@@ -408,10 +601,10 @@ simulation_tphi <- function(Z,
     dataModes <-  gen_choice_bimode(I, p1, p2, Z)
     modes <- dataModes$mode
     
-    mask1 <- modes == "m1"
-    nInt <- sum(mask1)
-    mask2 <- modes == "m2"
-    nTel <- sum(mask2)
+    maskSr <- modes == "m1"
+    n1 <- sum(maskSr)
+    maskSmr <- modes == "m2"
+    n2 <- sum(maskSmr)
     
     trueProbsSelect <- dataModes$probSelect
     
@@ -443,15 +636,16 @@ simulation_tphi <- function(Z,
     rm(dataY)
     
     # Creating the observed outcome vector
-    Yobs <- set_Yobs(Y1 = Y1, Y2 = Y2, modes = modes)
+    Yobs <- rep(NA_real_, N)
+    Yobs[modes == "m1"] <- Y1[modes == "m1"]
+    Yobs[modes == "m2"] <- Y2[modes == "m2"]
     
     # Estimations with Y1
       # Estimation of the internet design covariance matrix
     estimp1 <- estimProbsData$conditional[, "m1"]
     
-     # Total of phi_k y_1k with true probabilities
-    expPhi1 <- sum(phi * Y1exp)
-    totPhi1TW <- sum(phi[mask1] * trueWeights[mask1] * Yobs[mask1])
+     # Total estimation of phi_k y_1k  with true probabilities
+    totPhi1TW <- sum(phi[maskSr] * trueWeights[maskSr] * Yobs[maskSr])
     
         # Unbiased estimation of the variance of the total estimator.
         # The variance of Y1 is assumed known. The true probabilities are
@@ -466,14 +660,14 @@ simulation_tphi <- function(Z,
                                             p1,
                                             Z,
                                             phi,
-                                            estSD1 = sd1,
+                                            sd1 = sd1,
                                             correcEstimWeights = FALSE)
     }
     else
       apprVarPhi1TW <- NA_real_
     
       # Total of phi_k y_1k with estimated probabilities
-    totPhi1EW <- sum(phi[mask1] * estimWeights[mask1] * Yobs[mask1])
+    totPhi1EW <- sum(phi[maskSr] * estimWeights[maskSr] * Yobs[maskSr])
     # totPhi1EW <- NA_real_
     
     if (calcVariance)
@@ -486,50 +680,11 @@ simulation_tphi <- function(Z,
                                             estimp1,
                                             Z,
                                             phi,
-                                            estSD1 = sd1,
+                                            sd1 = sd1,
                                             correcEstimWeights = TRUE)
     }
     else
       apprVarPhi1EW <- NA_real_
-    
-      # parameter equal to
-      #  phi_k y_1k / sum of the phi_k on U
-    expMeanPhi1 <- expPhi1 / sum(phi)
-    meanPhi1TW <- totPhi1TW / sum(phi[mask1] * trueWeights[mask1])
-    
-    if (calcVariance)
-    {
-      apprVarMeanPhi1TW <-
-        MMsampling::estim_var_mean_phi1(Yobs,
-                                        modes,
-                                        I,
-                                        piMat,
-                                        p1,
-                                        Z,
-                                        phi,
-                                        correcEstimWeights = FALSE)
-    }
-    else
-      apprVarMeanPhi1TW <- NA_real_ 
-    
-    meanPhi1EW <- totPhi1EW / sum(phi[mask1] * estimWeights[mask1])
-      
-    # meanPhi1EW <- NA_real_
-    
-    if (calcVariance)
-    {
-      apprVarMeanPhi1EW <-
-      MMsampling::estim_var_mean_phi1(Yobs,
-                                      modes,
-                                      I,
-                                      piMat,
-                                      estimp1,
-                                      Z,
-                                      phi,
-                                      correcEstimWeights = TRUE)
-    }
-    else
-      apprVarMeanPhi1EW <- NA_real_
     
     # Estimations with Y2
     
@@ -538,7 +693,7 @@ simulation_tphi <- function(Z,
 
     
       # Total of phi_k y_2k with true probabilities
-    totPhi2TW <- sum(phi[mask2] * trueWeights[mask2] * Yobs[mask2])
+    totPhi2TW <- sum(phi[maskSmr] * trueWeights[maskSmr] * Yobs[maskSmr])
     
     
         # Unbiased estimation of the variance of the total estimator.
@@ -563,7 +718,7 @@ simulation_tphi <- function(Z,
     
       # Total of phi_k y_2k with estimated probabilities
     expPhi2 <- sum(phi * Y2exp)
-    totPhi2EW <- sum(phi[mask2] * estimWeights[mask2] * Yobs[mask2])
+    totPhi2EW <- sum(phi[maskSmr] * estimWeights[maskSmr] * Yobs[maskSmr])
     # totPhi2EW <- NA_real_
     
     if (calcVariance)
@@ -577,82 +732,21 @@ simulation_tphi <- function(Z,
                                             estimp2,
                                             Z,
                                             phi,
-                                            estSD2 = sd2,
+                                            sd2 = sd2,
                                             correcEstimWeights = TRUE)
     }
     else
       apprVarPhi2EW <- NA_real_
-    
-      # parameter equal to
-      #  phi_k y_2k / sum of the phi_k on U,
-    expMeanPhi2 <- expPhi2 / sum(phi)
-    meanPhi2TW <- totPhi2TW / sum(phi[mask2] * trueWeights[mask2])
-    # meanPhi2TW <- NA_real_
-    
-    if (calcVariance)
-    {
-      apprVarMeanPhi2TW <-
-        MMsampling::estim_var_mean_phi2(Yobs,
-                                        modes,
-                                        I,
-                                        piMat,
-                                        p1,
-                                        p2,
-                                        Z,
-                                        phi,
-                                        correcEstimWeights = FALSE)
-    }
-    else
-      apprVarMeanPhi2TW <- NA_real_
-    
-    
-    meanPhi2EW <- totPhi2EW / sum(phi[mask2] * estimWeights[mask2])
-    # meanPhi2EW <- NA_real_
-    
-    if (calcVariance)
-    {
-      apprVarMeanPhi2EW <-
-        MMsampling::estim_var_mean_phi2(Yobs,
-                                        modes,
-                                        I,
-                                        piMat,
-                                        estimp1,
-                                        estimp2,
-                                        Z,
-                                        phi,
-                                        correcEstimWeights = TRUE)
-    }
-    else
-      apprVarMeanPhi2EW <- NA_real_
-    
-    # rm(estimpq1Mat, estimpq2Mat)
-    
-    tibble(estimand = rep(c("phi1", "mean phi1", 
-                            "phi2", "mean phi2"), each = 2L), 
-           expEstimand = rep(c(expPhi1, expMeanPhi1, expPhi2, expMeanPhi2), 
-                             each = 2L),
-           estimator = c("totPhi1TW", "totPhi1EW", 
-                         "meanPhi1TW", "meanPhi1EW", 
-                         "totPhi2TW", "totPhi2EW",
-                         "meanPhi2TW", "meanPhi2EW"), 
-           estimation = c(totPhi1TW, totPhi1EW, 
-                          meanPhi1TW, meanPhi1EW, 
-                          totPhi2TW, totPhi2EW,
-                          meanPhi2TW, meanPhi2EW), 
+
+    tibble(estimand = rep(c("phi1", "phi2"), each = 2L), 
+           expEstimand = rep(c(expPhi1, expPhi2), each = 2L),
+           estimator = c("totPhi1TW", "totPhi1EW", "totPhi2TW", "totPhi2EW"), 
+           estimation = c(totPhi1TW, totPhi1EW, totPhi2TW, totPhi2EW),
            apprVar = c(apprVarPhi1TW, apprVarPhi1EW, 
-                       apprVarMeanPhi1TW, apprVarMeanPhi1EW,
-                       apprVarPhi2TW, apprVarPhi2EW,
-                       apprVarMeanPhi2TW, apprVarMeanPhi2EW)) %>% 
+                       apprVarPhi2TW, apprVarPhi2EW)) %>% 
       mutate(weights = rep_len(c("true", "estimated"), length.out = n()),
              .after = "estimator")
   }
-  
-  # pv <- profvis::profvis(lapply(seq_len(M), FUN = monoSim))
-  # return(profvis::profvis(lapply(seq_len(10L), FUN = monoSim))) #prof_output = "test.res"))
-  # pv <- profvis::profvis(lapply(seq_len(10L), FUN = monoSim))
-  # pv <- microbenchmark::microbenchmark(monoSim(), times = 10L)
-  # return(pv)
-
   # res <- lapply(seq_len(M), FUN = monoSim)
   
   res <- mclapply(seq_len(M), FUN = monoSim, mc.cores = nCores)
@@ -661,13 +755,10 @@ simulation_tphi <- function(Z,
   
   trueVarPhi1TW <- var_expansion_seq_phi1(Y1exp, piMat, p1, phi, sd1)
   
-  trueVarPhi2TW <- var_expansion_seq_phi2(Y2exp, I, piMat, 
-                                          p1, p2, Z, phi, sd2)
+  trueVarPhi2TW <- var_expansion_seq_phi2(Y2exp, piMat, p1, p2, phi, sd2)
   
   trueVar <- rep.int(c(trueVarPhi1TW, NA_real_, 
-                       NA_real_, NA_real_,
-                       trueVarPhi2TW, NA_real_, 
-                       NA_real_, NA_real_),
+                       trueVarPhi2TW, NA_real_),
                      times = M)
   
   res <- res %>% mutate(trueVar = trueVar)
@@ -676,64 +767,7 @@ simulation_tphi <- function(Z,
 }
 ```
 
-We would like to test our ability to detect the presence or absence of a constant measure effect with the superposition of confidence intervals of $\hat{t}_{pq\phi1}$ and $\hat{t}_{pq\phi2}$. If there is no measure effect then we can assume there will be superposition of the confidence intervals.
 
-We will change the value of the constant measure effect $\delta$ and test the coverage of our test. We consider the ratio between the measure bias and the expected mean of the telephone answers.
-
-```{r}
-ratioDeltas <- c(0.0, 0.1, 0.25, 0.5, 0.75, 1.0)
-expMean2 <- mean(Z %*% beta2)
-deltas <- ratioDeltas * abs(expMean2)
-
-deltas
-```
-
-Then for each measure bias we try the recognition of an eventual measure bias, with confidence intervals with errors $\alpha_1 = \alpha_2 = 0.05$.
-
-For centered it is not really an estimation because it uses the empiracal mean on U
-
-```{r}
-ratiosn <- c(0.16, 0.25, 0.4)
-nvec <- ratiosn * N
-rationMin <- min(ratiosn)
-nMin <- min(nvec)
-sdvec <- c(1.0, 2.0, 5.0)
-ratiosdvec <- c(0.25, 0.5, 1.0, 2.0, 4.0)
-rhovec <- c(0.8, 0.9)
-rhoRef <- 0.8
-
-paramVarn <- 
-  expand.grid(ratio_delta = ratioDeltas, 
-              ratio_n = ratiosn, 
-              sd = sdvec[1L], rho = rhoRef)
-paramVarRho <- 
-  expand.grid(ratio_delta = ratioDeltas, ratio_n = rationMin, sd = sdvec[1L], 
-              rho = rhovec)
-paramVarSD <- 
-  expand.grid(ratio_delta = ratioDeltas, ratio_n = rationMin,
-              sd = sdvec[-1L], 
-              rho = rhoRef)
-
-paramVarRatioSD <- expand.grid(ratio_delta = ratioDeltas, ratio_n = rationMin,
-                               sd1 = sdvec[1L],
-                               ratiosd = ratiosdvec,
-                               rho = rhoRef)
-  
-parameters <- 
-  rbind(paramVarn, paramVarRho, paramVarSD) %>% 
-  mutate(sd1 = sd, ratiosd = 1.0) %>% 
-  select(-sd) %>% 
-  rbind(paramVarRatioSD) %>% 
-  filter(sd1 == sdvec[1L] | !ratio_delta %in% c(0.1, 0.75)) %>% 
-  mutate(delta = ratio_delta * abs(expMean2), .after = "ratio_delta") %>% 
-  mutate(n = ratio_n * N, .after = "ratio_n") %>% 
-  mutate(sd2 = sd1 * ratiosd, .after = "ratiosd") %>% 
-  distinct()
-
-rm(paramVarn, paramVarRho, paramVarSD, paramVarRatioSD)
-
-parameters
-```
 
 ```{r}
 Msim <- 10000L
@@ -744,7 +778,7 @@ The different lines of the grid have the same seed. It is useful to run in diffe
 If the number of parallel cores changes, the results might be different.
 
 ```{r}
-resSimBiasDetection <- NULL
+resSimulation <- NULL
 
 pb <- progress::progress_bar$new(format = "[:bar] :percent eta: :eta",
                                  total = nrow(parameters))
@@ -781,11 +815,11 @@ for (k in seq_len(nrow(parameters)))
   resTempWithVar <- simFun(calcVariance = TRUE) %>% mutate(subset = 1L)
   resTempWithoutVar <- simFun(calcVariance = FALSE) %>% mutate(subset = 2L)
   
-  resSimBiasDetection <-
+  resSimulation <-
     cbind(parameters[k, ], 
           rbind(resTempWithVar, resTempWithoutVar), 
           row.names = NULL) %>%
-    rbind(resSimBiasDetection)
+    rbind(resSimulation)
   
   
 
@@ -795,8 +829,8 @@ for (k in seq_len(nrow(parameters)))
 
 rm(resTemp, pb)
 
-resSimBiasDetection <-
-  resSimBiasDetection %>%
+resSimulation <-
+  resSimulation %>%
   arrange(n, sd1, sd2, ratio_delta)
 ```
 
@@ -804,17 +838,51 @@ resSimBiasDetection <-
 rm(Msim, seed)
 ```
 
+## Properties of the estimators
+
+The first subset will be used for the estimations of the expectation of the totals and the approximate variances via Monte Carlo. The second will be used for the estimation of the variance of the totals via Monte Carlo.
+
+### Approximate unbiasedness of the total estimators
+
+```{r}
+resSimulation %>% 
+  filter(subset == 1L) %>% 
+  group_by(estimand, weights, n, sd1, sd2, rho) %>% 
+  summarize(M = n(),
+            true_expectation = first(expEstimand),
+            MC_expectation = mean(estimation, na.rm = TRUE)) %>% 
+  mutate(ratio_MC_true = MC_expectation / true_expectation) %>% 
+  ungroup()
+```
+
+
+Here we show average approximate variance and variance of different estimators, with no measure effect.
+
+### Quality of the approximate variance estimators
+
+```{r}
+resSimulation %>% 
+  mutate(estimation = if_else(subset == 1L, estimation, NA_real_)) %>% 
+  group_by(estimand, weights, n, sd1, sd2, rho) %>% 
+  summarize(M = n() / 2L,
+            MC_AV = mean(apprVar, na.rm = TRUE),
+            MC_var = var(estimation, na.rm = TRUE),
+            true_var = first(trueVar)) %>% 
+  mutate(MC_AV_by_var = MC_AV / MC_var) %>% 
+  ungroup()
+```
+
 ## Convergence in law
 
 ```{r}
-temp <- resSimBiasDetection %>% 
+temp <- resSimulation %>% 
   filter(ratio_delta == 0.0)
 ```
 
 Note : having sd1 = sd2 ensure to have only independent estimators.
 
 ```{r}
-resSimBiasDetection %>% 
+resSimulation %>% 
   filter(ratio_delta == 0.0,
          sd1 == sd2,
          estimand %in% c("phi1", "phi2"), 
@@ -829,7 +897,7 @@ for (sigm in sigmavec)
     {
       for (cor in rhovec)
       {
-        estimators1 <- resSimBiasDetection %>% 
+        estimators1 <- resSimulation %>% 
           filter(delta == 0.0,
                  sd1 == sigm,
                  sd2 == sigm,
@@ -841,7 +909,7 @@ for (sigm in sigmavec)
         
         
       
-        data2 <- resSimBiasDetection %>% 
+        data2 <- resSimulation %>% 
           filter(delta == 0.0, 
                  sd1 == sigm,
                  sd2 == sigm,
@@ -860,7 +928,7 @@ temp <- resultsGaussian %>%
          sampling == "SRS", 
          MBtype == "constant", signAge == "plus", 
          phi == "eq", trueEstimator) %>% 
-  select(experiment, nInt, nTel, estPhiYintEstMP, expYint, avgEstWeightsInt,
+  select(experiment, n1, n2, estPhiYintEstMP, expYint, avgEstWeightsInt,
          estPhiYtelEstMP, estPhiBarYtelEstMP, expYtel, normEstPhiBiasDiffHT) %>% 
   group_by(experiment) %>% 
   slice_head(n = 1L) %>% 
@@ -930,75 +998,13 @@ ks.test(x = (estimatorsPhi2 - empMean2) / empSD2, y = "pnorm")
 
 ### Variance estimators for the totals
 
-We use the results to test the validity of our approximate variance estimators, that will be use for the bias detection.
 
-Here are the true variance of $\hat{t}_{e\phi1}$, in the case of independency for both mode counterfactuals (intra & inter)
-
-```{r}
-true_variance_tephi1 <- function(Y1exp, pi, covpMat, p1, phi, sd1 = 1.0)
-{
-  Y1expMat <- Y1exp %*% t(Y1exp)
-  diag(Y1expMat) <- sd1^2L + Y1exp^2L
-  
-  # q1 variability
-  sum((1.0 - p1) * phi^2L / (pi * p1) * (sd1^2L + Y1exp^2L)) +
-  # S variability
-    t(phi / pi) %*% (covpMat * Y1expMat) %*% (phi / pi) +
-  # Y1 variability
-    sum(phi^2L) * sd1^2L
-}
-```
-
-And for $\hat{t}_{e\phi2}$ :
-
-```{r}
-true_variance_tephi2 <- function(Y2exp, pi, covpMat, p1, p2, phi, sd2 = 1.0)
-{
-  p1Bar <- 1.0 - p1
-  Y2expMat <- Y2exp %*% t(Y2exp)
-  diag(Y2expMat) <- sd2^2L + Y2exp^2L
-  # q2 variability
-    sum((1.0 - p2) * phi^2L / (pi * p1Bar * p2) * (sd2^2L + Y2exp^2L)) +
-  # q1 variability
-    sum(p1 * phi^2L / (pi * p1Bar) * (sd2^2L + Y2exp^2L)) +
-  # S variability
-    t(phi / pi) %*% (covpMat * Y2expMat) %*% (phi / pi) +
-  # Y2 variability
-    sum(phi^2L) * sd2^2L
-}
-```
-
-Those values can be used as comparison.
-
-Here we show average approximate variance and variance of different estimators, with no measure effect.
-
-NOTE : Calculation is made on the entire set of iterations, whereas in some next parts we will use only a half of them.
-
-```{r}
-temp <- resSimBiasDetection %>% 
-  filter(ratio_delta == 0.0)
-
-temp <- temp %>% 
-  # slice_head(n = nrow(temp) / 2L) %>% 
-  mutate(estimation = if_else(subset == 1L, estimation, NA_real_)) %>% 
-  group_by(estimand, weights, n, sd1, sd2, rho) %>% 
-  summarize(M = n() / 2L,
-            expEstimand = first(expEstimand),
-            mean = mean(estimation, na.rm = TRUE), 
-            MC_AV = mean(apprVar, na.rm = TRUE),
-            MC_var = var(estimation, na.rm = TRUE),
-            true_var = first(trueVar)) %>% 
-  mutate(MC_AV_by_var = MC_AV / MC_var) %>% 
-  ungroup()
-
-temp
-```
 
 The following table is restricted to the estimators $\hat{t}_{pq\phi1}$ and $\hat{t}_{pq\phi2}$. We have a new column that indicates the true variance of $\hat{t}_{e\phi1}$ and $\hat{t}_{e\phi2}$.
 
 ```{r}
 temp <- 
-resSimBiasDetection %>% 
+resSimulation %>% 
   # filter(ratio_delta == 0.0) %>% 
   filter(weights == "estimated", estimand %in% c("phi1", "phi2")) %>% 
   select(-weights)

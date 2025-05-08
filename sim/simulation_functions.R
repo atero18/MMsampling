@@ -54,7 +54,7 @@ gen_choice_bimode <- function(I, p1, p2, Z, checkRank = FALSE,
 }
 
 # Generate the conditional expectations of the counterfactuals
-gen_expY <- function(X,
+gen_Yexp <- function(X,
                      beta1, Y1Law = "gaussian", sd1,
                      beta2, Y2Law = "gaussian", sd2 = sd1,
                      seed = NULL)
@@ -135,7 +135,7 @@ gen_Y <- function(X,
   recExpY <- is.null(Y1exp) || is.null(Y2exp)
   if (recExpY)
   {
-    dataY <- gen_expY(X,
+    dataY <- gen_Yexp(X,
                       beta1, Y1Law, sd1,
                       beta2, Y2Law, sd2)
 

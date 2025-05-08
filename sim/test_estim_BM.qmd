@@ -275,7 +275,7 @@ simulation_tphi <- function(Z,
   }
   
   
-  dataExpY <- gen_expY(Z, 
+  dataExpY <- gen_Yexp(Z, 
                        beta1, Y1Law, sd1,
                        beta2, Y2Law, sd2)
   
@@ -305,10 +305,10 @@ simulation_tphi <- function(Z,
     dataModes <-  gen_choice_bimode(I, p1, p2, Z)
     modes <- dataModes$mode
     
-    mask1 <- modes == "m1"
-    nInt <- sum(mask1)
-    mask2 <- modes == "m2"
-    nTel <- sum(mask2)
+    maskSr <- modes == "m1"
+    n1 <- sum(maskSr)
+    maskSmr <- modes == "m2"
+    n2 <- sum(maskSmr)
     
     trueProbsSelect <- dataModes$probSelect
     
@@ -346,9 +346,9 @@ simulation_tphi <- function(Z,
       # Estimation of the internet design covariance matrix
     estimp1 <- estimProbsData$conditional[, "m1"]
     
-     # Total of phi_k y_1k with true probabilities
+     # Total estimation of phi_k y_1k with true probabilities
     expPhi1 <- sum(phi * Y1exp)
-    totPhi1TW <- sum(phi[mask1] * trueWeights[mask1] * Yobs[mask1])
+    totPhi1TW <- sum(phi[maskSr] * trueWeights[maskSr] * Yobs[maskSr])
     
         # Unbiased estimation of the variance of the total estimator.
         # The variance of Y1 is assumed known. The true probabilities are
@@ -363,14 +363,14 @@ simulation_tphi <- function(Z,
                                             p1,
                                             Z,
                                             phi,
-                                            estSD1 = sd1,
+                                            sd1 = sd1,
                                             correcEstimWeights = FALSE)
     }
     else
       apprVarPhi1TW <- NA_real_
     
       # Total of phi_k y_1k with estimated probabilities
-    totPhi1EW <- sum(phi[mask1] * estimWeights[mask1] * Yobs[mask1])
+    totPhi1EW <- sum(phi[maskSr] * estimWeights[maskSr] * Yobs[maskSr])
     # totPhi1EW <- NA_real_
     
     if (calcVariance)
@@ -383,7 +383,7 @@ simulation_tphi <- function(Z,
                                             estimp1,
                                             Z,
                                             phi,
-                                            estSD1 = sd1,
+                                            sd1 = sd1,
                                             correcEstimWeights = TRUE)
     }
     else
@@ -392,7 +392,7 @@ simulation_tphi <- function(Z,
       # parameter equal to
       #  phi_k y_1k / sum of the phi_k on U
     expMeanPhi1 <- expPhi1 / sum(phi)
-    meanPhi1TW <- totPhi1TW / sum(phi[mask1] * trueWeights[mask1])
+    meanPhi1TW <- totPhi1TW / sum(phi[maskSr] * trueWeights[maskSr])
     
     if (calcVariance)
     {
@@ -409,7 +409,7 @@ simulation_tphi <- function(Z,
     else
       apprVarMeanPhi1TW <- NA_real_ 
     
-    meanPhi1EW <- totPhi1EW / sum(phi[mask1] * estimWeights[mask1])
+    meanPhi1EW <- totPhi1EW / sum(phi[maskSr] * estimWeights[maskSr])
       
     # meanPhi1EW <- NA_real_
     
@@ -435,7 +435,7 @@ simulation_tphi <- function(Z,
 
     
       # Total of phi_k y_2k with true probabilities
-    totPhi2TW <- sum(phi[mask2] * trueWeights[mask2] * Yobs[mask2])
+    totPhi2TW <- sum(phi[maskSmr] * trueWeights[maskSmr] * Yobs[maskSmr])
     
     
         # Unbiased estimation of the variance of the total estimator.
@@ -460,7 +460,7 @@ simulation_tphi <- function(Z,
     
       # Total of phi_k y_2k with estimated probabilities
     expPhi2 <- sum(phi * Y2exp)
-    totPhi2EW <- sum(phi[mask2] * estimWeights[mask2] * Yobs[mask2])
+    totPhi2EW <- sum(phi[maskSmr] * estimWeights[maskSmr] * Yobs[maskSmr])
     # totPhi2EW <- NA_real_
     
     if (calcVariance)
@@ -474,7 +474,7 @@ simulation_tphi <- function(Z,
                                             estimp2,
                                             Z,
                                             phi,
-                                            estSD2 = sd2,
+                                            sd2 = sd2,
                                             correcEstimWeights = TRUE)
     }
     else
@@ -483,7 +483,7 @@ simulation_tphi <- function(Z,
       # parameter equal to
       #  phi_k y_2k / sum of the phi_k on U,
     expMeanPhi2 <- expPhi2 / sum(phi)
-    meanPhi2TW <- totPhi2TW / sum(phi[mask2] * trueWeights[mask2])
+    meanPhi2TW <- totPhi2TW / sum(phi[maskSmr] * trueWeights[maskSmr])
     # meanPhi2TW <- NA_real_
     
     if (calcVariance)
@@ -503,7 +503,7 @@ simulation_tphi <- function(Z,
       apprVarMeanPhi2TW <- NA_real_
     
     
-    meanPhi2EW <- totPhi2EW / sum(phi[mask2] * estimWeights[mask2])
+    meanPhi2EW <- totPhi2EW / sum(phi[maskSmr] * estimWeights[maskSmr])
     # meanPhi2EW <- NA_real_
     
     if (calcVariance)
@@ -521,8 +521,6 @@ simulation_tphi <- function(Z,
     }
     else
       apprVarMeanPhi2EW <- NA_real_
-    
-    # rm(estimpq1Mat, estimpq2Mat)
     
     tibble(estimand = rep(c("phi1", "mean phi1", 
                             "phi2", "mean phi2"), each = 2L), 
@@ -558,8 +556,8 @@ simulation_tphi <- function(Z,
   
   trueVarPhi1TW <- var_expansion_seq_phi1(Y1exp, piMat, p1, phi, sd1)
   
-  trueVarPhi2TW <- var_expansion_seq_phi2(Y2exp, I, piMat, 
-                                          p1, p2, Z, phi, sd2)
+  trueVarPhi2TW <- var_expansion_seq_phi2(Y2exp, piMat, 
+                                          p1, p2, phi, sd2)
   
   trueVar <- rep.int(c(trueVarPhi1TW, NA_real_, 
                        NA_real_, NA_real_,
@@ -758,7 +756,7 @@ temp <- resultsGaussian %>%
          sampling == "SRS", 
          MBtype == "constant", signAge == "plus", 
          phi == "eq", trueEstimator) %>% 
-  select(experiment, nInt, nTel, estPhiYintEstMP, expYint, avgEstWeightsInt,
+  select(experiment, n1, n2, estPhiYintEstMP, expYint, avgEstWeightsInt,
          estPhiYtelEstMP, estPhiBarYtelEstMP, expYtel, normEstPhiBiasDiffHT) %>% 
   group_by(experiment) %>% 
   slice_head(n = 1L) %>% 
@@ -882,8 +880,8 @@ temp <- temp %>%
   mutate(estimation = if_else(subset == 1L, estimation, NA_real_)) %>% 
   group_by(estimand, weights, n, sd1, sd2, rho) %>% 
   summarize(M = n() / 2L,
-            expEstimand = first(expEstimand),
-            mean = mean(estimation, na.rm = TRUE), 
+            true_expectation = first(expEstimand),
+            MC_expectation = mean(estimation, na.rm = TRUE), 
             MC_AV = mean(apprVar, na.rm = TRUE),
             MC_var = var(estimation, na.rm = TRUE),
             true_var = first(trueVar)) %>% 
@@ -931,7 +929,7 @@ for (k in seq_len(nrow(temp) / 2L))
 {
   delta <- temp[2L * k, "delta"]
   sigma <- temp[2L * k, "sigma"]
-  # expData <- gen_expY(Z, 
+  # expData <- gen_Yexp(Z, 
   #                     beta1 = beta1, sd1 = sigma, 
   #                     beta2 = beta2, sd2 = sigma)
 
@@ -1433,7 +1431,7 @@ Then we evaluate the coverage of our confidence intervals. For $\alpha = 0.05$, 
 ```{r}
 alpha <- .05
 
-nInt <- as.numeric(temp$nInt)
+n1 <- as.numeric(temp$n1)
 
 resDetection <- data.frame(ratio = ratioDeltas, 
                            delta = deltas, 
@@ -1444,7 +1442,7 @@ resDetection <- data.frame(ratio = ratioDeltas,
 for (delta in deltas)
 {
   estimatorPhiDelta <- 1.0 / (0.5 * N) * (estimatorsPhi1 + 
-  .5 * avgEstWeightsInt * nInt * (delta - 1.0) - 
+  .5 * avgEstWeightsInt * n1 * (delta - 1.0) - 
   estimatorsPhi2)
 
   empSDPhiDelta <- sd(estimatorPhiDelta)
@@ -1569,7 +1567,7 @@ simulationUncounf <-
     }
     
     
-    dataExpY <- gen_expY(X, 
+    dataExpY <- gen_Yexp(X, 
                          beta1, Y1Law, sd1,
                          beta2, Y2Law, sd2)
     
@@ -1631,7 +1629,7 @@ simulationUncounf <-
                   envir = environment())
     
     clusterExport(cluster, c("gen_choice_bimode", 
-                  "gen_expY", "gen_Y", "set_Yobs", "set_phi"))
+                  "gen_Yexp", "gen_Y", "set_Yobs", "set_phi"))
       
     
     if (class(phi) == "character")
@@ -1717,14 +1715,14 @@ simulationUncounf <-
       #   
       #   dataModes <- gen_choice_bimode(I, p1, p2)
       #   modes <- dataModes$mode
-      #   mask1 <- modes == "m1"
-      #   nInt <- sum(mask1)
-      #   mask2 <- modes == "m2"
-      #   nTel <- sum(mask2)
+      #   maskSr <- modes == "m1"
+      #   n1 <- sum(maskSr)
+      #   maskSmr <- modes == "m2"
+      #   n2 <- sum(maskSmr)
       #   trueProbsSelect <- dataModes$probSelect
       #   
-      #   if (rankMatrix(Z[mask1, , drop = FALSE]) == q &&
-      #       rankMatrix(Z[mask2, , drop = FALSE]) == q)
+      #   if (rankMatrix(Z[maskSr, , drop = FALSE]) == q &&
+      #       rankMatrix(Z[maskSmr, , drop = FALSE]) == q)
       #     modeChoiceOK <- TRUE
       #   else
       #     warning("Singular Zint / Ztel")
@@ -1734,10 +1732,10 @@ simulationUncounf <-
       dataModes <- gen_choice_bimode(I, p1, p2)
       modes <- dataModes$mode
       
-      mask1 <- modes == "m1"
-      nInt <- sum(mask1)
-      mask2 <- modes == "m2"
-      nTel <- sum(mask2)
+      maskSr <- modes == "m1"
+      n1 <- sum(maskSr)
+      maskSmr <- modes == "m2"
+      n2 <- sum(maskSmr)
       
       trueProbsSelect <- dataModes$probSelect
       
@@ -1796,8 +1794,8 @@ simulationUncounf <-
       
       # Creating the observed outcome vector
       # Yobs <- rep(NA_real_, N)
-      # Yobs[mask1] <- Yints[mask1]
-      # Yobs[mask2] <- Ytels[mask2]
+      # Yobs[maskSr] <- Yints[maskSr]
+      # Yobs[maskSmr] <- Ytels[maskSmr]
       
       sample <- MMsampling:::MMSample$new(Z = X, pi = pi, I = I, 
                              modes = modes, Yobs = Yobs, phi = phi)
@@ -1841,8 +1839,8 @@ simulationUncounf <-
         estim_delta_MCO_unique_model_const(Z, Yobs, modes, "m1", "m2")
       resEvalFull <- sum(phi) * deltaEval
       resEvalHT <- 
-        as.vector(crossprod(phi[mask1],
-                            estimWeights[mask1]) * 
+        as.vector(crossprod(phi[maskSr],
+                            estimWeights[maskSr]) * 
                     deltaEval)
       
       
@@ -1868,8 +1866,8 @@ simulationUncounf <-
       
       resEvalFull <- crossprod(phi, estMBs) %>% as.vector()
       
-      resEvalHT <- crossprod(phi[mask1] * estimWeights[mask1],
-                             estMBs[mask1]) %>% as.vector()
+      resEvalHT <- crossprod(phi[maskSr] * estimWeights[maskSr],
+                             estMBs[maskSr]) %>% as.vector()
       # toc() %>% print()
       
       
@@ -1890,8 +1888,8 @@ simulationUncounf <-
       
       resEvalFull <- crossprod(phi, estMBs) %>% as.vector()
       
-      resEvalHT <- crossprod(phi[mask1] * estimWeights[mask1],
-                             estMBs[mask1]) %>% as.vector()
+      resEvalHT <- crossprod(phi[maskSr] * estimWeights[maskSr],
+                             estMBs[maskSr]) %>% as.vector()
       # toc() %>% print()
       
       
@@ -1922,7 +1920,7 @@ simulationUncounf <-
         estim_MB_by_MCO(Z, 
                         phi = phi, 
                         weights = estimWeights,
-                        mask = mask1) %>% 
+                        mask = maskSr) %>% 
         sum()
     
       # toc() %>% print()
@@ -1953,7 +1951,7 @@ simulationUncounf <-
         estim_MB_by_MCO(Z, 
                         phi = phi, 
                         weights = estimWeights, 
-                        mask = mask1) %>% 
+                        mask = maskSr) %>% 
         sum()
     
       # toc() %>% print()
@@ -1969,38 +1967,38 @@ simulationUncounf <-
       # Estimations of t_phi1 and t_phi2
       # - With true weights
       estTotPhiYintHTTrueMP <- 
-        phi[mask1] * 
-        trueWeights[mask1] * 
-        Yints[mask1]
+        phi[maskSr] * 
+        trueWeights[maskSr] * 
+        Yints[maskSr]
       
       estTotPhiYintHTTrueMP <- sum(estTotPhiYintHTTrueMP)
       
       estTotPhiYtelHTTrueMP <- 
-        (1.0 - phi[mask2]) * 
-        trueWeights[mask2] * 
-        Ytels[mask2]
+        (1.0 - phi[maskSmr]) * 
+        trueWeights[maskSmr] * 
+        Ytels[maskSmr]
       
       # - With estimated weights
       estTotPhiYtelHTTrueMP <- sum(estTotPhiYtelHTTrueMP)
     
       estTotPhiYintHTEstMP <-
-        phi[mask1] *
-        estimWeights[mask1] *
-        Yints[mask1]
+        phi[maskSr] *
+        estimWeights[maskSr] *
+        Yints[maskSr]
     
       estTotPhiYintHTEstMP <- sum(estTotPhiYintHTEstMP)
     
       estTotPhiYtelHTEstmMP <-
-        (1.0 - phi[mask2]) *
-        estimWeights[mask2] *
-        Ytels[mask2]
+        (1.0 - phi[maskSmr]) *
+        estimWeights[maskSmr] *
+        Ytels[maskSmr]
     
       estTotPhiYtelHTEstmMP <- sum(estTotPhiYtelHTEstmMP)
       
       estPhiYtelEstMP <-
-        phi[mask2] *
-        estimWeights[mask2] *
-        Ytels[mask2]
+        phi[maskSmr] *
+        estimWeights[maskSmr] *
+        Ytels[maskSmr]
       
       estPhiYtelEstMP <- sum(estPhiYtelEstMP)
       
@@ -2012,18 +2010,18 @@ simulationUncounf <-
       partialResults$estPhiBias <- as.numeric(partialResults$estPhiBias)
       partialResults$trueEstimator <- as.logical(partialResults$trueEstimator)
       # Value estimated only on telephone answers, with estimated selection probabilities
-      benchmark <- crossprod(estimWeights[mask2], Ytels[mask2]) %>% 
+      benchmark <- crossprod(estimWeights[maskSmr], Ytels[maskSmr]) %>% 
         as.vector()
-      trueWeightsBenchmark <- crossprod(trueWeights[mask2], Ytels[mask2]) %>% 
+      trueWeightsBenchmark <- crossprod(trueWeights[maskSmr], Ytels[maskSmr]) %>% 
         as.vector()
 
       
       partialResults <- partialResults %>% 
         add_column(.before = 1L, expn = sum(pi)) %>% 
         add_column(.after = "expn", n = sum(I)) %>% 
-        add_column(.after = "n", nInt = nInt) %>% 
-        add_column(.after = "nInt", nTel = nTel) %>% 
-        add_column(.after = "nTel", expYint = expTotYint) %>% 
+        add_column(.after = "n", n1 = n1) %>% 
+        add_column(.after = "n1", n2 = n2) %>% 
+        add_column(.after = "n2", expYint = expTotYint) %>% 
         add_column(.after = "expYint", trueYtel = trueYtel) %>% 
         add_column(.after = "trueYtel", expYtel = expTotYtel) %>% 
         add_column(.before = "estPhiBias", truePhiBias = truePhiBias) %>% 
@@ -2031,10 +2029,10 @@ simulationUncounf <-
         add_column(.after = "truePhiBias", expPhiBias = expPhiBias) %>% 
         add_column(.after = "expPhiBias", 
                    estPhiYintTrueMP = estTotPhiYintHTTrueMP) %>% 
-        add_column(.after = "estPhiYintTrueMP", avgEstWeightsInt = mean(trueWeights[mask1])) %>% 
+        add_column(.after = "estPhiYintTrueMP", avgEstWeightsInt = mean(trueWeights[maskSr])) %>% 
         add_column(.after = "estPhiYintTrueMP", 
                    estPhiYintEstMP = estTotPhiYintHTEstMP) %>% 
-        add_column(.after = "estPhiYintEstMP", avgEstWeightsTel = mean(trueWeights[mask2])) %>%
+        add_column(.after = "estPhiYintEstMP", avgEstWeightsTel = mean(trueWeights[maskSmr])) %>%
         add_column(.after = "avgEstWeightsTel", estPhiYtelEstMP = estPhiYtelEstMP) %>% 
         add_column(.after = "estPhiYtelEstMP", 
                    estPhiBarYtelTrueMP = estTotPhiYtelHTTrueMP) %>% 
