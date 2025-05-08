@@ -343,12 +343,10 @@ simulation_tphi <- function(Z,
     Yobs <- set_Yobs(Y1 = Y1, Y2 = Y2, modes = modes)
     
     # Estimations with Y1
-      # Estimation of the internet design covariance matrix
-    estimp1 <- estimProbsData$conditional[, "m1"]
     
      # Total estimation of phi_k y_1k with true probabilities
     expPhi1 <- sum(phi * Y1exp)
-    totPhi1TW <- sum(phi[maskSr] * trueWeights[maskSr] * Yobs[maskSr])
+    totPhi1TW <- sum(trueWeights[maskSr] * phi[maskSr] * Yobs[maskSr])
     
         # Unbiased estimation of the variance of the total estimator.
         # The variance of Y1 is assumed known. The true probabilities are
@@ -363,13 +361,14 @@ simulation_tphi <- function(Z,
                                             p1,
                                             Z,
                                             phi,
-                                            sd1 = sd1,
+                                            sd1,
                                             correcEstimWeights = FALSE)
     }
     else
       apprVarPhi1TW <- NA_real_
     
       # Total of phi_k y_1k with estimated probabilities
+    estimp1 <- estimProbsData$conditional[, "m1"]
     totPhi1EW <- sum(phi[maskSr] * estimWeights[maskSr] * Yobs[maskSr])
     # totPhi1EW <- NA_real_
     
@@ -383,7 +382,7 @@ simulation_tphi <- function(Z,
                                             estimp1,
                                             Z,
                                             phi,
-                                            sd1 = sd1,
+                                            sd1,
                                             correcEstimWeights = TRUE)
     }
     else
@@ -452,7 +451,7 @@ simulation_tphi <- function(Z,
                                             p2,
                                             Z,
                                             phi,
-                                            sd2 = sd2,
+                                            sd2,
                                             correcEstimWeights = FALSE)
     }
     else
@@ -474,7 +473,7 @@ simulation_tphi <- function(Z,
                                             estimp2,
                                             Z,
                                             phi,
-                                            sd2 = sd2,
+                                            sd2,
                                             correcEstimWeights = TRUE)
     }
     else

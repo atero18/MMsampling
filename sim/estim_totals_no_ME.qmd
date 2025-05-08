@@ -610,7 +610,7 @@ simulation_tphi <- function(Z,
     
     rm(dataModes)
     
-    trueWeights <- (pi * trueProbsSelect)^-1L
+    ## trueWeights <- (pi * trueProbsSelect)^-1L
   
     # Estimation of mode selection probabilities
     estimProbsData <-
@@ -621,7 +621,7 @@ simulation_tphi <- function(Z,
 
     estimProbsSelect <-
        MMsampling::get_value_by_mode(estimProbsData$unconditional, modes)
-    estimWeights <- (pi * estimProbsSelect)^-1L
+    ## estimWeights <- (pi * estimProbsSelect)^-1L
     
     # Generating values for Y_int and Y_tel
     dataY <- gen_Y(Z, 
@@ -641,11 +641,8 @@ simulation_tphi <- function(Z,
     Yobs[modes == "m2"] <- Y2[modes == "m2"]
     
     # Estimations with Y1
-      # Estimation of the internet design covariance matrix
-    estimp1 <- estimProbsData$conditional[, "m1"]
-    
      # Total estimation of phi_k y_1k  with true probabilities
-    totPhi1TW <- sum(phi[maskSr] * trueWeights[maskSr] * Yobs[maskSr])
+    totPhi1TW <- estim_tot_m1(Yobs, modes, pi, p1, phi)
     
         # Unbiased estimation of the variance of the total estimator.
         # The variance of Y1 is assumed known. The true probabilities are
@@ -653,20 +650,21 @@ simulation_tphi <- function(Z,
     if (calcVariance)
     {
       apprVarPhi1TW <-
-        MMsampling::estim_appr_var_seq_phi1(Yobs,
-                                            modes,
-                                            I,
-                                            piMat,
-                                            p1,
-                                            Z,
-                                            phi,
-                                            sd1 = sd1,
-                                            correcEstimWeights = FALSE)
+        estim_appr_var_seq_phi1(Yobs,
+                                modes,
+                                I,
+                                piMat,
+                                p1,
+                                Z,
+                                phi,
+                                sd1,
+                                correcEstimWeights = FALSE)
     }
     else
       apprVarPhi1TW <- NA_real_
     
       # Total of phi_k y_1k with estimated probabilities
+    estimp1 <- estimProbsData$conditional[, "m1"]
     totPhi1EW <- sum(phi[maskSr] * estimWeights[maskSr] * Yobs[maskSr])
     # totPhi1EW <- NA_real_
     
