@@ -1,0 +1,947 @@
+---
+title: "Estimation of totals (without measure effect)"
+format:
+  html:
+    toc: true
+    html-math-method: katex
+    css: styles.css
+---
+
+```{r}
+# knitr::purl("./sim/test_estim.qmd")
+```
+
+```{r}
+#| message: false
+#| warning: false
+library(dplyr)
+options(dplyr.summarise.inform = FALSE)
+library(tibble)
+library(tidyr)
+library(glue)
+library(parallel)
+library(tictoc)
+library(ggplot2)
+theme_set(theme_light())
+library(Matrix)
+library(progress)
+library(marginaleffects)
+library(mc2d)
+```
+
+# Population generation
+
+```{r}
+source("simulation_functions.R")
+```
+
+```{r}
+RNGkind(kind = "L'Ecuyer-CMRG")
+set.seed(145L)
+```
+
+```{r}
+N <- 10000L
+```
+
+Creating independent covariates, using the 2022 French age pyramid ([INSEE](https://www.insee.fr/fr/statistiques/6688661?sommaire=6686521))
+
+```{r}
+gen_covariates <- function(N)
+{
+  pyramid <- read.csv("./population_pyramid_FR_2022.csv",
+                      header = TRUE, dec = ".") %>% 
+    mutate(sex = if_else(sex == "Man", 1L, 0L))
+  
+  groupUnits <- sample(seq_len(nrow(pyramid)), size = N, 
+                       replace = TRUE, prob = pyramid$percentage)
+  
+  pyramid[groupUnits, c("age", "sex")] %>% 
+    mutate(const = 1.0, .before = 1L) %>% 
+    remove_rownames()
+}
+
+
+Z <- gen_covariates(N)
+
+sex <- factor(Z$sex)
+levels(sex) <- c("Woman", "Man")
+```
+
+```{r}
+summary(Z[, -1L])
+```
+
+```{r}
+data <- X[, c("sex", "age")]
+data$sex <- sex
+ggplot(data) + 
+  geom_density(aes(x = age, colour = sex)) +
+  ggtitle("Age density conditionally to the sex")
+
+data %>% 
+  group_by(sex) %>% 
+  summarize(meanAge = mean(age))
+rm(data)
+```
+
+```{r}
+Z <- as.matrix(Z)
+```
+
+Creating a regression vector for both mode : $\beta$ is defined to have in average a counterfactual expectation for each mode equal to one.
+
+```{r}
+beta <- c(0.0, -0.1, 4.0)
+beta[1L] <- 1.0 - mean(Z %*% beta)
+print(beta)
+```
+
+$Y_{1}$ and $Y_{2}$ expectations depebd on `Z`:
+
+```{r}
+data.frame(Yexp = Z %*% beta) %>% 
+  ggplot() + 
+  geom_density(aes(x = Yexp)) +
+  ggtitle("Distribution of the potential outcomes expected values")
+```
+
+We simulate a mode selection MAR (Missing At Random) under a logistic model, with $Z$ as variable:
+
+```{r}
+alpha1 <- c(0.7, -0.02, -0.5)
+
+alpha2 <- c(0.4, -0.01, -0.3)
+```
+
+```{r}
+gen_selection_probabilities <- function(Z, alpha)
+{
+  expit <- function(x) 1.0 / (1.0 + exp(-x))
+
+  expit(Z %*% alpha) %>%
+    as.vector()
+}
+
+p1 <- gen_selection_probabilities(Z, alpha1)
+p2 <- gen_selection_probabilities(Z, alpha2)
+```
+
+
+Here are some details about the $p_{1k}$ and $p_{2k}$:
+
+```{r}
+glue("m1 probabilities:\n")
+summary(p1) %>% print()
+glue("m2 probabilities:\n")
+summary(p2) %>% print()
+```
+
+```{r}
+data.frame(mode = factor(rep(c("m1", "m2"), each = N)), 
+           prob = c(p1, p2)) %>% 
+  ggplot() + 
+  geom_density(aes(x = prob, color = mode)) +
+  ggtitle("Distribution of p1 and p2") +
+  xlab("mode selection probability")
+```
+
+```{r}
+p1[sex == "Man"] %>% summary()
+p1[sex == "Woman"] %>% summary()
+```
+
+Probability to answer by $m_2$ under to the sequential protocol (i.e. do not answer by $m_1$ and agree to answer by $m_2$):
+```{r}
+pRep2 <- (1.0 - p1) * p2
+summary(pRep2)
+```
+
+About $S_{r\bullet}$ (case of SRS with $f = \frac{1}{10}$):
+
+```{r}
+# Calculation of the inclusion covariance matrix using the
+# second order inclusion probabilities.
+pi2_to_covarInc <- function(pi2)
+{
+  pi <- diag(pi2)
+
+  pi2 - outer(pi, pi)
+}
+
+# Generates the second order inclusion probabilities matrix of a
+# Simple Random Sampling (SRS) design
+piMat_SRS <- function(n, N)
+{
+  piMat <- matrix(n * (n - 1L) / (N * (N - 1L)), nrow = N, ncol = N)
+  diag(piMat) <- n / N
+
+  piMat
+}
+```
+
+
+```{r}
+f <- 1.0 / 10.0
+n <- f * N
+expSizeSr <- f * sum(p1)
+
+pi <- rep(f, N)
+piMat <- piMat_SRS(n, N)
+pCov <- pi2_to_covarInc(piMat)
+varSizeSr <- f * sum(p1 * (1.0 - p1)) + 
+  t(p1) %*% pCov %*% p1 %>% 
+  as.numeric()
+
+glue("Expected size of Sr : {expSizeSr}")
+glue("Variance of the size of Sr : {varSizeSr}")
+```
+
+About $S_{mr}$ (case of SRS with $f = \frac{1}{10}$):
+
+```{r}
+expSizeSmr <- f * sum(pRep2)
+
+varSizeSmr <- f * sum(pRep2 * (1.0 - p2)) + 
+  f * sum(pRep2 * (1.0 - p1)) +
+  t(pRep2) %*% pCov %*% pRep2 %>% 
+  as.numeric()
+
+glue("Expected size of Smr : {expSizeSmr}")
+glue("Variance of the size of Smr : {varSizeSmr}")
+```
+
+About $S_a$ (case of SRS with $f = \frac{1}{10}$):
+
+```{r}
+expSizeSa <- expSizeSr + expSizeSmr
+
+varSizeSa <- f * sum(pRep2 * (1.0 - p2)) + 
+  f * sum(p1 * (1.0 - p1) * (1.0 - p2)) +
+  t(p1 + pRep2) %*% pCov %*% (p1 + pRep2) %>% 
+  as.numeric()
+
+glue("Expected size of Sa : {expSizeSa}")
+glue("Variance of the size of Sa : {varSizeSa}")
+
+rm(f, pCov, pi, piMat)
+rm(expSizeSr, varSizeSr, 
+   expSizeSmr, varSizeSmr, 
+   expSizeSa, varSizeSa)
+```
+
+# Bias detection
+
+```{r}
+simulation_tphi <- function(Z,
+                            sampling = "SRS",
+                            alpha1, alpha2, 
+                            beta, 
+                            sd1 = 1.0, sd2 = sd1, 
+                            rho = 0.8,
+                            phi = rep(0.5, N), M = 10000L,
+                            n = ceiling(N / 10L),
+                            seed = 123L,
+                            nCores = detectCores() - 1L,
+                            calcVariance = TRUE)
+{
+  set.seed(seed)
+  
+  N <- nrow(Z)
+  
+  expit <- function(x) 1.0 / (1.0 + exp(-x))
+
+  p1 <- expit(Z %*% alpha1) %>% as.numeric()
+  p2 <- expit(Z %*% alpha2) %>% as.numeric()
+
+  if (sampling == "SRS")
+  {
+    pi <- rep(n / N, N)
+    piMat <- piMat_SRS(n, N)
+  }
+  
+  
+  dataExpY <- gen_expY(Z, 
+                       beta1, Y1Law, sd1,
+                       beta2, Y2Law, sd2)
+  
+  Yexp <- NULL ## TO DO
+  Y1exp <- dataExpY$Y1exp
+  sd1s <- dataExpY$sd1s
+  
+  Y2exp <- dataExpY$Y2exp
+  sd2s <- dataExpY$sd2s
+  
+  rm(dataExpY)
+  
+  phi <- set_phi(phi, N)
+  
+  
+  monoSim <- function(...)
+  {
+    q <- ncol(Z)
+        
+    if (sampling == "SRS")
+    {
+      selectedSample <- sample(seq_len(N), size = n, replace = FALSE)
+      
+      I <- logical(N)
+      I[selectedSample] <- TRUE
+      rm(selectedSample)
+    }
+    
+    
+    dataModes <-  gen_choice_bimode(I, p1, p2, Z)
+    modes <- dataModes$mode
+    
+    mask1 <- modes == "m1"
+    nInt <- sum(mask1)
+    mask2 <- modes == "m2"
+    nTel <- sum(mask2)
+    
+    trueProbsSelect <- dataModes$probSelect
+    
+    rm(dataModes)
+    
+    trueWeights <- (pi * trueProbsSelect)^-1L
+  
+    # Estimation of mode selection probabilities
+    estimProbsData <-
+      MMsampling::estim_response_prob_sequential(I, Z,
+                                                 modes,
+                                                 c("m1", "m2"),
+                                                 chosenOnly = FALSE)
+
+    estimProbsSelect <-
+       MMsampling::get_value_by_mode(estimProbsData$unconditional, modes)
+    estimWeights <- (pi * estimProbsSelect)^-1L
+    
+    # Generating values for Y_int and Y_tel
+    dataY <- gen_Y(Z, 
+                   beta1, sd1, Y1Law,
+                   beta2, sd2, Y2Law,
+                   Y1exp = Y1exp, Y2exp = Y2exp,
+                   rho = rho)
+    
+    Y1 <- dataY$Y1
+    Y2 <- dataY$Y2
+    
+    rm(dataY)
+    
+    # Creating the observed outcome vector
+    Yobs <- set_Yobs(Y1 = Y1, Y2 = Y2, modes = modes)
+    
+    # Estimations with Y1
+      # Estimation of the internet design covariance matrix
+    estimp1 <- estimProbsData$conditional[, "m1"]
+    
+     # Total of phi_k y_1k with true probabilities
+    expPhi1 <- sum(phi * Y1exp)
+    totPhi1TW <- sum(phi[mask1] * trueWeights[mask1] * Yobs[mask1])
+    
+        # Unbiased estimation of the variance of the total estimator.
+        # The variance of Y1 is assumed known. The true probabilities are
+        # used in the calculation.
+    if (calcVariance)
+    {
+      apprVarPhi1TW <-
+        MMsampling::estim_appr_var_seq_phi1(Yobs,
+                                            modes,
+                                            I,
+                                            piMat,
+                                            p1,
+                                            Z,
+                                            phi,
+                                            estSD1 = sd1,
+                                            correcEstimWeights = FALSE)
+    }
+    else
+      apprVarPhi1TW <- NA_real_
+    
+      # Total of phi_k y_1k with estimated probabilities
+    totPhi1EW <- sum(phi[mask1] * estimWeights[mask1] * Yobs[mask1])
+    # totPhi1EW <- NA_real_
+    
+    if (calcVariance)
+    {
+      apprVarPhi1EW <-
+        MMsampling::estim_appr_var_seq_phi1(Yobs,
+                                            modes,
+                                            I,
+                                            piMat,
+                                            estimp1,
+                                            Z,
+                                            phi,
+                                            estSD1 = sd1,
+                                            correcEstimWeights = TRUE)
+    }
+    else
+      apprVarPhi1EW <- NA_real_
+    
+      # parameter equal to
+      #  phi_k y_1k / sum of the phi_k on U
+    expMeanPhi1 <- expPhi1 / sum(phi)
+    meanPhi1TW <- totPhi1TW / sum(phi[mask1] * trueWeights[mask1])
+    
+    if (calcVariance)
+    {
+      apprVarMeanPhi1TW <-
+        MMsampling::estim_var_mean_phi1(Yobs,
+                                        modes,
+                                        I,
+                                        piMat,
+                                        p1,
+                                        Z,
+                                        phi,
+                                        correcEstimWeights = FALSE)
+    }
+    else
+      apprVarMeanPhi1TW <- NA_real_ 
+    
+    meanPhi1EW <- totPhi1EW / sum(phi[mask1] * estimWeights[mask1])
+      
+    # meanPhi1EW <- NA_real_
+    
+    if (calcVariance)
+    {
+      apprVarMeanPhi1EW <-
+      MMsampling::estim_var_mean_phi1(Yobs,
+                                      modes,
+                                      I,
+                                      piMat,
+                                      estimp1,
+                                      Z,
+                                      phi,
+                                      correcEstimWeights = TRUE)
+    }
+    else
+      apprVarMeanPhi1EW <- NA_real_
+    
+    # Estimations with Y2
+    
+      # Estimation of the internet design covariance matrix
+    estimp2 <-  estimProbsData$conditional[, "m2"]
+
+    
+      # Total of phi_k y_2k with true probabilities
+    totPhi2TW <- sum(phi[mask2] * trueWeights[mask2] * Yobs[mask2])
+    
+    
+        # Unbiased estimation of the variance of the total estimator.
+        # The variance of Y2 is assumed known. The true probabilities are
+        # used in the calculation.
+    if (calcVariance)
+    {
+      apprVarPhi2TW <-
+        MMsampling::estim_appr_var_seq_phi2(Yobs,
+                                            modes,
+                                            I,
+                                            piMat,
+                                            p1,
+                                            p2,
+                                            Z,
+                                            phi,
+                                            sd2 = sd2,
+                                            correcEstimWeights = FALSE)
+    }
+    else
+      apprVarPhi2TW <- NA_real_
+    
+      # Total of phi_k y_2k with estimated probabilities
+    expPhi2 <- sum(phi * Y2exp)
+    totPhi2EW <- sum(phi[mask2] * estimWeights[mask2] * Yobs[mask2])
+    # totPhi2EW <- NA_real_
+    
+    if (calcVariance)
+    {
+      apprVarPhi2EW <-
+        MMsampling::estim_appr_var_seq_phi2(Yobs,
+                                            modes,
+                                            I,
+                                            piMat,
+                                            estimp1,
+                                            estimp2,
+                                            Z,
+                                            phi,
+                                            estSD2 = sd2,
+                                            correcEstimWeights = TRUE)
+    }
+    else
+      apprVarPhi2EW <- NA_real_
+    
+      # parameter equal to
+      #  phi_k y_2k / sum of the phi_k on U,
+    expMeanPhi2 <- expPhi2 / sum(phi)
+    meanPhi2TW <- totPhi2TW / sum(phi[mask2] * trueWeights[mask2])
+    # meanPhi2TW <- NA_real_
+    
+    if (calcVariance)
+    {
+      apprVarMeanPhi2TW <-
+        MMsampling::estim_var_mean_phi2(Yobs,
+                                        modes,
+                                        I,
+                                        piMat,
+                                        p1,
+                                        p2,
+                                        Z,
+                                        phi,
+                                        correcEstimWeights = FALSE)
+    }
+    else
+      apprVarMeanPhi2TW <- NA_real_
+    
+    
+    meanPhi2EW <- totPhi2EW / sum(phi[mask2] * estimWeights[mask2])
+    # meanPhi2EW <- NA_real_
+    
+    if (calcVariance)
+    {
+      apprVarMeanPhi2EW <-
+        MMsampling::estim_var_mean_phi2(Yobs,
+                                        modes,
+                                        I,
+                                        piMat,
+                                        estimp1,
+                                        estimp2,
+                                        Z,
+                                        phi,
+                                        correcEstimWeights = TRUE)
+    }
+    else
+      apprVarMeanPhi2EW <- NA_real_
+    
+    # rm(estimpq1Mat, estimpq2Mat)
+    
+    tibble(estimand = rep(c("phi1", "mean phi1", 
+                            "phi2", "mean phi2"), each = 2L), 
+           expEstimand = rep(c(expPhi1, expMeanPhi1, expPhi2, expMeanPhi2), 
+                             each = 2L),
+           estimator = c("totPhi1TW", "totPhi1EW", 
+                         "meanPhi1TW", "meanPhi1EW", 
+                         "totPhi2TW", "totPhi2EW",
+                         "meanPhi2TW", "meanPhi2EW"), 
+           estimation = c(totPhi1TW, totPhi1EW, 
+                          meanPhi1TW, meanPhi1EW, 
+                          totPhi2TW, totPhi2EW,
+                          meanPhi2TW, meanPhi2EW), 
+           apprVar = c(apprVarPhi1TW, apprVarPhi1EW, 
+                       apprVarMeanPhi1TW, apprVarMeanPhi1EW,
+                       apprVarPhi2TW, apprVarPhi2EW,
+                       apprVarMeanPhi2TW, apprVarMeanPhi2EW)) %>% 
+      mutate(weights = rep_len(c("true", "estimated"), length.out = n()),
+             .after = "estimator")
+  }
+  
+  # pv <- profvis::profvis(lapply(seq_len(M), FUN = monoSim))
+  # return(profvis::profvis(lapply(seq_len(10L), FUN = monoSim))) #prof_output = "test.res"))
+  # pv <- profvis::profvis(lapply(seq_len(10L), FUN = monoSim))
+  # pv <- microbenchmark::microbenchmark(monoSim(), times = 10L)
+  # return(pv)
+
+  # res <- lapply(seq_len(M), FUN = monoSim)
+  
+  res <- mclapply(seq_len(M), FUN = monoSim, mc.cores = nCores)
+  
+  res <- do.call("rbind", res)
+  
+  trueVarPhi1TW <- var_expansion_seq_phi1(Y1exp, piMat, p1, phi, sd1)
+  
+  trueVarPhi2TW <- var_expansion_seq_phi2(Y2exp, I, piMat, 
+                                          p1, p2, Z, phi, sd2)
+  
+  trueVar <- rep.int(c(trueVarPhi1TW, NA_real_, 
+                       NA_real_, NA_real_,
+                       trueVarPhi2TW, NA_real_, 
+                       NA_real_, NA_real_),
+                     times = M)
+  
+  res <- res %>% mutate(trueVar = trueVar)
+  
+  res
+}
+```
+
+We would like to test our ability to detect the presence or absence of a constant measure effect with the superposition of confidence intervals of $\hat{t}_{pq\phi1}$ and $\hat{t}_{pq\phi2}$. If there is no measure effect then we can assume there will be superposition of the confidence intervals.
+
+We will change the value of the constant measure effect $\delta$ and test the coverage of our test. We consider the ratio between the measure bias and the expected mean of the telephone answers.
+
+```{r}
+ratioDeltas <- c(0.0, 0.1, 0.25, 0.5, 0.75, 1.0)
+expMean2 <- mean(Z %*% beta2)
+deltas <- ratioDeltas * abs(expMean2)
+
+deltas
+```
+
+Then for each measure bias we try the recognition of an eventual measure bias, with confidence intervals with errors $\alpha_1 = \alpha_2 = 0.05$.
+
+For centered it is not really an estimation because it uses the empiracal mean on U
+
+```{r}
+ratiosn <- c(0.16, 0.25, 0.4)
+nvec <- ratiosn * N
+rationMin <- min(ratiosn)
+nMin <- min(nvec)
+sdvec <- c(1.0, 2.0, 5.0)
+ratiosdvec <- c(0.25, 0.5, 1.0, 2.0, 4.0)
+rhovec <- c(0.8, 0.9)
+rhoRef <- 0.8
+
+paramVarn <- 
+  expand.grid(ratio_delta = ratioDeltas, 
+              ratio_n = ratiosn, 
+              sd = sdvec[1L], rho = rhoRef)
+paramVarRho <- 
+  expand.grid(ratio_delta = ratioDeltas, ratio_n = rationMin, sd = sdvec[1L], 
+              rho = rhovec)
+paramVarSD <- 
+  expand.grid(ratio_delta = ratioDeltas, ratio_n = rationMin,
+              sd = sdvec[-1L], 
+              rho = rhoRef)
+
+paramVarRatioSD <- expand.grid(ratio_delta = ratioDeltas, ratio_n = rationMin,
+                               sd1 = sdvec[1L],
+                               ratiosd = ratiosdvec,
+                               rho = rhoRef)
+  
+parameters <- 
+  rbind(paramVarn, paramVarRho, paramVarSD) %>% 
+  mutate(sd1 = sd, ratiosd = 1.0) %>% 
+  select(-sd) %>% 
+  rbind(paramVarRatioSD) %>% 
+  filter(sd1 == sdvec[1L] | !ratio_delta %in% c(0.1, 0.75)) %>% 
+  mutate(delta = ratio_delta * abs(expMean2), .after = "ratio_delta") %>% 
+  mutate(n = ratio_n * N, .after = "ratio_n") %>% 
+  mutate(sd2 = sd1 * ratiosd, .after = "ratiosd") %>% 
+  distinct()
+
+rm(paramVarn, paramVarRho, paramVarSD, paramVarRatioSD)
+
+parameters
+```
+
+```{r}
+Msim <- 10000L
+```
+
+The different lines of the grid have the same seed. It is useful to run in different orders the evaluations and because the results from different parameters are never mixed there is no independency issue.
+
+If the number of parallel cores changes, the results might be different.
+
+```{r}
+resSimBiasDetection <- NULL
+
+pb <- progress::progress_bar$new(format = "[:bar] :percent eta: :eta",
+                                 total = nrow(parameters))
+
+pb$tick(0L)
+
+for (k in seq_len(nrow(parameters)))
+{
+  # Change of the constant of the web conditional expectations
+  beta1Temp <- beta2
+  beta1Temp[1L] <- beta2[1L] + parameters[k, "delta"]
+  
+  simFun <- function(calcVariance = TRUE)
+  {
+    simulation_tphi(M = Msim,
+                    Z = Z,
+                    sampling = "SRS",
+                    alpha1 = alpha1,
+                    alpha2 = alpha2,
+                    beta1 = beta1Temp,
+                    beta2 = beta2,
+                    Y1Law = "gaussian",
+                    Y2Law = "gaussian",
+                    phi = "eq",
+                    sd1 = parameters[k, "sd1"],
+                    sd2 = parameters[k, "sd2"],
+                    n = parameters[k, "n"],
+                    rho = parameters[k, "rho"],
+                    seed = 200L,
+                    nCores = 30L,
+                    calcVariance = calcVariance)
+  }
+  
+  resTempWithVar <- simFun(calcVariance = TRUE) %>% mutate(subset = 1L)
+  resTempWithoutVar <- simFun(calcVariance = FALSE) %>% mutate(subset = 2L)
+  
+  resSimBiasDetection <-
+    cbind(parameters[k, ], 
+          rbind(resTempWithVar, resTempWithoutVar), 
+          row.names = NULL) %>%
+    rbind(resSimBiasDetection)
+  
+  
+
+  pb$tick()
+  ## seed <- .Random.seed
+}
+
+rm(resTemp, pb)
+
+resSimBiasDetection <-
+  resSimBiasDetection %>%
+  arrange(n, sd1, sd2, ratio_delta)
+```
+
+```{r}
+rm(Msim, seed)
+```
+
+## Convergence in law
+
+```{r}
+temp <- resSimBiasDetection %>% 
+  filter(ratio_delta == 0.0)
+```
+
+Note : having sd1 = sd2 ensure to have only independent estimators.
+
+```{r}
+resSimBiasDetection %>% 
+  filter(ratio_delta == 0.0,
+         sd1 == sd2,
+         estimand %in% c("phi1", "phi2"), 
+         weights == "estimated") %>% 
+  group_by(estimand, n, sd1, rho) %>% 
+  summarise(M = n(), shapiro.pval = shapiro.test(estimation)$p.value)
+
+
+for (sigm in sigmavec)
+  {
+    for (nb in nvec)
+    {
+      for (cor in rhovec)
+      {
+        estimators1 <- resSimBiasDetection %>% 
+          filter(delta == 0.0,
+                 sd1 == sigm,
+                 sd2 == sigm,
+                 n == nb,
+                 estimand == "phi1", 
+                 weights == "estimated") %>% 
+          select(estimation) %>% 
+          pull()
+        
+        
+      
+        data2 <- resSimBiasDetection %>% 
+          filter(delta == 0.0, 
+                 sd1 == sigm,
+                 sd2 == sigm,
+                 n == nb,
+                 estimand == "phi2", 
+                 weights == "estimated") %>% 
+          select(estimation)
+      }
+    }
+  }
+```
+
+```{r}
+temp <- resultsGaussian %>% 
+  filter(Y2Law == "gaussian", Y1Law == "gaussian", 
+         sampling == "SRS", 
+         MBtype == "constant", signAge == "plus", 
+         phi == "eq", trueEstimator) %>% 
+  select(experiment, nInt, nTel, estPhiYintEstMP, expYint, avgEstWeightsInt,
+         estPhiYtelEstMP, estPhiBarYtelEstMP, expYtel, normEstPhiBiasDiffHT) %>% 
+  group_by(experiment) %>% 
+  slice_head(n = 1L) %>% 
+  ungroup()
+```
+
+### $\hat{t}_{pq\phi1}$
+
+With $\phi \equiv \frac{1}{2}$
+
+```{r}
+estimatorsPhi1 <- temp$estPhiYintEstMP
+
+empMean1 <- mean(estimatorsPhi1)
+
+expMean1 <- as.numeric(0.5 * temp[1L, "expYint"])
+
+glue("empirical mean: {empMean1} (expected: {expMean1})")
+```
+
+Modifier, utilisation d'un écart-type estimé sur toute la population... :
+
+```{r}
+
+empSD1 <- sd(estimatorsPhi1)
+
+temp %>% 
+ggplot() + 
+  geom_density(aes(x = estPhiYintEstMP)) + 
+  geom_vline(aes(xintercept = empMean1, colour = "constant"), show.legend = TRUE) +
+  ggtitle("HT-phi1 estimator with estimated probabilities") +
+  xlab("Estimator") +
+  scale_color_manual(name = "bias", values = c(constant = "red"))
+
+ks.test(x = (estimatorsPhi1 - empMean1) / empSD1, y = "pnorm")
+```
+
+### $\hat{t}_{pq\bar{\phi}2}$
+
+With $\phi \equiv \frac{1}{2}$
+
+```{r}
+estimatorsPhi2 <- temp$estPhiYtelEstMP
+
+empMean2 <- mean(estimatorsPhi2)
+
+expMean2 <- 0.5 * as.numeric(temp[1L, "expYtel"])
+
+glue("empirical mean: {empMean2} (expected: {expMean2})")
+```
+
+```{r}
+empSD2 <- sd(estimatorsPhi2)
+
+temp %>% 
+ggplot() + 
+  geom_density(aes(x = estimatorsPhi2)) + 
+  geom_vline(aes(xintercept = empMean2, colour = "constant"), show.legend = TRUE) +
+  ggtitle("HT-phi1 estimator with estimated probabilities") +
+  xlab("Estimator") +
+  scale_color_manual(name = "bias", values = c(constant = "red"))
+
+ks.test(x = (estimatorsPhi2 - empMean2) / empSD2, y = "pnorm")
+```
+
+## Bias detection
+
+### Variance estimators for the totals
+
+We use the results to test the validity of our approximate variance estimators, that will be use for the bias detection.
+
+Here are the true variance of $\hat{t}_{e\phi1}$, in the case of independency for both mode counterfactuals (intra & inter)
+
+```{r}
+true_variance_tephi1 <- function(Y1exp, pi, covpMat, p1, phi, sd1 = 1.0)
+{
+  Y1expMat <- Y1exp %*% t(Y1exp)
+  diag(Y1expMat) <- sd1^2L + Y1exp^2L
+  
+  # q1 variability
+  sum((1.0 - p1) * phi^2L / (pi * p1) * (sd1^2L + Y1exp^2L)) +
+  # S variability
+    t(phi / pi) %*% (covpMat * Y1expMat) %*% (phi / pi) +
+  # Y1 variability
+    sum(phi^2L) * sd1^2L
+}
+```
+
+And for $\hat{t}_{e\phi2}$ :
+
+```{r}
+true_variance_tephi2 <- function(Y2exp, pi, covpMat, p1, p2, phi, sd2 = 1.0)
+{
+  p1Bar <- 1.0 - p1
+  Y2expMat <- Y2exp %*% t(Y2exp)
+  diag(Y2expMat) <- sd2^2L + Y2exp^2L
+  # q2 variability
+    sum((1.0 - p2) * phi^2L / (pi * p1Bar * p2) * (sd2^2L + Y2exp^2L)) +
+  # q1 variability
+    sum(p1 * phi^2L / (pi * p1Bar) * (sd2^2L + Y2exp^2L)) +
+  # S variability
+    t(phi / pi) %*% (covpMat * Y2expMat) %*% (phi / pi) +
+  # Y2 variability
+    sum(phi^2L) * sd2^2L
+}
+```
+
+Those values can be used as comparison.
+
+Here we show average approximate variance and variance of different estimators, with no measure effect.
+
+NOTE : Calculation is made on the entire set of iterations, whereas in some next parts we will use only a half of them.
+
+```{r}
+temp <- resSimBiasDetection %>% 
+  filter(ratio_delta == 0.0)
+
+temp <- temp %>% 
+  # slice_head(n = nrow(temp) / 2L) %>% 
+  mutate(estimation = if_else(subset == 1L, estimation, NA_real_)) %>% 
+  group_by(estimand, weights, n, sd1, sd2, rho) %>% 
+  summarize(M = n() / 2L,
+            expEstimand = first(expEstimand),
+            mean = mean(estimation, na.rm = TRUE), 
+            MC_AV = mean(apprVar, na.rm = TRUE),
+            MC_var = var(estimation, na.rm = TRUE),
+            true_var = first(trueVar)) %>% 
+  mutate(MC_AV_by_var = MC_AV / MC_var) %>% 
+  ungroup()
+
+temp
+```
+
+The following table is restricted to the estimators $\hat{t}_{pq\phi1}$ and $\hat{t}_{pq\phi2}$. We have a new column that indicates the true variance of $\hat{t}_{e\phi1}$ and $\hat{t}_{e\phi2}$.
+
+```{r}
+temp <- 
+resSimBiasDetection %>% 
+  # filter(ratio_delta == 0.0) %>% 
+  filter(weights == "estimated", estimand %in% c("phi1", "phi2")) %>% 
+  select(-weights)
+
+
+Y2exp <- Z %*% beta2
+
+# List of the expected values of the web counterfactuals for each delta
+Y1exp_list <- list("0" = Y2exp)
+for (delta in unique(temp$delta))
+  Y1exp_list[[as.character(delta)]] <- Y2exp + delta
+
+covarSRS <- covar_SRS(n, N)
+
+# List of the variance of t_ephi2 for each value of sigma
+vartotphi2TW_list <- list()
+for (sigma in unique(temp$sigma))
+{
+  vartotphi2TW_list[[as.character(sigma)]] <- 
+    true_variance_tephi2(Y2exp,
+                         pi, covarSRS, 
+                         p1, p2, 
+                         phi, 
+                         sd2 = sigma)
+}
+
+varsTW <- numeric(nrow(temp))
+
+for (k in seq_len(nrow(temp) / 2L))
+{
+  delta <- temp[2L * k, "delta"]
+  sigma <- temp[2L * k, "sigma"]
+  # expData <- gen_expY(Z, 
+  #                     beta1 = beta1, sd1 = sigma, 
+  #                     beta2 = beta2, sd2 = sigma)
+
+  n <- temp[k, "n"]
+  vartotphi1TW <- true_variance_tephi1(Y1exp_list[[as.character(delta)]], 
+                                       pi, covarSRS, 
+                                       p1,
+                                       phi, 
+                                       sd1 = sigma)
+
+  vartotphi2TW <- vartotphi2TW_list[[as.character(sigma)]]
+
+  varsTW[c(2L * k - 1L, 2L * k)] <- c(vartotphi1TW, vartotphi2TW)
+}
+
+
+rm(expData)
+
+
+temp %>% 
+  add_column(varTW = varsTW)
+  # conversion_latex(nom = "simulation_estim_var_approx", caption = "Variance estimation")
+
+rm(delta, sigma, n, temp, vartotphi1TW, vartotphi2TW, varsTW)
+```
+
+
