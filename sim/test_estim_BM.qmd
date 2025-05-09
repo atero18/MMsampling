@@ -289,6 +289,12 @@ simulation_tphi <- function(Z,
   
   phi <- set_phi(phi, N)
   
+  expPhi1 <- sum(phi * Y1exp)
+  expMeanPhi1 <- expPhi1 / sum(phi)
+  expPhi2 <- sum(phi * Y2exp)
+  expMeanPhi2 <- expPhi2 / sum(phi)
+    
+  
   
   monoSim <- function(...)
   {
@@ -345,7 +351,6 @@ simulation_tphi <- function(Z,
     # Estimations with Y1
     
      # Total estimation of phi_k y_1k with true probabilities
-    expPhi1 <- sum(phi * Y1exp)
     totPhi1TW <- sum(trueWeights[maskSr] * phi[maskSr] * Yobs[maskSr])
     
         # Unbiased estimation of the variance of the total estimator.
@@ -390,7 +395,6 @@ simulation_tphi <- function(Z,
     
       # parameter equal to
       #  phi_k y_1k / sum of the phi_k on U
-    expMeanPhi1 <- expPhi1 / sum(phi)
     meanPhi1TW <- totPhi1TW / sum(phi[maskSr] * trueWeights[maskSr])
     
     if (calcVariance)
@@ -458,7 +462,6 @@ simulation_tphi <- function(Z,
       apprVarPhi2TW <- NA_real_
     
       # Total of phi_k y_2k with estimated probabilities
-    expPhi2 <- sum(phi * Y2exp)
     totPhi2EW <- sum(phi[maskSmr] * estimWeights[maskSmr] * Yobs[maskSmr])
     # totPhi2EW <- NA_real_
     
@@ -481,7 +484,6 @@ simulation_tphi <- function(Z,
     
       # parameter equal to
       #  phi_k y_2k / sum of the phi_k on U,
-    expMeanPhi2 <- expPhi2 / sum(phi)
     meanPhi2TW <- totPhi2TW / sum(phi[maskSmr] * trueWeights[maskSmr])
     # meanPhi2TW <- NA_real_
     
@@ -564,7 +566,7 @@ simulation_tphi <- function(Z,
                        NA_real_, NA_real_),
                      times = M)
   
-  res <- res %>% mutate(trueVar = trueVar)
+  res <- res %>% mutate(trueVar = trueVar, .after = "apprVar")
   
   res
 }
