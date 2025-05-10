@@ -365,8 +365,8 @@ simulation_tphi <- function(Z,
                                             piMat,
                                             p1,
                                             Z,
-                                            phi,
                                             sd1,
+                                            phi,
                                             correcEstimWeights = FALSE)
     }
     else
@@ -386,8 +386,8 @@ simulation_tphi <- function(Z,
                                             piMat,
                                             estimp1,
                                             Z,
-                                            phi,
                                             sd1,
+                                            phi,
                                             correcEstimWeights = TRUE)
     }
     else
@@ -454,8 +454,8 @@ simulation_tphi <- function(Z,
                                             p1,
                                             p2,
                                             Z,
-                                            phi,
                                             sd2,
+                                            phi,
                                             correcEstimWeights = FALSE)
     }
     else
@@ -475,8 +475,8 @@ simulation_tphi <- function(Z,
                                             estimp1,
                                             estimp2,
                                             Z,
-                                            phi,
                                             sd2,
+                                            phi,
                                             correcEstimWeights = TRUE)
     }
     else
@@ -555,10 +555,9 @@ simulation_tphi <- function(Z,
   
   res <- do.call("rbind", res)
   
-  trueVarPhi1TW <- var_expansion_seq_phi1(Y1exp, piMat, p1, phi, sd1)
+  trueVarPhi1TW <- var_expansion_seq_phi1(Y1exp, piMat, p1, sd1, phi)
   
-  trueVarPhi2TW <- var_expansion_seq_phi2(Y2exp, piMat, 
-                                          p1, p2, phi, sd2)
+  trueVarPhi2TW <- var_expansion_seq_phi2(Y2exp, piMat, p1, p2, sd2, phi)
   
   trueVar <- rep.int(c(trueVarPhi1TW, NA_real_, 
                        NA_real_, NA_real_,
@@ -2119,12 +2118,12 @@ simulationUncounf <-
       
     # We calculate the real variance of the benchmark estimator
     sdTWBenchmark <- var_expansion_seq_phi2(Y2exp = Y2exp, 
-                                     covarY2 = covarYtel,
-                                     piMat = piMat,
-                                     pq1Mat = pq1Mat,
-                                     pq2Mat = pq2Mat,
-                                     phi = numeric(N),
-                                     correcEstimWeights = FALSE) %>% sqrt()
+                                            covarY2 = covarYtel,
+                                            piMat = piMat,
+                                            pq1Mat = pq1Mat,
+                                            pq2Mat = pq2Mat,
+                                            phi = numeric(N),
+                                            correcEstimWeights = FALSE) %>% sqrt()
     
     results <- results %>% 
       mutate(expSDTWBenchmark = sdTWBenchmark)

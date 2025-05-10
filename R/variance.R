@@ -69,16 +69,17 @@ estim_appr_var_seq_phi1 <- function(Yobs,
                                     p1,
                                     Z,
                                     phi = rep(1.0, length(Yobs)),
-                                    sd1 = 0.0,
+                                    sd1 = NULL,
                                     correcEstimWeights = FALSE)
 {
 
   if (all(phi == 0.0))
     return(0.0)
 
-  args <- list(...)
-
   maskSr <- modes == "m1"
+
+  if (is.null(sd1))
+    sd1 <- sd(Yobs[maskSr], na.rm = FALSE)
 
   pi <- diag(piMat)
   piSr <- pi[maskSr]
@@ -171,16 +172,17 @@ estim_appr_var_seq_phi2 <- function(Yobs,
                                     p1,
                                     p2,
                                     Z,
+                                    sd2 = NULL,
                                     phi = rep(1.0, length(Yobs)),
-                                    sd2 = 0.0,
                                     correcEstimWeights = FALSE)
 {
   if (all(phi == 0.0))
     return(0.0)
 
-  args <- list(...)
-
   maskSmr <- modes == "m2"
+
+  if (is.null(sd2))
+    sd2 <- sd(Yobs[maskSmr])
 
   pi <- diag(piMat)
   piSmr <- pi[maskSmr]
@@ -257,8 +259,8 @@ estim_appr_var_seq_phi2 <- function(Yobs,
 var_expansion_seq_phi2 <- function(Y2exp,
                                    piMat,
                                    p1, p2,
-                                   phi = rep(1.0, length(Y2exp)),
-                                   sd2 = 0.0)
+                                   sd2 = 0.0,
+                                   phi = rep(1.0, length(Y2exp)))
 {
 
   if (all(phi == 0.0))
@@ -410,6 +412,7 @@ covar_HT_seq_phi1_phi2 <- function(Y1exp, Y2exp,
 }
 
 
+## NEEDS TO BE COMPLETELY UPDATED
 #' @export
 var_estim_tot_BM <- function(modeTotBiased = "HT", modeTotRef = "HT",
                              calculTotal = "population",
@@ -452,9 +455,10 @@ var_estim_tot_BM <- function(modeTotBiased = "HT", modeTotRef = "HT",
 
   phiBar <- 1.0 - phi
 
-  varPhi1 <- var_expansion_seq_phi1(Y1exp, covarY1, piMat, pq1Mat, phi)
-  varPhi2 <- var_expansion_seq_phi2(Y2exp, covarY2, piMat, pq1Mat, pq2Mat, phi)
-  covarPhi12 <- covar_HT_seq_phi1_phi2(Y1exp, Y2exp, piMat, pq1Mat, pq2Mat, phi)
+  ## Functions to update
+  varPhi1 <- var_expansion_seq_phi1(Y1exp, covarY1, piMat, pq1Mat, SD1, phi)
+  varPhi2 <- var_expansion_seq_phi2(Y2exp, covarY2, piMat, pq1Mat, pq2Mat, SD2, phi)
+  covarPhi12 <- covar_HT_seq_phi1_phi2(Y1exp, Y2exp, piMat, pq1Mat, pq2Mat, COV12, phi)
 
   # Variance of the total MB estimator
   if (modeTotBiased == "HT" && modeTotRef == "HT" && calculTotal == "population")

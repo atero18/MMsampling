@@ -255,11 +255,20 @@ estim_tot_m2 <- function(Yobs, modes, pi, p1, p2, phi = rep(1.0, len(Yobs)))
 ```
 
 ```{r}
-estim_tot_a <- function(Yobs, modes, pi, pa, phi = rep(1.0, len(Yobs)))
+estim_tot_m1_m2 <- function(Yobs, modes, pi, p1, p2, phi)
+{
+  estim_tot_m1(Yobs, modes, pi, p1, phi) +
+    estim_tot_m2(Yobs, modes, pi, p1, p2, 1.0 - phi)
+}
+```
+
+
+```{r}
+estim_tot_a <- function(Yobs, modes, pi, pa)
 {
   maskSa <- modes %in% c("m1", "m2")
   
-  sum((pi[maskSa] * pa[maskSa])^-1L * phi[maskSa] * Yobs[maskSa])
+  sum((pi[maskSa] * pa[maskSa])^-1L * Yobs[maskSa])
 }
 ```
 
@@ -284,15 +293,19 @@ estim_appr_var_seq_m1 <- function(Yobs,
                                   piMat,
                                   p1,
                                   Z,
+                                  sd1 = NULL,
                                   phi = rep(1.0, length(Yobs)),
-                                  sd1 = 0.0,
                                   correcEstimWeights = FALSE)
 {
 
   if (all(phi == 0.0))
     return(0.0)
 
-  args <- list(...)
+  # If sd1 is not given we use the estimated standard deviation
+  # (assumed independent of the covariates) of the y_1k 
+  # with the m1 outcomes
+  if (is.null(sd1))
+    sd1 <- sd(Yobs[maskSr], na.rm = FALSE)
 
   maskSr <- modes == "m1"
 
@@ -357,15 +370,17 @@ estim_appr_var_seq_m2 <- function(Yobs,
                                   p2,
                                   Z,
                                   phi = rep(1.0, length(Yobs)),
-                                  sd2 = 0.0,
+                                  sd2 = NULL,
                                   correcEstimWeights = FALSE)
 {
-  if (all(phi == 0.0))
-    return(0.0)
-
-  args <- list(...)
 
   maskSmr <- modes == "m2"
+  
+  # If sd2 is not given we use the estimated standard deviation
+  # (assumed independent of the covariates) of the y_2k 
+  # with the m2 outcomes
+  if (is.null(sd2))
+    sd2 <- sd(Yobs[maskSmr], na.rm = FALSE)
 
   pi <- diag(piMat)
   piSmr <- pi[maskSmr]
@@ -448,8 +463,8 @@ estim_appr_var_seq_m2 <- function(Yobs,
 var_expansion_m1 <- function(Y1exp,
                              piMat,
                              p1,
-                             phi = rep(1.0, length(Y1exp)),
-                             sd1 = 0.0)
+                             sd1 = 0.0,
+                             phi = rep(1.0, length(Y1exp)))
 {
   pi <- diag(piMat)
 
@@ -580,21 +595,13 @@ simulation_tphi <- function(Z,
   }
   
   
-  # Variance matrix of the potential outcomes, for the vector
-  # (Y1^T, Y2^T)^T of R^(2N)
-    # Variance of each potential outcome (homoscedasticity)
-  varY_mat <- diag(c(rep(sd1^2L, N), rep(sd2^2L, N)))
-  rownames(varY_mat) <- colnames(varY_mat) <- 
-    c(paste0("y1", seq_len(N)), paste0("y2", seq_len(N)))
-    # Covariance between the potential outcomes of m1 and m2
-    # (same interaction, only for y1k and y2k)
-  subCovarm1m2_mat <- diag(rho * sd1 * sd2, N)
-  varY_mat[seq(N + 1L, 2L * N), seq_len(N)] <- 
-    varY_mat[seq_len(N), seq(N + 1L, 2L * N)] <- subCovarm1m2_mat
-  rm(subCovarm1m2_mat)
-
+  # Variance matrix of the potential outcomes for one unit, for the vector
+  # (y_1k, y_2k)^T
+  varYUnit_mat <- matrix(c(sd1^2L, rho * sd1 * sd2, rho * sd1 * sd2, sd2^2L),
+                         nrow = 2L, ncol = 2L)
+  rownames(varYUnit_mat) <- colnames(varYUnit_mat) <- c("y1k", "y2k")
+  
   phi <- set_phi(phi, N)
-  YPhiexp <- sum(phi * Yexp)
   
   
   monoSim <- function(...)
@@ -635,66 +642,75 @@ simulation_tphi <- function(Z,
     ## estimWeights <- (pi * estimProbsSelect)^-1L
     
     # Generating values for Y_int and Y_tel
-    Y <- 
-      mvtnorm::rmvnorm(n = 1L, mean = rep.int(Yexp, 2L), 
-                       sigma = varY_mat,
-                       checkSymmetry = FALSE)[1L, ]
-    names(Y) <- rownames(varY_mat)
+      # Generation for each unit of independent couples (e_1k, e_2k) 
+      # with centered multivariate normal distribution and as variance
+      # the variance of the couple (y_1k, y_2k) 
+    YpotOutRes_mat <- 
+      mvtnorm::rmvnorm(n = N, 
+                       mean = numeric(2L), sigma = varYUnit_mat,
+                       checkSymmetry = FALSE)
+    
+      # Changing the expectations to have the potential outcomes :
+      # y_1k = E[y_k | Z] + e_1k and y_1k = E[y_k | Z] + e_2k
+    Y1 <- Yexp + YpotOutRes_mat[, 1L]
+    names(Y1) <- paste0("y1", seq_len(N))
+    
+    Y2 <- Yexp + YpotOutRes_mat[, 2L]
+    names(Y2) <- paste0("y2", seq_len(N))
+    
+    rm(YpotOutRes_mat)
 
     
     # Creating the observed outcome vector
     Yobs <- rep(NA_real_, N)
-    Yobs[modes == "m1"] <- Y[modes == "m1"]
-    Yobs[modes == "m2"] <- Y[modes == "m2"]
+    Yobs[modes == "m1"] <- Y1[modes == "m1"]
+    Yobs[modes == "m2"] <- Y2[modes == "m2"]
+    names(Yobs) <- paste0("yobs", seq_len(N))
     
     # Estimations with Y1
-     # Total estimation of phi_k y_1k  with true probabilities
-    totPhi1TW <- estim_tot_m1(Yobs, modes, pi, p1, phi)
+     # Total estimation of y_1k  with true probabilities
+    tot1TW <- estim_tot_m1(Yobs, modes, pi, p1)
     
         # Unbiased estimation of the variance of the total estimator.
         # The variance of Y1 is assumed known. The true probabilities are
         # used in the calculation.
     if (calcVariance)
     {
-      apprVarPhi1TW <-
+      apprVar1TW <-
         estim_appr_var_seq_m1(Yobs,
                               modes,
                               I,
                               piMat,
                               p1,
                               Z,
-                              phi,
                               sd1,
                               correcEstimWeights = FALSE)
     }
     else
-      apprVarPhi1TW <- NA_real_
+      apprVar1TW <- NA_real_
     
-      # Total of phi_k y_1k with estimated probabilities
+      # Total of y_1k with estimated probabilities
     estimp1 <- estimProbsData$conditional[, "m1"]
-    totPhi1EW <- estim_tot_m1(Yobs, modes, pi, estimp1, phi)
-
-    # totPhi1EW <- NA_real_
+    tot1EW <- estim_tot_m1(Yobs, modes, pi, estimp1)
     
     if (calcVariance)
     {
-      apprVarPhi1EW <-
+      apprVar1EW <-
         estim_appr_var_seq_m1(Yobs,
                               modes,
                               I,
                               piMat,
                               estimp1,
                               Z,
-                              phi,
                               sd1,
                               correcEstimWeights = TRUE)
     }
     else
-      apprVarPhi1EW <- NA_real_
+      apprVar1EW <- NA_real_
     
     # Estimations with Y2
-      # Total of phi_k y_2k with true probabilities
-    totPhi2TW <- estim_tot_m2(Yobs, modes, pi, p1, p2, phi)
+      # Total of y_2k with true probabilities
+    tot2TW <- estim_tot_m2(Yobs, modes, pi, p1, p2)
     
     
         # Unbiased estimation of the variance of the total estimator.
@@ -702,7 +718,7 @@ simulation_tphi <- function(Z,
         # used in the calculation.
     if (calcVariance)
     {
-      apprVarPhi2TW <-
+      apprVar2TW <-
         estim_appr_var_seq_m2(Yobs,
                               modes,
                               I,
@@ -710,23 +726,21 @@ simulation_tphi <- function(Z,
                               p1,
                               p2,
                               Z,
-                              phi,
                               sd2,
                               correcEstimWeights = FALSE)
     }
     else
-      apprVarPhi2TW <- NA_real_
+      apprVar2TW <- NA_real_
     
     # Estimation of the internet design covariance matrix
     estimp2 <-  estimProbsData$conditional[, "m2"]
     
-      # Total of phi_k y_2k with estimated probabilities
-    totPhi2EW <- estim_tot_m2(Yobs, modes, pi, estimp1, estimp2, phi)
-    # totPhi2EW <- NA_real_
+      # Total of y_2k with estimated probabilities
+    tot2EW <- estim_tot_m2(Yobs, modes, pi, estimp1, estimp2)
     
     if (calcVariance)
     {
-      apprVarPhi2EW <-
+      apprVar2EW <-
         estim_appr_var_seq_m2(Yobs,
                               modes,
                               I,
@@ -734,18 +748,16 @@ simulation_tphi <- function(Z,
                               estimp1,
                               estimp2,
                               Z,
-                              phi,
                               sd2,
                               correcEstimWeights = TRUE)
     }
     else
-      apprVarPhi2EW <- NA_real_
+      apprVar2EW <- NA_real_
 
-    tibble(estimand = rep(c("phi1", "phi2"), each = 2L), 
-           estimator = c("totPhi1TW", "totPhi1EW", "totPhi2TW", "totPhi2EW"), 
-           estimation = c(totPhi1TW, totPhi1EW, totPhi2TW, totPhi2EW),
-           apprVar = c(apprVarPhi1TW, apprVarPhi1EW, 
-                       apprVarPhi2TW, apprVarPhi2EW)) %>% 
+    tibble(estimator = c("tot1TW", "tot1EW", "tot2TW", "tot2EW"), 
+           estimation = c(tot1TW, tot1EW, tot2TW, tot2EW),
+           apprVar = c(apprVar1TW, apprVar1EW, 
+                       apprVar2TW, apprVar2EW)) %>% 
       mutate(weights = rep_len(c("true", "estimated"), length.out = n()),
              .after = "estimator")
   }
@@ -1040,11 +1052,11 @@ for (k in seq_len(nrow(temp) / 2L))
   #                     beta2 = beta2, sd2 = sigma)
 
   n <- temp[k, "n"]
-  vartotphi1TW <- true_variance_tephi1(Y1exp_list[[as.character(delta)]], 
-                                       pi, covarSRS, 
-                                       p1,
-                                       phi, 
-                                       sd1 = sigma)
+  vartot1TW <- true_variance_tephi1(Y1exp_list[[as.character(delta)]], 
+                                    pi, covarSRS, 
+                                    p1,
+                                    phi, 
+                                    sd1 = sigma)
 
   vartotphi2TW <- vartotphi2TW_list[[as.character(sigma)]]
 
