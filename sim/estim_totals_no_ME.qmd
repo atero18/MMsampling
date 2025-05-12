@@ -24,7 +24,7 @@ library(ggplot2)
 theme_set(theme_light())
 ## library(Matrix)
 library(progress)
-library(marginaleffects)
+## library(marginaleffects)
 ## library(mc2d)
 library(mvtnorm)
 ```
@@ -165,7 +165,6 @@ About $S_{r\bullet}$ (case of SRS with $f = \frac{1}{10}$):
 pi2_to_covarInc <- function(pi2)
 {
   pi <- diag(pi2)
-
   pi2 - outer(pi, pi)
 }
 
@@ -587,6 +586,7 @@ parameters <- parameters %>%
 
 ```{r}
 head(parameters)
+glue("Size of the grid: {nrow(parameters)} iterations.")
 ```
 
 ## Simulation function
@@ -613,6 +613,10 @@ simulation_tphi <- function(Z,
 
   p1 <- expit(Z %*% alpha1) %>% as.numeric()
   p2 <- expit(Z %*% alpha2) %>% as.numeric()
+  
+  # Probability to answer with any mode : equality true for any vector
+  # iff R2 indepdendent of R1 conditionally to (Z, Y1, Y2, S) 
+  pa <- p1 + (1.0 - p1) * p2
 
   if (sampling == "SRS")
   {
@@ -777,6 +781,29 @@ simulation_tphi <- function(Z,
     }
     else
       apprVar2EW <- NA_real_
+    
+    # Estimations with Y1 and Y2 consider equal
+    
+    if (sd1 == sd2)
+    {
+      YobsEq <- Yobs
+      YobsEq[modes == "m2"] <- Y1[modes == "m2"]
+      
+      
+    }
+    else
+    {
+      totaTW <- apprVaraTW <- NaN
+      totaEW <- apprVaraEW <- NaN
+    }
+    
+      # Total estimation of y_1k  with true probabilities
+    totaTW <- estim_tot_a(Yobs, modes, pi, pa)
+    
+        # Unbiased estimation of the variance of the total estimator.
+        # The variance of Y1 is assumed known. The true probabilities are
+        # used in the calculation.
+    
 
     tibble(estimator = c("tot1TW", "tot1EW", "tot2TW", "tot2EW"), 
            estimation = c(tot1TW, tot1EW, tot2TW, tot2EW),
