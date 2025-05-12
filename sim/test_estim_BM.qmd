@@ -640,6 +640,8 @@ If the number of parallel cores changes, the results might be different.
 ```{r}
 resSimBiasDetection <- NULL
 
+set.seed(200L)
+
 pb <- progress::progress_bar$new(format = "[:bar] :percent eta: :eta",
                                  total = nrow(parameters))
 
@@ -667,7 +669,7 @@ for (k in seq_len(nrow(parameters)))
                     sd2 = parameters[k, "sd2"],
                     n = parameters[k, "n"],
                     rho = parameters[k, "rho"],
-                    seed = 200L,
+                    seed = NULL,
                     nCores = 30L,
                     calcVariance = calcVariance)
   }

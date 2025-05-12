@@ -614,6 +614,8 @@ simulation_tphi <- function(Z,
   p1 <- expit(Z %*% alpha1) %>% as.numeric()
   p2 <- expit(Z %*% alpha2) %>% as.numeric()
   
+  Yexp <- Z %*% beta
+  
   # Probability to answer with any mode : equality true for any vector
   # iff R2 indepdendent of R1 conditionally to (Z, Y1, Y2, S) 
   pa <- p1 + (1.0 - p1) * p2
@@ -646,7 +648,7 @@ simulation_tphi <- function(Z,
     }
     
     
-    dataModes <-  gen_choice_bimode(I, p1, p2, Z)
+    dataModes <-  MMsampling::gen_choice_bimode(I, p1, p2, Z)
     modes <- dataModes$mode
     
     maskSr <- modes == "m1"
@@ -697,15 +699,15 @@ simulation_tphi <- function(Z,
     Yobs[modes == "m2"] <- Y2[modes == "m2"]
     names(Yobs) <- paste0("yobs", seq_len(N))
     
-    # Estimations with Y1
-     # Total estimation of y_1k  with true probabilities
+    # Estimations with Y1 (total of the y_1k)
+     # With true probabilities
     tot1TW <- estim_tot_m1(Yobs, modes, pi, p1)
     
-        # Unbiased estimation of the variance of the total estimator.
-        # The variance of Y1 is assumed known. The true probabilities are
-        # used in the calculation.
+
     if (calcVariance)
     {
+      # The variance of Y1 is assumed known. The true probabilities are
+      # used in the calculation.
       apprVar1TW <-
         estim_appr_var_seq_m1(Yobs,
                               modes,
@@ -718,12 +720,14 @@ simulation_tphi <- function(Z,
     else
       apprVar1TW <- NA_real_
     
-      # Total of y_1k with estimated probabilities
+      # With estimated probabilities
     estimp1 <- estimProbsData$conditional[, "m1"]
     tot1EW <- estim_tot_m1(Yobs, modes, pi, estimp1)
     
+
     if (calcVariance)
     {
+      # The variance of Y1 is assumed known.
       apprVar1EW <-
         estim_appr_var_seq_m1(Yobs,
                               modes,
@@ -738,15 +742,14 @@ simulation_tphi <- function(Z,
       apprVar1EW <- NA_real_
     
     # Estimations with Y2
-      # Total of y_2k with true probabilities
+      # With true probabilities
     tot2TW <- estim_tot_m2(Yobs, modes, pi, p1, p2)
     
     
-        # Unbiased estimation of the variance of the total estimator.
-        # The variance of Y2 is assumed known. The true probabilities are
-        # used in the calculation.
     if (calcVariance)
     {
+      # The variance of Y2 is assumed known. The true probabilities are
+      # used in the calculation.
       apprVar2TW <-
         estim_appr_var_seq_m2(Yobs,
                               modes,
@@ -760,14 +763,13 @@ simulation_tphi <- function(Z,
     else
       apprVar2TW <- NA_real_
     
-    # Estimation of the internet design covariance matrix
+      # With estimated probabilities
     estimp2 <-  estimProbsData$conditional[, "m2"]
-    
-      # Total of y_2k with estimated probabilities
     tot2EW <- estim_tot_m2(Yobs, modes, pi, estimp1, estimp2)
     
     if (calcVariance)
     {
+      # The variance of Y1 is assumed known.
       apprVar2EW <-
         estim_appr_var_seq_m2(Yobs,
                               modes,
@@ -782,14 +784,56 @@ simulation_tphi <- function(Z,
     else
       apprVar2EW <- NA_real_
     
-    # Estimations with Y1 and Y2 consider equal
-    
+    # Estimations with Y1 and Y2 considered equal (to some Y)
+    # In the case of V[Y1 | Z] != V[Y2 | Z] the equality
+    # is clearly not respected
     if (sd1 == sd2)
     {
+      
       YobsEq <- Yobs
-      YobsEq[modes == "m2"] <- Y1[modes == "m2"]
+      YobsEq[modes %in% c("m1", "m2")] <- Y1[modes %in% c("m1", "m2")]
       
+      # With true probabilities
+      totaTW <- estim_tot_a(Yobs, modes, pi, pa)
       
+      if (calcVariance)
+      {
+        # Unbiased estimation of the variance of the total estimator.
+        # The variance of Y is assumed known. The true probabilities are
+        # used in the calculation.
+        apprVaraTW <-
+          estim_appr_var_seq_a(Yobs,
+                               modes,
+                               I,
+                               pi_mat,
+                               pa,
+                               sd1,
+                               correcEstimWeights = FALSE)
+      }
+      else
+        apprVaraTW <- NA_real_
+      
+      # With estimated probabilities
+      totaEW <- estim_tot_a(Yobs, modes, pi, pa)
+      
+      if (calcVariance)
+      {
+        # Unbiased estimation of the variance of the total estimator.
+        # The variance of Y is assumed known. The true probabilities are
+        # used in the calculation.
+        apprVaraEW <-
+          estim_appr_var_seq_a(Yobs,
+                               modes,
+                               I,
+                               pi_mat,
+                               estimpa,
+                               sd1,
+                               correcEstimWeights = TRUE,
+                               Z)
+      }
+      else
+        apprVaraEW <- NA_real_
+        
     }
     else
     {
@@ -797,18 +841,16 @@ simulation_tphi <- function(Z,
       totaEW <- apprVaraEW <- NaN
     }
     
-      # Total estimation of y_1k  with true probabilities
-    totaTW <- estim_tot_a(Yobs, modes, pi, pa)
-    
-        # Unbiased estimation of the variance of the total estimator.
-        # The variance of Y1 is assumed known. The true probabilities are
-        # used in the calculation.
-    
-
-    tibble(estimator = c("tot1TW", "tot1EW", "tot2TW", "tot2EW"), 
-           estimation = c(tot1TW, tot1EW, tot2TW, tot2EW),
+gfdsgfs !!! 
+    tibble(estimator = c("tot1TW", "tot1EW", 
+                         "tot2TW", "tot2EW", 
+                         "totaTW", "totaEW"), 
+           estimation = c(tot1TW, tot1EW, 
+                          tot2TW, tot2EW, 
+                          totaTW, totaEW),
            apprVar = c(apprVar1TW, apprVar1EW, 
-                       apprVar2TW, apprVar2EW)) %>% 
+                       apprVar2TW, apprVar2EW,
+                       apprVaraTW, apprVaraTW),) %>% 
       mutate(weights = rep_len(c("true", "estimated"), length.out = n()),
              .after = "estimator")
   }
@@ -818,16 +860,22 @@ simulation_tphi <- function(Z,
   
   res <- do.call("rbind", res)
   
-  trueVarPhi1TW <- var_expansion_m1(Y1exp, pi_mat, p1, phi, sd1)
+  trueVar1TW <- var_expansion_m1(Yexp, pi_mat, p1, phi, sd1)
   
-  trueVarPhi2TW <- var_expansion_m2(Y2exp, pi_mat, p1, p2, phi, sd2)
+  trueVar2TW <- var_expansion_m2(Yexp, pi_mat, p1, p2, phi, sd2)
   
-  trueVar <- rep.int(c(trueVarPhi1TW, NA_real_, 
-                       trueVarPhi2TW, NA_real_),
+  if (sd1 == sd2)
+    trueVaraTW <- var_expansion_a(Yexp, pi_mat, p1, sd1)
+  else
+    trueVaraTW <- NaN
+  
+  trueVar <- rep.int(c(trueVar1TW, NA_real_, 
+                       trueVar2TW, NA_real_,
+                       trueVaraTW, NA_real_),
                      times = M)
   
   res <- res %>% 
-    mutate(expEstimand = YPhiexp, .after = "estimand") %>% 
+    mutate(expEstimand = Yexp, .after = "estimand") %>% 
     mutate(trueVar = trueVar, .after = "apprVar")
   
   res
@@ -846,6 +894,7 @@ If the number of parallel cores changes, the results might be different.
 
 ```{r}
 resSimulation <- NULL
+set.seed(200L)
 
 pb <- progress::progress_bar$new(format = "[:bar] :percent eta: :eta",
                                  total = nrow(parameters))
@@ -868,7 +917,7 @@ for (k in seq_len(nrow(parameters)))
                     sd2 = parameters[k, "sd2"],
                     n = parameters[k, "n"],
                     rho = parameters[k, "rho"],
-                    seed = 200L,
+                    seed = NULL,
                     nCores = 30L,
                     calcVariance = calcVariance)
   }
@@ -880,23 +929,21 @@ for (k in seq_len(nrow(parameters)))
     cbind(parameters[k, ], 
           rbind(resTempWithVar, resTempWithoutVar), 
           row.names = NULL) %>%
+    filter(!is.nan(estimation), 
+           !estimator %in% c("totaTW", "totaEW") | rho == rho_ref) %>% 
+    mutate(rho = if_else(estimator %in% c("totaTW", "totaEW"), 1.0, rho)) %>% 
     rbind(resSimulation)
-  
-  
 
   pb$tick()
-  ## seed <- .Random.seed
 }
 
-rm(resTemp, pb)
+rm(resTempWithVar, resTempWithoutVar, pb)
 
 resSimulation <-
   resSimulation %>%
   arrange(n, sd1, sd2, ratio_delta)
-```
 
-```{r}
-rm(Msim, seed)
+rm(Msim)
 ```
 
 ## Properties of the estimators
@@ -1053,76 +1100,6 @@ ggplot() +
   scale_color_manual(name = "bias", values = c(constant = "red"))
 
 ks.test(x = (estimatorsPhi2 - empMean2) / empSD2, y = "pnorm")
-```
-
-## Bias detection
-
-### Variance estimators for the totals
-
-
-
-The following table is restricted to the estimators $\hat{t}_{pq\phi1}$ and $\hat{t}_{pq\phi2}$. We have a new column that indicates the true variance of $\hat{t}_{e\phi1}$ and $\hat{t}_{e\phi2}$.
-
-```{r}
-temp <- 
-resSimulation %>% 
-  # filter(ratio_delta == 0.0) %>% 
-  filter(weights == "estimated", estimand %in% c("phi1", "phi2")) %>% 
-  select(-weights)
-
-
-Y2exp <- Z %*% beta2
-
-# List of the expected values of the web counterfactuals for each delta
-Y1exp_list <- list("0" = Y2exp)
-for (delta in unique(temp$delta))
-  Y1exp_list[[as.character(delta)]] <- Y2exp + delta
-
-covarSRS <- covar_SRS(n, N)
-
-# List of the variance of t_ephi2 for each value of sigma
-vartotphi2TW_list <- list()
-for (sigma in unique(temp$sigma))
-{
-  vartotphi2TW_list[[as.character(sigma)]] <- 
-    true_variance_tephi2(Y2exp,
-                         pi, covarSRS, 
-                         p1, p2, 
-                         phi, 
-                         sd2 = sigma)
-}
-
-varsTW <- numeric(nrow(temp))
-
-for (k in seq_len(nrow(temp) / 2L))
-{
-  delta <- temp[2L * k, "delta"]
-  sigma <- temp[2L * k, "sigma"]
-  # expData <- gen_expY(Z, 
-  #                     beta1 = beta1, sd1 = sigma, 
-  #                     beta2 = beta2, sd2 = sigma)
-
-  n <- temp[k, "n"]
-  vartot1TW <- true_variance_tephi1(Y1exp_list[[as.character(delta)]], 
-                                    pi, covarSRS, 
-                                    p1,
-                                    phi, 
-                                    sd1 = sigma)
-
-  vartotphi2TW <- vartotphi2TW_list[[as.character(sigma)]]
-
-  varsTW[c(2L * k - 1L, 2L * k)] <- c(vartotphi1TW, vartotphi2TW)
-}
-
-
-rm(expData)
-
-
-temp %>% 
-  add_column(varTW = varsTW)
-  # conversion_latex(nom = "simulation_estim_var_approx", caption = "Variance estimation")
-
-rm(delta, sigma, n, temp, vartotphi1TW, vartotphi2TW, varsTW)
 ```
 
 
