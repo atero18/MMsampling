@@ -92,17 +92,16 @@ estim_appr_var_seq_phi1 <- function(Yobs,
 
   # Sampling variability (S)
   # There is no correction needed for probabilities estimation
-  piMatSr <- pi_mat[maskSr, maskSr]
-
-  covarpSr <- pi2_to_covarInc(piMatSr)
+  piSr_mat <- pi_mat[maskSr, maskSr]
+  covarpSr <- pi2_to_covarInc(piSr_mat)
 
   correctedY1Srp <- (piSr * p1Sr)^-1L * weightedY1Sr
-  varSEst <-
+  varpEst <-
     t(correctedY1Srp) %*%
-    (covarpSr / piMatSr) %*%
+    (covarpSr / piSr_mat) %*%
     correctedY1Srp %>%
     as.numeric()
-  varSEst <- varSEst +
+  varpEst <- varpEst +
     sum((1.0 - piSr) * piSr^-2L * p1Sr^-1L * (1.0 - p1Sr^-1L) *
           weightedY1Sr^2L)
 
@@ -123,7 +122,7 @@ estim_appr_var_seq_phi1 <- function(Yobs,
   # Y1 variability
   varY1Est <- sum(phi^2L) * sd1^2L
 
-  varSEst + varq1Est + varY1Est
+  varpEst + varq1Est + varY1Est
 }
 
 #' Calculate the true variance of the HT estimator of t_phi1 in the case
@@ -189,8 +188,6 @@ estim_appr_var_seq_phi2 <- function(Yobs,
   pi <- diag(pi_mat)
   piSmr <- pi[maskSmr]
 
-  piMatSmr <- pi_mat[maskSmr, maskSmr]
-
   p1Smr <- p1[maskSmr]
   p1Smrbar <- 1.0 - p1Smr
 
@@ -200,15 +197,16 @@ estim_appr_var_seq_phi2 <- function(Yobs,
   weightedY2Smr <- phi[maskSmr] * Yobs[maskSmr]
 
   # Sampling variability (S)
-  covarpSmr <- pi2_to_covarInc(piMatSmr)
+  piSmr_mat <- pi_mat[maskSmr, maskSmr]
+  covarpSmr <- pi2_to_covarInc(piSmr_mat)
 
   correctedY2Smrp <- (piSmr * p1Smrbar * p2Smr)^-1L * weightedY2Smr
-  varSEst <-
+  varpEst <-
     t(correctedY2Smrp) %*%
-    (covarpSmr / piMatSmr) %*%
+    (covarpSmr / piSmr_mat) %*%
     correctedY2Smrp %>%
     as.numeric()
-  varSEst <- varSEst +
+  varpEst <- varpEst +
     sum((1.0 - piSmr) * piSmr^-2L * (p1Smrbar * p2Smr)^-1L *
           (1.0 - (p1Smrbar * p2Smr)^-1L) * weightedY2Smr^2L)
 
@@ -247,7 +245,7 @@ estim_appr_var_seq_phi2 <- function(Yobs,
   # Y2 variability
   varY2Est <- sum(phi^2L) * sd2^2L
 
-  varSEst + varq1Est + varq2Est + varY2Est
+  varpEst + varq1Est + varq2Est + varY2Est
 }
 
 #' Calculate the true variance of the HT estimator of t_phi2 in the case
