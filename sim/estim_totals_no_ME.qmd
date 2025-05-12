@@ -20,13 +20,12 @@ library(tibble)
 library(tidyr)
 library(glue)
 library(parallel)
-library(tictoc)
 library(ggplot2)
 theme_set(theme_light())
-library(Matrix)
+## library(Matrix)
 library(progress)
 library(marginaleffects)
-library(mc2d)
+## library(mc2d)
 library(mvtnorm)
 ```
 
@@ -266,9 +265,9 @@ estim_tot_m1_m2 <- function(Yobs, modes, pi, p1, p2, phi)
 ```{r}
 estim_tot_a <- function(Yobs, modes, pi, pa)
 {
-  maskSa <- modes %in% c("m1", "m2")
+  modes[modes == "m2"] <- "m1"
   
-  sum((pi[maskSa] * pa[maskSa])^-1L * Yobs[maskSa])
+  estim_tot_m1(Yobs, modes, pi, pa)
 }
 ```
 
@@ -292,10 +291,10 @@ estim_appr_var_seq_m1 <- function(Yobs,
                                   I, 
                                   piMat,
                                   p1,
-                                  Z,
                                   sd1 = NULL,
                                   phi = rep(1.0, length(Yobs)),
-                                  correcEstimWeights = FALSE)
+                                  correcEstimWeights = FALSE,
+                                  Z = matrix(1.0, nrow = len(Yobs), ncol = 1L))
 {
 
   if (all(phi == 0.0))
@@ -368,10 +367,10 @@ estim_appr_var_seq_m2 <- function(Yobs,
                                   piMat,
                                   p1,
                                   p2,
-                                  Z,
                                   phi = rep(1.0, length(Yobs)),
                                   sd2 = NULL,
-                                  correcEstimWeights = FALSE)
+                                  correcEstimWeights = FALSE,
+                                  Z = matrix(1.0, nrow = len(Yobs), ncol = 1L))
 {
 
   maskSmr <- modes == "m2"
@@ -457,6 +456,26 @@ estim_appr_var_seq_m2 <- function(Yobs,
 }
 ```
 
+```{r}
+estim_appr_var_seq_a <- function(Yobs,
+                                 modes,
+                                 I, 
+                                 piMat,
+                                 pa,
+                                 sd = NULL,
+                                 correcEstimWeights = FALSE,
+                                 Z = matrix(1.0, nrow = len(Yobs), ncol = 1L))
+{
+  modes[modes == "m2"] <- "m1"
+  
+  estim_appr_var_seq_m1(Yobs, modes, I, 
+                        piMat, pa, sd, 
+                        correcEstimWeights = correcEstimWeights,
+                        Z = Z)
+}
+```
+
+
 ##Expansion estimators true variance
 
 ```{r}
@@ -515,6 +534,15 @@ var_expansion_m2 <- function(Y2exp,
 }
 ```
 
+```{r}
+var_expansion_a <- function(Yexp,
+                            piMat,
+                            pa,
+                            sd = 0.0)
+{
+  var_expansion_m1(Yexp, piMat, pa ,sd)
+}
+```
 
 
 # Simulation
@@ -682,7 +710,6 @@ simulation_tphi <- function(Z,
                               I,
                               piMat,
                               p1,
-                              Z,
                               sd1,
                               correcEstimWeights = FALSE)
     }
@@ -701,9 +728,9 @@ simulation_tphi <- function(Z,
                               I,
                               piMat,
                               estimp1,
-                              Z,
                               sd1,
-                              correcEstimWeights = TRUE)
+                              correcEstimWeights = TRUE,
+                              Z)
     }
     else
       apprVar1EW <- NA_real_
@@ -725,7 +752,6 @@ simulation_tphi <- function(Z,
                               piMat,
                               p1,
                               p2,
-                              Z,
                               sd2,
                               correcEstimWeights = FALSE)
     }
@@ -747,9 +773,9 @@ simulation_tphi <- function(Z,
                               piMat,
                               estimp1,
                               estimp2,
-                              Z,
                               sd2,
-                              correcEstimWeights = TRUE)
+                              correcEstimWeights = TRUE,
+                              Z)
     }
     else
       apprVar2EW <- NA_real_

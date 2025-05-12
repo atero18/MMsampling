@@ -67,10 +67,11 @@ estim_appr_var_seq_phi1 <- function(Yobs,
                                     I,
                                     piMat,
                                     p1,
-                                    Z,
                                     phi = rep(1.0, length(Yobs)),
                                     sd1 = NULL,
-                                    correcEstimWeights = FALSE)
+                                    correcEstimWeights = FALSE,
+                                    Z = matrix(1.0, nrow = len(Yobs),
+                                               ncol = 1L))
 {
 
   if (all(phi == 0.0))
@@ -171,10 +172,11 @@ estim_appr_var_seq_phi2 <- function(Yobs,
                                     piMat,
                                     p1,
                                     p2,
-                                    Z,
                                     sd2 = NULL,
                                     phi = rep(1.0, length(Yobs)),
-                                    correcEstimWeights = FALSE)
+                                    correcEstimWeights = FALSE,
+                                    Z = matrix(1.0, nrow = len(Yobs),
+                                               ncol = 1L))
 {
   if (all(phi == 0.0))
     return(0.0)

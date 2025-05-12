@@ -4,9 +4,9 @@ estim_var_mean_phi1 <- function(Yobs,
                                 I,
                                 piMat,
                                 p1,
-                                Z,
                                 phi = rep(1.0, length(Yobs)),
-                                correcEstimWeights = FALSE)
+                                correcEstimWeights = FALSE,
+                                Z = matrix(1.0, nrow = len(Yobs), ncol = 1L))
 {
 
   maskSr <- modes == "m1"
@@ -27,10 +27,11 @@ estim_var_mean_phi1 <- function(Yobs,
   # (with or without estimated probabilities)of the variable
   # phi_k (y_1k - average on U of the y_1l) / sum of the phi_k on U
   estim_appr_var_seq_phi1(errTerms, modes, I, piMat,
-                          p1, Z,
+                          p1,
                           sd1 = 0.0,
                           phi,
-                          correcEstimWeights = correcEstimWeights) / sumPhi^2L
+                          correcEstimWeights = correcEstimWeights, Z) /
+    sumPhi^2L
 }
 
 #' @export
@@ -40,9 +41,9 @@ estim_var_mean_phi2 <- function(Yobs,
                                 piMat,
                                 p1,
                                 p2,
-                                Z,
                                 phi = rep(1.0, length(Yobs)),
-                                correcEstimWeights = FALSE)
+                                correcEstimWeights = FALSE,
+                                Z = matrix(1.0, nrow = len(Yobs), ncol = 1L))
 {
   maskSmr <- modes == "m2"
 
@@ -61,6 +62,7 @@ estim_var_mean_phi2 <- function(Yobs,
   # (with or without estimated probabilities) of the variable
   # phi_k (y_2k - average on U of the y_2l) / sum of the phi_k on U
   estim_appr_var_seq_phi2(errTerms, modes, I, piMat,
-                          p1, p2, Z, sd2 = 0.0, phi,
-                          correcEstimWeights = correcEstimWeights) / sumPhi^2L
+                          p1, p2, sd2 = 0.0, phi,
+                          correcEstimWeights = correcEstimWeights, Z) /
+    sumPhi^2L
 }

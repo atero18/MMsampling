@@ -364,7 +364,6 @@ simulation_tphi <- function(Z,
                                             I,
                                             piMat,
                                             p1,
-                                            Z,
                                             sd1,
                                             phi,
                                             correcEstimWeights = FALSE)
@@ -385,10 +384,10 @@ simulation_tphi <- function(Z,
                                             I,
                                             piMat,
                                             estimp1,
-                                            Z,
                                             sd1,
                                             phi,
-                                            correcEstimWeights = TRUE)
+                                            correcEstimWeights = TRUE,
+                                            Z)
     }
     else
       apprVarPhi1EW <- NA_real_
@@ -405,7 +404,6 @@ simulation_tphi <- function(Z,
                                         I,
                                         piMat,
                                         p1,
-                                        Z,
                                         phi,
                                         correcEstimWeights = FALSE)
     }
@@ -426,7 +424,8 @@ simulation_tphi <- function(Z,
                                       estimp1,
                                       Z,
                                       phi,
-                                      correcEstimWeights = TRUE)
+                                      correcEstimWeights = TRUE,
+                                      Z)
     }
     else
       apprVarMeanPhi1EW <- NA_real_
@@ -453,7 +452,6 @@ simulation_tphi <- function(Z,
                                             piMat,
                                             p1,
                                             p2,
-                                            Z,
                                             sd2,
                                             phi,
                                             correcEstimWeights = FALSE)
@@ -474,10 +472,10 @@ simulation_tphi <- function(Z,
                                             piMat,
                                             estimp1,
                                             estimp2,
-                                            Z,
                                             sd2,
                                             phi,
-                                            correcEstimWeights = TRUE)
+                                            correcEstimWeights = TRUE,
+                                            Z)
     }
     else
       apprVarPhi2EW <- NA_real_
@@ -496,7 +494,6 @@ simulation_tphi <- function(Z,
                                         piMat,
                                         p1,
                                         p2,
-                                        Z,
                                         phi,
                                         correcEstimWeights = FALSE)
     }
@@ -518,7 +515,8 @@ simulation_tphi <- function(Z,
                                         estimp2,
                                         Z,
                                         phi,
-                                        correcEstimWeights = TRUE)
+                                        correcEstimWeights = TRUE,
+                                        Z)
     }
     else
       apprVarMeanPhi2EW <- NA_real_
