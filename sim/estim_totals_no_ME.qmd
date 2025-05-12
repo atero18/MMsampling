@@ -481,7 +481,9 @@ estim_appr_var_seq_m1_m2 <- function(Yobs,
                                      rho = 0.8,
                                      phi = rep(1.0, length(Yobs)),
                                      correcEstimWeights = FALSE,
-                                     Z = matrix(1.0, nrow = len(Yobs), ncol = 1L))
+                                     Z = matrix(1.0, nrow = len(Yobs), ncol = 1L),
+                                     m1Only = FALSE,
+                                     m2Only = FALSE)
 {
   pi <- diag(pi_mat)
   
@@ -489,10 +491,10 @@ estim_appr_var_seq_m1_m2 <- function(Yobs,
   maskSmr <- modes == "m2"
   maskSa <- maskSr | maskSmr
   na <- sum(maskSa) # Number of respondents
-  maskm1Sa <- modes[maskSa] == "m1"
+  maskm1Sa <- modes[maskSa] == "m1" # mask of the m1 respondents within Sa
   
-  m1Only <- all(phi[maskSmr] == 1.0)
-  m2Only <- all(phi[maskSr] == 0.0)
+  m1Only <- m1Only || all(phi == 1.0, na.rm = TRUE)
+  m2Only <- m2Only || all(phi == 0.0, na.rm = TRUE)
   
   if (!m2Only)
   {
