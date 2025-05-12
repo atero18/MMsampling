@@ -198,8 +198,8 @@ n <- f * N
 expSizeSr <- f * sum(p1)
 
 pi <- rep(f, N)
-piMat <- piMat_SRS(n, N)
-pCov <- pi2_to_covarInc(piMat)
+pi_mat <- piMat_SRS(n, N)
+pCov <- pi2_to_covarInc(pi_mat)
 varSizeSr <- f * sum(p1 * (1.0 - p1)) + 
   t(p1) %*% pCov %*% p1 %>% 
   as.numeric()
@@ -235,7 +235,7 @@ varSizeSa <- f * sum(pRep2 * (1.0 - p2)) +
 glue("Expected size of Sa : {expSizeSa}")
 glue("Variance of the size of Sa : {varSizeSa}")
 
-rm(f, pCov, pi, piMat)
+rm(f, pCov, pi, pi_mat)
 rm(expSizeSr, varSizeSr, 
    expSizeSmr, varSizeSmr, 
    expSizeSa, varSizeSa)
@@ -271,7 +271,7 @@ simulation_tphi <- function(Z,
   if (sampling == "SRS")
   {
     pi <- rep(n / N, N)
-    piMat <- piMat_SRS(n, N)
+    pi_mat <- piMat_SRS(n, N)
   }
   
   
@@ -362,7 +362,7 @@ simulation_tphi <- function(Z,
         MMsampling::estim_appr_var_seq_phi1(Yobs,
                                             modes,
                                             I,
-                                            piMat,
+                                            pi_mat,
                                             p1,
                                             sd1,
                                             phi,
@@ -382,7 +382,7 @@ simulation_tphi <- function(Z,
         MMsampling::estim_appr_var_seq_phi1(Yobs,
                                             modes,
                                             I,
-                                            piMat,
+                                            pi_mat,
                                             estimp1,
                                             sd1,
                                             phi,
@@ -402,7 +402,7 @@ simulation_tphi <- function(Z,
         MMsampling::estim_var_mean_phi1(Yobs,
                                         modes,
                                         I,
-                                        piMat,
+                                        pi_mat,
                                         p1,
                                         phi,
                                         correcEstimWeights = FALSE)
@@ -420,7 +420,7 @@ simulation_tphi <- function(Z,
       MMsampling::estim_var_mean_phi1(Yobs,
                                       modes,
                                       I,
-                                      piMat,
+                                      pi_mat,
                                       estimp1,
                                       Z,
                                       phi,
@@ -449,7 +449,7 @@ simulation_tphi <- function(Z,
         MMsampling::estim_appr_var_seq_phi2(Yobs,
                                             modes,
                                             I,
-                                            piMat,
+                                            pi_mat,
                                             p1,
                                             p2,
                                             sd2,
@@ -469,7 +469,7 @@ simulation_tphi <- function(Z,
         MMsampling::estim_appr_var_seq_phi2(Yobs,
                                             modes,
                                             I,
-                                            piMat,
+                                            pi_mat,
                                             estimp1,
                                             estimp2,
                                             sd2,
@@ -491,7 +491,7 @@ simulation_tphi <- function(Z,
         MMsampling::estim_var_mean_phi2(Yobs,
                                         modes,
                                         I,
-                                        piMat,
+                                        pi_mat,
                                         p1,
                                         p2,
                                         phi,
@@ -510,7 +510,7 @@ simulation_tphi <- function(Z,
         MMsampling::estim_var_mean_phi2(Yobs,
                                         modes,
                                         I,
-                                        piMat,
+                                        pi_mat,
                                         estimp1,
                                         estimp2,
                                         Z,
@@ -553,9 +553,9 @@ simulation_tphi <- function(Z,
   
   res <- do.call("rbind", res)
   
-  trueVarPhi1TW <- var_expansion_seq_phi1(Y1exp, piMat, p1, sd1, phi)
+  trueVarPhi1TW <- var_expansion_seq_phi1(Y1exp, pi_mat, p1, sd1, phi)
   
-  trueVarPhi2TW <- var_expansion_seq_phi2(Y2exp, piMat, p1, p2, sd2, phi)
+  trueVarPhi2TW <- var_expansion_seq_phi2(Y2exp, pi_mat, p1, p2, sd2, phi)
   
   trueVar <- rep.int(c(trueVarPhi1TW, NA_real_, 
                        NA_real_, NA_real_,
@@ -1542,25 +1542,25 @@ simulationUncounf <-
     expit <- function(x) 1.0 / (1.0 + exp(-x))
 
     p1 <- expit(X %*% alpha1) %>% as.numeric()
-    pq1Mat <- p1 %*% t(p1)
-    diag(pq1Mat) <- p1
+    p1_mat <- p1 %*% t(p1)
+    diag(p1_mat) <- p1
     
     p2 <- expit(X %*% alpha2) %>% as.numeric()
-    pq2Mat <- p2 %*% t(p2)
-    diag(pq2Mat) <- p2
+    p2_mat <- p2 %*% t(p2)
+    diag(p2_mat) <- p2
     
     clusterExport(cluster, 
-                  varlist = c("p1", "pq1Mat", "p2", "pq2Mat"),
+                  varlist = c("p1", "p1_mat", "p2", "p2_mat"),
                   envir = environment())
     
 
     if (sampling == "SRS")
     {
       pi <- rep(n / N, N)
-      piMat <- piMat_SRS(n, N)
+      pi_mat <- piMat_SRS(n, N)
       
       clusterExport(cluster, 
-                    varlist = c("pi", "piMat"),
+                    varlist = c("pi", "pi_mat"),
                     envir = environment())
     }
     
@@ -2081,8 +2081,8 @@ simulationUncounf <-
                                     calculTotal = "population",
                                     Y1exp = Y1exp, Y2exp = Y2exp,
                                     covarY1 = covarYint, covarY2 = covarYtel,
-                                    piMat = piMat,
-                                    pq1Mat = pq1Mat, pq2Mat = pq2Mat,
+                                    pi_mat = pi_mat,
+                                    p1_mat = p1_mat, p2_mat = p2_mat,
                                     phi = phi,
                                     subResults = TRUE)
         
@@ -2117,9 +2117,9 @@ simulationUncounf <-
     # We calculate the real variance of the benchmark estimator
     sdTWBenchmark <- var_expansion_seq_phi2(Y2exp = Y2exp, 
                                             covarY2 = covarYtel,
-                                            piMat = piMat,
-                                            pq1Mat = pq1Mat,
-                                            pq2Mat = pq2Mat,
+                                            pi_mat = pi_mat,
+                                            p1_mat = p1_mat,
+                                            p2_mat = p2_mat,
                                             phi = numeric(N),
                                             correcEstimWeights = FALSE) %>% sqrt()
     

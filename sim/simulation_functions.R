@@ -260,10 +260,10 @@ set_phi <- function(phi = "eq", N)
 # Simple Random Sampling (SRS) design
 piMat_SRS <- function(n, N)
 {
-  piMat <- matrix(n * (n - 1L) / (N * (N - 1L)), nrow = N, ncol = N)
-  diag(piMat) <- n / N
+  pi_mat <- matrix(n * (n - 1L) / (N * (N - 1L)), nrow = N, ncol = N)
+  diag(pi_mat) <- n / N
 
-  piMat
+  pi_mat
 }
 
 # Generates the covariance matrix of a Simple Random Sampling (SRS) design

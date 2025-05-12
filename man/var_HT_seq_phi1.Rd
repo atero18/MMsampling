@@ -9,8 +9,8 @@ variance.}
 var_expansion_seq_phi1(
   Y1exp,
   I,
-  piMat,
-  pq1Mat,
+  pi_mat,
+  p1_mat,
   Z,
   biasedMode,
   modes,

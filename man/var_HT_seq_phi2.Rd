@@ -10,9 +10,9 @@ known selection probabilities.}
 var_expansion_seq_phi2(
   Y2exp,
   I,
-  piMat,
-  pq1Mat,
-  pq2Mat,
+  pi_mat,
+  p1_mat,
+  p2_mat,
   Z,
   biasedMode,
   refMode,

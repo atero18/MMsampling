@@ -173,10 +173,10 @@ pi2_to_covarInc <- function(pi2)
 # Simple Random Sampling (SRS) design
 piMat_SRS <- function(n, N)
 {
-  piMat <- matrix(n * (n - 1L) / (N * (N - 1L)), nrow = N, ncol = N)
-  diag(piMat) <- n / N
+  pi_mat <- matrix(n * (n - 1L) / (N * (N - 1L)), nrow = N, ncol = N)
+  diag(pi_mat) <- n / N
 
-  piMat
+  pi_mat
 }
 ```
 
@@ -187,8 +187,8 @@ n <- f * N
 expSizeSr <- f * sum(p1)
 
 pi <- rep(f, N)
-piMat <- piMat_SRS(n, N)
-pCov <- pi2_to_covarInc(piMat)
+pi_mat <- piMat_SRS(n, N)
+pCov <- pi2_to_covarInc(pi_mat)
 varSizeSr <- f * sum(p1 * (1.0 - p1)) + 
   t(p1) %*% pCov %*% p1 %>% 
   as.numeric()
@@ -224,7 +224,7 @@ varSizeSa <- f * sum(pRep2 * (1.0 - p2)) +
 glue("Expected size of Sa : {expSizeSa}")
 glue("Variance of the size of Sa : {varSizeSa}")
 
-rm(f, pCov, pi, piMat)
+rm(f, pCov, pi, pi_mat)
 rm(expSizeSr, varSizeSr, 
    expSizeSmr, varSizeSmr, 
    expSizeSa, varSizeSa)
@@ -276,7 +276,9 @@ estim_tot_a <- function(Yobs, modes, pi, pa)
 Fisher Information Matrix with a logistic model and weights equal to 1.
 
 ```{r}
-Fisher_Information_Matrix <- function(prob, Z, maskSubset = !logical(nrow(Z)))
+Fisher_Information_Matrix <- function(prob, 
+                                      Z, 
+                                      maskSubset = !logical(len(prob)))
 {
   probSubset <- prob[maskSubset]
   ZSubset <- Z[maskSubset, , drop = FALSE]
@@ -289,17 +291,13 @@ Fisher_Information_Matrix <- function(prob, Z, maskSubset = !logical(nrow(Z)))
 estim_appr_var_seq_m1 <- function(Yobs,
                                   modes,
                                   I, 
-                                  piMat,
+                                  pi_mat,
                                   p1,
                                   sd1 = NULL,
                                   phi = rep(1.0, length(Yobs)),
                                   correcEstimWeights = FALSE,
                                   Z = matrix(1.0, nrow = len(Yobs), ncol = 1L))
 {
-
-  if (all(phi == 0.0))
-    return(0.0)
-
   # If sd1 is not given we use the estimated standard deviation
   # (assumed independent of the covariates) of the y_1k 
   # with the m1 outcomes
@@ -308,7 +306,7 @@ estim_appr_var_seq_m1 <- function(Yobs,
 
   maskSr <- modes == "m1"
 
-  pi <- diag(piMat)
+  pi <- diag(pi_mat)
   piSr <- pi[maskSr]
   p1Sr <- p1[maskSr]
 
@@ -318,7 +316,7 @@ estim_appr_var_seq_m1 <- function(Yobs,
 
   # Sampling variability (S)
   # There is no correction needed for probabilities estimation
-  piMatSr <- piMat[maskSr, maskSr]
+  piMatSr <- pi_mat[maskSr, maskSr]
   
   covarpSr <- pi2_to_covarInc(piMatSr)
 
@@ -364,11 +362,11 @@ estim_appr_var_seq_m1 <- function(Yobs,
 estim_appr_var_seq_m2 <- function(Yobs,
                                   modes,
                                   I,
-                                  piMat,
+                                  pi_mat,
                                   p1,
                                   p2,
-                                  phi = rep(1.0, length(Yobs)),
                                   sd2 = NULL,
+                                  phi = rep(1.0, length(Yobs)),
                                   correcEstimWeights = FALSE,
                                   Z = matrix(1.0, nrow = len(Yobs), ncol = 1L))
 {
@@ -381,10 +379,10 @@ estim_appr_var_seq_m2 <- function(Yobs,
   if (is.null(sd2))
     sd2 <- sd(Yobs[maskSmr], na.rm = FALSE)
 
-  pi <- diag(piMat)
+  pi <- diag(pi_mat)
   piSmr <- pi[maskSmr]
 
-  piMatSmr <- piMat[maskSmr, maskSmr]
+  piMatSmr <- pi_mat[maskSmr, maskSmr]
 
   p1Smr <- p1[maskSmr]
   p1Smrbar <- 1.0 - p1Smr
@@ -460,7 +458,7 @@ estim_appr_var_seq_m2 <- function(Yobs,
 estim_appr_var_seq_a <- function(Yobs,
                                  modes,
                                  I, 
-                                 piMat,
+                                 pi_mat,
                                  pa,
                                  sd = NULL,
                                  correcEstimWeights = FALSE,
@@ -469,7 +467,7 @@ estim_appr_var_seq_a <- function(Yobs,
   modes[modes == "m2"] <- "m1"
   
   estim_appr_var_seq_m1(Yobs, modes, I, 
-                        piMat, pa, sd, 
+                        pi_mat, pa, sd, 
                         correcEstimWeights = correcEstimWeights,
                         Z = Z)
 }
@@ -480,15 +478,15 @@ estim_appr_var_seq_a <- function(Yobs,
 
 ```{r}
 var_expansion_m1 <- function(Y1exp,
-                             piMat,
+                             pi_mat,
                              p1,
                              sd1 = 0.0,
                              phi = rep(1.0, length(Y1exp)))
 {
-  pi <- diag(piMat)
+  pi <- diag(pi_mat)
 
   # Sampling variability (S)
-  covarPi <- pi2_to_covarInc(piMat)
+  covarPi <- pi2_to_covarInc(pi_mat)
   correctedY1p <- pi^-1L * phi * Y1exp
   varS <- t(correctedY1p) %*% covarPi %*% correctedY1p +
     sum(pi^-1L * (1.0 - pi) * phi^2L) * sd1^2L
@@ -506,16 +504,16 @@ var_expansion_m1 <- function(Y1exp,
 
 ```{r}
 var_expansion_m2 <- function(Y2exp,
-                             piMat,
+                             pi_mat,
                              p1, p2,
                              phi = rep(1.0, length(Y2exp)),
                              sd2 = 0.0)
 {
-  pi <- diag(piMat)
+  pi <- diag(pi_mat)
   p1Bar <- 1.0 - p1
 
   # Sampling variability (S)
-  covarPi <- pi2_to_covarInc(piMat)
+  covarPi <- pi2_to_covarInc(pi_mat)
   correctedY2p <- pi^-1L * phi * Y2exp
   varS <- t(correctedY2p) %*% covarPi %*% correctedY2p +
     sum(pi^-1L * (1.0 - pi) * phi^2L) * sd2^2L
@@ -536,11 +534,11 @@ var_expansion_m2 <- function(Y2exp,
 
 ```{r}
 var_expansion_a <- function(Yexp,
-                            piMat,
+                            pi_mat,
                             pa,
                             sd = 0.0)
 {
-  var_expansion_m1(Yexp, piMat, pa ,sd)
+  var_expansion_m1(Yexp, pi_mat, pa ,sd)
 }
 ```
 
@@ -619,7 +617,7 @@ simulation_tphi <- function(Z,
   if (sampling == "SRS")
   {
     pi <- rep(n / N, N)
-    piMat <- piMat_SRS(n, N)
+    pi_mat <- piMat_SRS(n, N)
   }
   
   
@@ -708,7 +706,7 @@ simulation_tphi <- function(Z,
         estim_appr_var_seq_m1(Yobs,
                               modes,
                               I,
-                              piMat,
+                              pi_mat,
                               p1,
                               sd1,
                               correcEstimWeights = FALSE)
@@ -726,7 +724,7 @@ simulation_tphi <- function(Z,
         estim_appr_var_seq_m1(Yobs,
                               modes,
                               I,
-                              piMat,
+                              pi_mat,
                               estimp1,
                               sd1,
                               correcEstimWeights = TRUE,
@@ -749,7 +747,7 @@ simulation_tphi <- function(Z,
         estim_appr_var_seq_m2(Yobs,
                               modes,
                               I,
-                              piMat,
+                              pi_mat,
                               p1,
                               p2,
                               sd2,
@@ -770,7 +768,7 @@ simulation_tphi <- function(Z,
         estim_appr_var_seq_m2(Yobs,
                               modes,
                               I,
-                              piMat,
+                              pi_mat,
                               estimp1,
                               estimp2,
                               sd2,
@@ -793,9 +791,9 @@ simulation_tphi <- function(Z,
   
   res <- do.call("rbind", res)
   
-  trueVarPhi1TW <- var_expansion_m1(Y1exp, piMat, p1, phi, sd1)
+  trueVarPhi1TW <- var_expansion_m1(Y1exp, pi_mat, p1, phi, sd1)
   
-  trueVarPhi2TW <- var_expansion_m2(Y2exp, piMat, p1, p2, phi, sd2)
+  trueVarPhi2TW <- var_expansion_m2(Y2exp, pi_mat, p1, p2, phi, sd2)
   
   trueVar <- rep.int(c(trueVarPhi1TW, NA_real_, 
                        trueVarPhi2TW, NA_real_),
