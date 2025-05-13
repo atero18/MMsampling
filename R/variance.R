@@ -189,7 +189,7 @@ estim_appr_var_seq_phi2 <- function(Yobs,
   piSmr <- pi[maskSmr]
 
   p1Smr <- p1[maskSmr]
-  p1Smrbar <- 1.0 - p1Smr
+  p1barSmr <- 1.0 - p1Smr
 
   p2Smr <- p2[maskSmr]
 
@@ -200,19 +200,19 @@ estim_appr_var_seq_phi2 <- function(Yobs,
   piSmr_mat <- pi_mat[maskSmr, maskSmr]
   covarpSmr <- pi2_to_covarInc(piSmr_mat)
 
-  correctedY2Smrp <- (piSmr * p1Smrbar * p2Smr)^-1L * weightedY2Smr
+  correctedY2Smrp <- (piSmr * p1barSmr * p2Smr)^-1L * weightedY2Smr
   varpEst <-
     t(correctedY2Smrp) %*%
     (covarpSmr / piSmr_mat) %*%
     correctedY2Smrp %>%
     as.numeric()
   varpEst <- varpEst +
-    sum((1.0 - piSmr) * piSmr^-2L * (p1Smrbar * p2Smr)^-1L *
-          (1.0 - (p1Smrbar * p2Smr)^-1L) * weightedY2Smr^2L)
+    sum((1.0 - piSmr) * piSmr^-2L * (p1barSmr * p2Smr)^-1L *
+          (1.0 - (p1barSmr * p2Smr)^-1L) * weightedY2Smr^2L)
 
 
   # q1 variability (R1)
-  correctedY2Smrq1 <- (piSmr * p1Smrbar)^-1L * weightedY2Smr
+  correctedY2Smrq1 <- (piSmr * p1barSmr)^-1L * weightedY2Smr
 
   #   If the probabilities p_1k are estimations we add a term
   #   that uses the covariates used by the regression estimators of

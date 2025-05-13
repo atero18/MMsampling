@@ -380,7 +380,7 @@ estim_appr_var_seq_m2 <- function(Yobs,
   pi <- diag(pi_mat)
   piSmr <- pi[maskSmr]
   p1Smr <- p1[maskSmr]
-  p1Smrbar <- 1.0 - p1Smr
+  p1barSmr <- 1.0 - p1Smr
 
   p2Smr <- p2[maskSmr]
 
@@ -391,19 +391,19 @@ estim_appr_var_seq_m2 <- function(Yobs,
   piSmr_mat <- pi_mat[maskSmr, maskSmr]
   covarpSmr <- pi2_to_covarInc(piSmr_mat)
 
-  correctedY2Smrp <- (piSmr * p1Smrbar * p2Smr)^-1L * weightedY2Smr
+  correctedY2Smrp <- (piSmr * p1barSmr * p2Smr)^-1L * weightedY2Smr
   varpEst <-
     t(correctedY2Smrp) %*%
     (covarpSmr / piSmr_mat) %*%
     correctedY2Smrp %>%
     as.numeric()
   varpEst <- varpEst +
-    sum((1.0 - piSmr) * piSmr^-2L * (p1Smrbar * p2Smr)^-1L *
-          (1.0 - (p1Smrbar * p2Smr)^-1L) * weightedY2Smr^2L)
+    sum((1.0 - piSmr) * piSmr^-2L * (p1barSmr * p2Smr)^-1L *
+          (1.0 - (p1barSmr * p2Smr)^-1L) * weightedY2Smr^2L)
 
 
   # q1 variability (R1)
-  correctedY2Smrq1 <- (piSmr * p1Smrbar)^-1L * weightedY2Smr
+  correctedY2Smrq1 <- (piSmr * p1barSmr)^-1L * weightedY2Smr
 
   #   If the probabilities p_1k are estimations we add a term
   #   that uses the covariates used by the regression estimators of
@@ -470,6 +470,7 @@ estim_appr_var_seq_a <- function(Yobs,
 ```
 
 ```{r}
+# ... : arguments for matching
 estim_appr_var_seq_m1_m2 <- function(Yobs,
                                      modes,
                                      I,
@@ -483,9 +484,12 @@ estim_appr_var_seq_m1_m2 <- function(Yobs,
                                      correcEstimWeights = FALSE,
                                      Z = matrix(1.0, nrow = len(Yobs), ncol = 1L),
                                      m1Only = FALSE,
-                                     m2Only = FALSE)
+                                     m2Only = FALSE,
+                                     ...)
 {
+  
   pi <- diag(pi_mat)
+  N <- len(pi)
   
   maskSr <- modes == "m1"
   maskSmr <- modes == "m2"
@@ -495,6 +499,9 @@ estim_appr_var_seq_m1_m2 <- function(Yobs,
   
   m1Only <- m1Only || all(phi == 1.0, na.rm = TRUE)
   m2Only <- m2Only || all(phi == 0.0, na.rm = TRUE)
+  
+  if (!m1Only && !m2Only)
+    requireNamespace(package = "MatchIt", versionCheck = NULL, quietly = FALSE)
   
   if (!m2Only)
   {
@@ -506,6 +513,9 @@ estim_appr_var_seq_m1_m2 <- function(Yobs,
     
     piSr <- pi[maskSr]
     p1Sr <- p1[maskSr]
+    
+    piSr_mat <- pi_mat[maskSr, maskSr]
+    covarpSr <- pi2_to_covarInc(piSr_mat)
   }
   
   if (!m1Only)
@@ -521,23 +531,22 @@ estim_appr_var_seq_m1_m2 <- function(Yobs,
     p1BarSmr <- 1.0 - p1Smr
     p2Smr <- p2[maskSmr]
     
+    piSmr_mat <- pi_mat[maskSmr, maskSmr]
+    covarpSmr <- pi2_to_covarInc(piSmr_mat)
   }
   
   piSa <- pi[maskSa]
   p1Sa <- p1[maskSa]
-  p1Sabar <- 1.0 - p1Sa
+  p1barSa <- 1.0 - p1Sa
   p2Sa <- p2[maskSa]
   
   # Sampling variability (S)
   # There is no correction needed for probabilities estimation
+    # If we use only the m1 outcomes
+    # (we do not weight by phi)
   if (m1Only)
   {
-    
-    piSr_mat <- pi_mat[maskSr, maskSr]
-    covarpSr <- pi2_to_covarInc(piSr_mat)
-    
-    p1Sr <- p1[maskSr]
-    
+    phi <- rep(1.0, N)
     Y1Sr <- Yobs[maskSr]
     
     correctedY1Srp <- (piSr * p1Sr)^-1L * Y1Sr
@@ -552,24 +561,27 @@ estim_appr_var_seq_m1_m2 <- function(Yobs,
     
     rm(piSr_mat, covarpSr)
   }
+    # If we use only the m2 outcomes
+    # (we do not weight by 1 - phi)
   else if (m2Only)
   {
-    piSmr_mat <- pi_mat[maskSmr, maskSmr]
-    covarpSmr <- pi2_to_covarInc(piSmr_mat)
-  
+    phi <- numeric(N)
     Y2Smr <- Yobs[maskSmr]
-    correctedY2Smrp <- (piSmr * p1Smrbar * p2Smr)^-1L * Y2Smr
+    correctedY2Smrp <- (piSmr * p1barSmr * p2Smr)^-1L * Y2Smr
     varpEst <-
       t(correctedY2Smrp) %*%
       (covarpSmr / piSmr_mat) %*%
       correctedY2Smrp %>%
       as.numeric()
     varpEst <- varpEst +
-      sum((1.0 - piSmr) * piSmr^-2L * (p1Smrbar * p2Smr)^-1L *
-            (1.0 - (p1Smrbar * p2Smr)^-1L) * Y2Smr^2L)
+      sum((1.0 - piSmr) * piSmr^-2L * (p1barSmr * p2Smr)^-1L *
+            (1.0 - (p1barSmr * p2Smr)^-1L) * Y2Smr^2L)
     
     rm(piSmr_mat, covarpSmr)
   }
+    # If we use the m1 and m2 outcomes
+    # We will need here have to estimate the potential outcomes
+    # on Sr (y_2k) and Smr (y_2k) by single matching with Z
   else
   {
     piSr_mat <- pi_mat[maskSr, maskSr]
@@ -577,21 +589,109 @@ estim_appr_var_seq_m1_m2 <- function(Yobs,
     
     # Vectors that contains "estimation" of Y1 and Y2 respectively.
     # It is equal to the true value when it is known.
-    Y1SaEst <- Y2SaEst <- Yobs[maskSa]
+    YobsSa <- Yobs[maskSa]
+    Y1SaEst <- Y2SaEst <- YobsSa
     
-
+    dataMatchingSa <- as.data.frame(Z[maskSa, , drop = FALSE]) %>% 
+      mutate(mode = as.integer(maskm1Sa))
+    row.names(dataMatchingSa) <- seq_len(na)
+    
+    # Estimation of the y_1k on Smr
+    if (!all(phi[maskSm] == 0.0))
+    {
+      matchingControl <- 
+        MatchIt::matchit(mode ~ ., data = dataMatchingSa, estimand = "ATC", ...)
+      
+      Y1SaEst[!maskm1Sa] <- YobsSa[as.integer(matchingControl$match.matrix)]
+      
+      rm(matchingControl)
+    }
+    
+    # Estimation of the y_2k on Sr
+    if (!all(phi[maskSr] == 1.0))
+    {
+      matchingTreated <- 
+        MatchIt::matchit(mode ~ ., data = dataMatchingSa, estimand = "ATT", ...)
+    
+      Y2SaEst[maskm1Sa] <- YobsSa[as.integer(matchingTreated$match.matrix)]
+      
+      rm(matchingTreated)
+    }
+    
+    rm(dataMatchingSa)
+    
     phiY1SaEst <- phi[maskSa] * Y1SaEst
     phiY2SaEst <- (1.0 - phi[maskSa]) * Y2SaEst
     
-    correctedPhiYSap <- phiY1SaEst + phiY2SaEst
-    correctedPhiYSap[maskm1Sa] <-  * correctedPhiYSap[maskm1Sa]
     
     piSa_mat <- pi_mat[maskSa, maskSa]
     covarpSa <- pi2_to_covarInc(piSa_mat)
     
     
+    # The variance estimator is the average of the variance estimator based on
+    # Sr and the one based on Smr
+      # Sr
+    PhiYSr <- phiY1SaEst[maskm1Sa] + phiY2SaEst[maskm1Sa]
+    correctedPhiYSrp <- 
+      (piSr * p1Sr)^-1L * PhiYSr
     
-    varpEst <- 0.5 * 
+    varpSrEst <-
+    t(correctedPhiYSrp) %*%
+    (covarpSr / piSr_mat) %*%
+    correctedPhiYSrp %>%
+    as.numeric()
+    varpSrEst <- varpSrEst + 
+      sum((1.0 - piSr) * piSr^-2L * p1Sr^-1L * (1.0 - p1Sr^-1L) *
+            PhiYSr^2L)
+    
+      # Smr
+    PhiYSmr <- phiY1SaEst[!maskm1Sa] + phiY2SaEst[!maskm1Sa]
+    correctedPhiYSmrp <- 
+      (piSmr * p1barSmr * p2Smr)^-1L * PhiYSmr
+    
+    varpSmrEst <-
+      t(correctedPhiYSmrp) %*%
+      (covarpSmr / piSmr_mat) %*%
+      correctedPhiYSmrp %>%
+      as.numeric()
+    varpSmrEst <- varpSmrEst +
+      sum((1.0 - piSmr) * piSmr^-2L * (p1barSmr * p2Smr)^-1L *
+            (1.0 - (p1barSmr * p2Smr)^-1L) * PhiYSmr^2L)
+    
+    varpEst <- 0.5 * (varpSrEst + varpSmrEst)
+  }
+  
+  
+  # q1 variability (R1)
+  if  (correcEstimWeights)
+  {
+    estLinCoefq1 <- NULL
+    if (!m2Only)
+    {
+      estVPhi11 <- -crossprod(Z[maskSr, , drop = FALSE],
+                          (pi[maskSr] * p1Sr)^-1L *
+                            phi[maskSr] * Yobs[maskSr] * (1.0 - p1Sr))
+
+      
+      estbPhi11 <- solve(Fisher_Information_Matrix(p1, Z, I)) %*% estVPhi11
+      estLinCoefq1 <- estLinCoefq1 + estbPhi11
+    }
+    
+    if (!m1Only)
+    {
+      
+    }
+  }
+  if (m1Only)
+  {
+    
+  }
+  else if (m2Only)
+  {
+    
+  }
+  else
+  {
     
   }
   
