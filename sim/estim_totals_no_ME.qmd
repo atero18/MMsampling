@@ -840,8 +840,8 @@ estim_appr_var_seq_a <- function(Yobs,
   
   estim_appr_var_seq_m1(Yobs, responses, I, 
                         pi_mat, pa, sd, 
-                        correcEstimWeights = correcEstimWeights,
-                        Z = Z,
+                        correcEstimWeights,
+                        Z,
                         ...)
 }
 ```
@@ -884,7 +884,7 @@ var_expansion_m1_m2 <- function(Y1exp, Y2exp,
   varq1 <- 
     sum(pi^-1L * p1 * p1bar * 
     (varCorrectedDifference + 
-       p1^-1L * phi * Y1exp - p1bar^-1L * phibar * Y2exp))
+       (p1^-1L * phi * Y1exp - p1bar^-1L * phibar^2L * Y2exp)^2L))
      
     
   # q2 variability (R2)
@@ -892,7 +892,7 @@ var_expansion_m1_m2 <- function(Y1exp, Y2exp,
   if (any(phibar > 0.0))
   {
     varPhibarY2 <- phibar^2L * (sd2^2L + Y2exp^2L) # Variance of each phikbar y_2k
-    varq2 <- sum((pi * p1bar * p2)^-1L * (1.0 - p2) * varPhiY2)
+    varq2 <- sum((pi * p1bar * p2)^-1L * (1.0 - p2) * varPhibarY2)
   }
   else
     varq2 <- 0.0
@@ -914,7 +914,7 @@ var_expansion_m1 <- function(Y1exp,
                              sd1 = 0.0,
                              phi = rep(1.0, length(Y1exp)))
 {
-  var_expansion_m1_m2(Y1exp, numeric(length(Y1exp)), 
+  var_expansion_m1_m2(Y1exp, Y2exp = numeric(length(Y1exp)), 
                       pi_mat,
                       p1, p2 = NULL, 
                       sd1, sd2 = 0.0, rho = 0.0, 
@@ -1335,8 +1335,7 @@ simulation_tphi <- function(Z,
                                  sd2,
                                  rho,
                                  phi,
-                                 correcEstimWeights = FALSE,
-                                 Z)
+                                 correcEstimWeights = FALSE)
     }
     else
       apprVarPhiTW <- NA_real_
@@ -1370,22 +1369,21 @@ simulation_tphi <- function(Z,
                          "totaTW", "totaEW",
                          "totphiTW", "totphiEW"),
            sample = rep(c("Sr", "Smr", "Sa", "Sa"), each = 2L),
-           estimand = rep(c(sum(Y1), sum(Y2), sum(Y1),
-                            sum(phi * Y1 + (1.0 - phi) * Y2)), each = 2L),
+           estimand = rep(c("t_1", "t_2", "t_=", "t_phi"), each = 2L),
            estimation = c(tot1TW, tot1EW, 
                           tot2TW, tot2EW, 
                           totaTW, totaEW,
                           totPhiTW, totPhiEW),
            apprVar = c(apprVar1TW, apprVar1EW, 
                        apprVar2TW, apprVar2EW,
-                       apprVaraTW, apprVaraTW,
+                       apprVaraTW, apprVaraEW,
                        apprVarPhiTW, apprVarPhiEW)) %>% 
       mutate(weights = rep_len(c("true", "estimated"), length.out = n()),
              .after = "sample")
   }
-  res <- lapply(seq_len(M), FUN = monoSim)
+  # res <- lapply(seq_len(M), FUN = monoSim)
   
-  # res <- mclapply(seq_len(M), FUN = monoSim, mc.cores = nCores)
+  res <- mclapply(seq_len(M), FUN = monoSim, mc.cores = nCores)
   
   res <- do.call("rbind", res)
   
@@ -1394,11 +1392,14 @@ simulation_tphi <- function(Z,
   trueVar2TW <- var_expansion_m2(Yexp, pi_mat, p1, p2, sd2)
   
   if (sd1 == sd2)
-    trueVaraTW <- var_expansion_a(Yexp, pi_mat, p1, sd1)
+    trueVaraTW <- var_expansion_a(Yexp, pi_mat, pa, sd1)
   else
     trueVaraTW <- NaN
   
-  trueVarPhi <- var_expansion_m1_m2(Yexp, Yexp, p1, p2, sd1, sd2, rho, phi)
+  trueVarPhi <- var_expansion_m1_m2(Yexp, Yexp, 
+                                    pi_mat, 
+                                    p1, p2, 
+                                    sd1, sd2, rho, phi)
   
   trueVar <- rep.int(c(trueVar1TW, NA_real_, 
                        trueVar2TW, NA_real_,
@@ -1417,10 +1418,11 @@ simulation_tphi <- function(Z,
 ## Simulation
 
 ```{r}
-Msim <- 10L
+Msim <- 500L
 ```
 
 The different lines of the grid have the same seed. It is useful to run in different orders the evaluations and because the results from different parameters are never mixed there is no independency issue.
+
 
 If the number of parallel cores changes, the results might be different.
 
@@ -1429,7 +1431,8 @@ resSimulation <- NULL
 set.seed(200L)
 
 pb <- progress::progress_bar$new(format = "[:bar] :percent eta: :eta",
-                                 total = nrow(parameters))
+                                 total = nrow(parameters),
+                                 clear = TRUE)
 
 pb$tick(0L)
 
@@ -1438,8 +1441,6 @@ phi = rep(0.5, N)
 ## alphaa à changer
 for (k in seq_len(nrow(parameters)))
 {
-  
-  
   simFun <- function(calcVariance = TRUE)
   {
     simulation_tphi(M = Msim,
@@ -1474,14 +1475,12 @@ for (k in seq_len(nrow(parameters)))
   pb$tick()
 }
 
-rm(resTempWithVar, resTempWithoutVar, pb)
+rm(pb, resTempWithVar, resTempWithoutVar)
 
 resSimulation <-
   resSimulation %>%
   mutate(phi = 0.5) %>% 
-  arrange(n, sd1, sd2, ratio_delta)
-
-
+  arrange(n, sd1, sd2, rho)
 ```
 
 ```{r}
@@ -1497,7 +1496,7 @@ The first subset will be used for the estimations of the expectation of the tota
 ```{r}
 resSimulation %>% 
   filter(subset == 1L) %>% 
-  group_by(estimand, weights, n, sd1, sd2, rho) %>% 
+  group_by(estimand, sample, weights, n, sd1, sd2, rho) %>% 
   summarize(M = n(),
             true_expectation = first(expEstimand),
             MC_expectation = mean(estimation, na.rm = TRUE)) %>% 
