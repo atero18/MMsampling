@@ -478,8 +478,8 @@ estim_appr_var_seq_m1_m2 <- function(Yobs,
   na <- sum(maskSa) # Number of respondents
   maskm1Sa <- modes[maskSa] == "m1" # mask of the m1 respondents within Sa
   
-  m1Only <- m1Only || all(phi == 1.0, na.rm = TRUE)
-  m2Only <- m2Only || all(phi == 0.0, na.rm = TRUE)
+  m1Only <- (m1Only || all(phi == 1.0, na.rm = TRUE))
+  m2Only <- (m2Only || all(phi == 0.0, na.rm = TRUE)) && !m1Only
   
   if (m1Only)
     phi <- rep(1.0, N)
@@ -777,55 +777,19 @@ estim_appr_var_seq_m1_m2 <- function(Yobs,
 ```
 
 ```{r}
-estim_appr_var_seq_m1 <- function(Yobs,
-                                  modes,
-                                  I,
-                                  pi_mat,
-                                  p1,
-                                  sd1 = NULL,
-                                  correcEstimWeights = FALSE,
-                                  Z = matrix(1.0, nrow = length(Yobs), ncol = 1L),
-                                  ...)
-{
-  estim_appr_var_seq_m1_m2(Yobs,
-                           modes,
-                           I,
-                           pi_mat,
-                           p1,
-                           sd1 = sd1,
-                           phi = rep(1.0, length(Yobs)),
-                           correcEstimWeights = correcEstimWeights,
-                           Z = Z,
-                           m1Only = TRUE,
-                           ...)
-}
+estim_appr_var_seq_m1 <- purrr::partial(estim_appr_var_seq_m1_m2,
+                                        phi = rep(1.0, length(Yobs)), 
+                                        m1Only = TRUE,
+                                        sd2 = 0.0,
+                                        rho = 0.0)
 ```
 
 ```{r}
-estim_appr_var_seq_m2 <- function(Yobs,
-                                  modes,
-                                  I,
-                                  pi_mat,
-                                  p1,
-                                  p2,
-                                  sd2 = NULL,
-                                  correcEstimWeights = FALSE,
-                                  Z = matrix(1.0, nrow = length(Yobs), ncol = 1L),
-                                  ...)
-  
-{
-  estim_appr_var_seq_m1_m2(Yobs,
-                           modes,
-                           I,
-                           pi_mat,
-                           p1,
-                           p2,
-                           sd2 = sd2,
-                           correcEstimWeights = correcEstimWeights,
-                           Z = Z,
-                           m2Only = TRUE,
-                           ...)
-}
+estim_appr_var_seq_m2 <- purr::partial(estim_appr_var_seq_m1_m2,
+                                       phi = numeric(Yobs),
+                                       m2Only = TRUE,
+                                       sd1 = 0.0,
+                                       rho = 0.0)
 ```
 
 ```{r}
@@ -852,60 +816,134 @@ estim_appr_var_seq_a <- function(Yobs,
 
 ##Expansion estimators true variance
 
+CONDITIONS INDEPENDANCE
+
 ```{r}
-var_expansion_m1 <- function(Y1exp,
-                             pi_mat,
-                             p1,
-                             sd1 = 0.0,
-                             phi = rep(1.0, length(Y1exp)))
+var_expansion_m1_m2 <- function(Y1exp, Y2exp, 
+                                pi_mat, 
+                                p1, p2, 
+                                sd1 = 0.0, sd2 = 0.0, rho = 0.0, 
+                                phi = rep(0.5, length(Y1exp)))
 {
   pi <- diag(pi_mat)
-
-  # Sampling variability (S)
+  
+  p1bar <- 1.0 - p1
+  
+  phibar <- 1.0 - phi
+  
   covarPi <- pi2_to_covarInc(pi_mat)
-  correctedY1p <- pi^-1L * phi * Y1exp
+  
+  
+  # Sampling variability (S)
+  correctedY1p <- pi^-1L * (phi * Y1exp + phibar * Y2exp)
   varp <- as.numeric(t(correctedY1p) %*% covarPi %*% correctedY1p) +
-    sum(pi^-1L * (1.0 - pi) * phi^2L) * sd1^2L
-
+    sum(pi^-1L * (1.0 - pi) * 
+          ((phi^2L * sd1^2L + phibar^2L * sd2^2L +
+             2.0 * phi * phibar * rho * sd1 * sd2))
+  
   # q1 variability (R1)
-  #  With the independence between p and q1
-  varq1 <- sum((pi * p1)^-1L * (1.0 - p1) * phi^2L * (sd1^2L + Y1exp^2L))
-
-  # Y1 variability
-  varY1 <- sum(phi^2L) * sd1^2L
-
-  varp + varq1 + varY1
+  # with the independence between p and q1
+  # Variance of the term phik y1k / p1k - phikbar y2k / p1kbar
+  varCorrectedDifference <- 
+    (p1^-2L * phi^2L * sd1^2L + 
+       p1bar^-2L * phibar^2L * sd2^2L -
+       2.0 * (p1 * p1bar)^-1L * phi * phibar * rho * sd1 * sd2)
+  varq1 <- 
+    sum(pi^-1L * p1 * p1Bar * 
+    (varCorrectedDifference + 
+       p1^-1L * phi * Y1exp - p1bar^-1L * phibar * Y2exp))
+     
+    
+  # q2 variability (R2)
+  # with the conditional independence between p and q1 ; and q1 and q2
+  if (any(phibar > 0.0))
+  {
+    varPhibarY2 <- phibar^2L * (sd2^2L + Y2exp^2L) # Variance of each phikbar y_2k
+    varq2 <- sum((pi * p1bar * p2)^-1L * (1.0 - p2) * varPhiY2)
+  }
+  else
+    varq2 <- 0.0
+  
+  # potential outcomes variability
+  varPhiY <- 
+    sum(phi^2L) * sd1^2L +
+    2.0 * sum(phi * phibar) * rho * sd1 * sd2 +
+    sum(phibar^2L) * sd2^2L
+  
+  varp + varq1 + varq2 + varPhiY
 }
 ```
 
 ```{r}
-var_expansion_m2 <- function(Y2exp,
-                             pi_mat,
-                             p1, p2,
-                             sd2 = 0.0,
-                             phi = rep(1.0, length(Y2exp)))
-{
-  pi <- diag(pi_mat)
-  p1Bar <- 1.0 - p1
+var_expansion_m1 <- purrr::partial(var_expansion_m1_m2,
+                                   Y2exp = numeric(length(Y1exp)), 
+                                   p2 = NULL,
+                                   sd2 = 0.0, rho = 0.0)
+```
 
-  # Sampling variability (S)
-  covarPi <- pi2_to_covarInc(pi_mat)
-  correctedY2p <- pi^-1L * phi * Y2exp
-  varp <- as.numeric(t(correctedY2p) %*% covarPi %*% correctedY2p) +
-    sum(pi^-1L * (1.0 - pi) * phi^2L) * sd2^2L
+```{r}
+var_expansion_m2 <- purrr::partial(var_expansion_m1_m2,
+                                   Y1exp = numeric(length(Y2exp)),
+                                   sd1 = 0.0, rho = 0.0) 
+```
 
-  # q1 variability (R1)
-  varPhiY2 <- phi^2L * (sd2^2L + Y2exp^2L) # Variance of each phi_k y_2k
-  varq1 <- sum((pi * p1Bar)^-1L * p1 * varPhiY2)
 
-  # q2 variability (R2)
-  varq2 <- sum((pi * p1Bar * p2)^-1L * (1.0 - p2) * varPhiY2)
 
-  # Y2 variability
-  varY2 <- sum(phi^2L) * sd2^2L
+```{r}
+# var_expansion_m1 <- function(Y1exp,
+#                              pi_mat,
+#                              p1,
+#                              sd1 = 0.0,
+#                              phi = rep(1.0, length(Y1exp)))
+# {
+#   pi <- diag(pi_mat)
+#   
+# 
+#   # Sampling variability (S)
+#   covarPi <- pi2_to_covarInc(pi_mat)
+#   correctedY1p <- pi^-1L * phi * Y1exp
+#   varp <- as.numeric(t(correctedY1p) %*% covarPi %*% correctedY1p) +
+#     sum(pi^-1L * (1.0 - pi) * phi^2L) * sd1^2L
+# 
+#   # q1 variability (R1)
+#   # with the independence between p and q1
+#   varq1 <- sum((pi * p1)^-1L * (1.0 - p1) * phi^2L * (sd1^2L + Y1exp^2L))
+# 
+#   # Y1 variability
+#   varY1 <- sum(phi^2L) * sd1^2L
+# 
+#   varp + varq1 + varY1
+# }
+```
 
-  varp + varq1 + varq2 + varY2
-}
+```{r}
+# var_expansion_m2 <- function(Y2exp,
+#                              pi_mat,
+#                              p1, p2,
+#                              sd2 = 0.0,
+#                              phi = rep(1.0, length(Y2exp)))
+# {
+#   pi <- diag(pi_mat)
+#   p1Bar <- 1.0 - p1
+# 
+#   # Sampling variability (S)
+#   covarPi <- pi2_to_covarInc(pi_mat)
+#   correctedY2p <- pi^-1L * phi * Y2exp
+#   varp <- as.numeric(t(correctedY2p) %*% covarPi %*% correctedY2p) +
+#     sum(pi^-1L * (1.0 - pi) * phi^2L) * sd2^2L
+# 
+#   # q1 variability (R1)
+#   varPhiY2 <- phi^2L * (sd2^2L + Y2exp^2L) # Variance of each phi_k y_2k
+#   varq1 <- sum((pi * p1Bar)^-1L * p1 * varPhiY2)
+# 
+#   # q2 variability (R2)
+#   varq2 <- sum((pi * p1Bar * p2)^-1L * (1.0 - p2) * varPhiY2)
+# 
+#   # Y2 variability
+#   varY2 <- sum(phi^2L) * sd2^2L
+# 
+#   varp + varq1 + varq2 + varY2
+# }
 ```
 
 ```{r}
@@ -976,7 +1014,8 @@ simulation_tphi <- function(Z,
                             beta, 
                             sd1 = 1.0, sd2 = sd1, 
                             rho = 0.8,
-                            phi = rep(0.5, N), M = 10000L,
+                            phi = rep(0.5, N), 
+                            M = 10000L,
                             n = ceiling(N / 10L),
                             seed = 123L,
                             nCores = detectCores() - 1L,
@@ -1232,6 +1271,19 @@ simulation_tphi <- function(Z,
       # With true probabilities
     totPhiTW <- estim_tot_m1_m2(Yobs, modes, pi, p1, p2, phi)
     
+    totPhiEW <- estim_tot_m1_m2(Yobs, modes, pi, estimp1, estimp2, phi)
+    
+    if (calcVariance)
+    {
+      apprVarPhiTW <- NaN
+    }
+    else
+      apprVarPhiTW <- NA_real_
+    
+      # With estimated probabilities
+    totphiEW <- estim_tot_m1_m2(Yobs, modes, pi, estimp1, estimp2, phi)
+    
+    
     if (calcVariance)
     {
       apprVarPhiEW <- NaN
@@ -1239,24 +1291,23 @@ simulation_tphi <- function(Z,
     else
       apprVarPhiEW <- NA_real_
     
-      # With estimated probabilities
-    totphiEW <- estim_tot_m1_m2(Yobs, modes, pi, estimp1, estimp2, phi)
-    
 
     tibble(estimator = c("tot1TW", "tot1EW", 
                          "tot2TW", "tot2EW", 
-                         "totaTW", "totaEW"), 
-           estimand = c(sum(Y1), sum(Y1),
-                        sum(Y2), sum(Y2),
-                        sum(Y1), sum(Y1)),
+                         "totaTW", "totaEW",
+                         "totphiTW", "totphiEW"),
+           sample = rep(c("Sr", "Smr", "Sa", "Sa"), each = 2L),
+           estimand = rep(c(sum(Y1), sum(Y2), sum(Y1),
+                            sum(phi * Y1 + (1.0 - phi) * Y2)), each = 2L),
            estimation = c(tot1TW, tot1EW, 
                           tot2TW, tot2EW, 
                           totaTW, totaEW),
            apprVar = c(apprVar1TW, apprVar1EW, 
                        apprVar2TW, apprVar2EW,
-                       apprVaraTW, apprVaraTW),) %>% 
+                       apprVaraTW, apprVaraTW,
+                       apprVarPhiTW, apprVarPhiEW)) %>% 
       mutate(weights = rep_len(c("true", "estimated"), length.out = n()),
-             .after = "estimator")
+             .after = "sample")
   }
   res <- lapply(seq_len(M), FUN = monoSim)
   
@@ -1273,9 +1324,13 @@ simulation_tphi <- function(Z,
   else
     trueVaraTW <- NaN
   
+  ## À FAIRE
+  trueVarPhi <- -1.0
+  
   trueVar <- rep.int(c(trueVar1TW, NA_real_, 
                        trueVar2TW, NA_real_,
-                       trueVaraTW, NA_real_),
+                       trueVaraTW, NA_real_,
+                       trueVarPhi, NA_real_),
                      times = M)
   
   res <- res %>% 
@@ -1286,7 +1341,7 @@ simulation_tphi <- function(Z,
 }
 ```
 
-
+## Simulation
 
 ```{r}
 Msim <- 1000L
@@ -1350,6 +1405,7 @@ rm(resTempWithVar, resTempWithoutVar, pb)
 
 resSimulation <-
   resSimulation %>%
+  mutate(phi = 0.5) %>% 
   arrange(n, sd1, sd2, ratio_delta)
 
 
