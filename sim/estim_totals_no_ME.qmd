@@ -1418,7 +1418,7 @@ simulation_tphi <- function(Z,
 ## Simulation
 
 ```{r}
-Msim <- 500L
+Msim <- 10000L
 ```
 
 The different lines of the grid have the same seed. It is useful to run in different orders the evaluations and because the results from different parameters are never mixed there is no independency issue.
@@ -1512,7 +1512,7 @@ Here we show average approximate variance and variance of different estimators, 
 ```{r}
 resSimulation %>% 
   mutate(estimation = if_else(subset == 1L, estimation, NA_real_)) %>% 
-  group_by(estimand, weights, n, sd1, sd2, rho) %>% 
+  group_by(estimand, sample, weights, n, sd1, sd2, rho) %>% 
   summarize(M = n() / 2L,
             MC_AV = mean(apprVar, na.rm = TRUE),
             MC_var = var(estimation, na.rm = TRUE),
