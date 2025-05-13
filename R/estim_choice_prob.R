@@ -26,7 +26,7 @@ estim_response_prob_global <- function(I, modes, Z,
   RGH <- set_RGH(RGH, N)
   RGHNames <- unique(RGH)
 
-  data <- cbind(mode = as.factor(modes), Z) %>% as.data.frame()
+  data <- cbind(mode = modes, Z) %>% as.data.frame()
   fittedProbs <- numeric(N)
 
 
