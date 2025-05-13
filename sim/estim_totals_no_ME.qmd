@@ -410,12 +410,12 @@ estim_appr_var_seq_m2 <- function(Yobs,
   #   alpha1 (the parameter of the logistic model for the m1 response)
   if (correcEstimWeights)
   {
-    estVPhi11 <- -crossprod(Z[maskSr, , drop = FALSE],
-                          (pi[maskSr] * p1Sr)^-1L *
-                            phi[maskSr] * Yobs[maskSr] * (1.0 - p1Sr))
+    estVPhi21 <- crossprod(Z[maskSmr, , drop = FALSE],
+                           (pi[maskSmr] * (1.0 - p1Smr) * p2[maskSmr])^-1L *
+                             phi[maskSmr] * Yobs[maskSmr] * p1Smr)
+    
 
-
-    estbPhi21 <- solve(Fisher_Information_Matrix(p1, Z, I)) %*% estVPhi11
+    estbPhi21 <- solve(Fisher_Information_Matrix(p1, Z, I)) %*% estVPhi21
     correctedY2Smrq1 <- correctedY2Smrq1 - Z[maskSmr, ] %*% estbPhi21
   }
 
@@ -500,6 +500,11 @@ estim_appr_var_seq_m1_m2 <- function(Yobs,
   m1Only <- m1Only || all(phi == 1.0, na.rm = TRUE)
   m2Only <- m2Only || all(phi == 0.0, na.rm = TRUE)
   
+  if (m1Only)
+    phi <- rep(1.0, N)
+  else if (m2Only)
+    phi <- numeric(N)
+  
   if (!m1Only && !m2Only)
     requireNamespace(package = "MatchIt", versionCheck = NULL, quietly = FALSE)
   
@@ -510,6 +515,10 @@ estim_appr_var_seq_m1_m2 <- function(Yobs,
     # with the m1 outcomes
     if (is.null(sd1))
       sd1 <- sd(Yobs[maskSr], na.rm = FALSE)
+    
+    phiSr <- phi[maskSr]
+    Y1Sr <- Yobs[maskSr]
+    phiY1Sr <- phiSr * Y1Sr
     
     piSr <- pi[maskSr]
     p1Sr <- p1[maskSr]
@@ -525,6 +534,10 @@ estim_appr_var_seq_m1_m2 <- function(Yobs,
     # with the m2 outcomes
     if (is.null(sd2))
       sd2 <- sd(Yobs[maskSmr], na.rm = FALSE)
+    
+    phiSmr <- phi[maskSmr]
+    Y2Smr <- Yobs[maskSmr]
+    phiY2Smr <- (1.0 - phiSmr) * Y2Smr
     
     piSmr <- pi[maskSmr]
     p1Smr <- p1[maskSmr]
@@ -546,9 +559,6 @@ estim_appr_var_seq_m1_m2 <- function(Yobs,
     # (we do not weight by phi)
   if (m1Only)
   {
-    phi <- rep(1.0, N)
-    Y1Sr <- Yobs[maskSr]
-    
     correctedY1Srp <- (piSr * p1Sr)^-1L * Y1Sr
     varpEst <-
       t(correctedY1Srp) %*%
@@ -559,13 +569,12 @@ estim_appr_var_seq_m1_m2 <- function(Yobs,
       sum((1.0 - piSr) * piSr^-2L * p1Sr^-1L * (1.0 - p1Sr^-1L) *
             Y1Sr^2L)
     
-    rm(piSr_mat, covarpSr)
+    rm(covarpSr)
   }
     # If we use only the m2 outcomes
     # (we do not weight by 1 - phi)
   else if (m2Only)
   {
-    phi <- numeric(N)
     Y2Smr <- Yobs[maskSmr]
     correctedY2Smrp <- (piSmr * p1barSmr * p2Smr)^-1L * Y2Smr
     varpEst <-
@@ -577,10 +586,10 @@ estim_appr_var_seq_m1_m2 <- function(Yobs,
       sum((1.0 - piSmr) * piSmr^-2L * (p1barSmr * p2Smr)^-1L *
             (1.0 - (p1barSmr * p2Smr)^-1L) * Y2Smr^2L)
     
-    rm(piSmr_mat, covarpSmr)
+    rm(covarpSmr)
   }
     # If we use the m1 and m2 outcomes
-    # We will need here have to estimate the potential outcomes
+    # We will need here have to estimate the counterfactuals
     # on Sr (y_2k) and Smr (y_2k) by single matching with Z
   else
   {
@@ -592,30 +601,30 @@ estim_appr_var_seq_m1_m2 <- function(Yobs,
     YobsSa <- Yobs[maskSa]
     Y1SaEst <- Y2SaEst <- YobsSa
     
-    dataMatchingSa <- as.data.frame(Z[maskSa, , drop = FALSE]) %>% 
-      mutate(mode = as.integer(maskm1Sa))
+    dataMatchingSa <- as.data.frame(Z[maskSa, , drop = FALSE])
+    dataMatchingSa$mode <- as.integer(maskm1Sa)
     row.names(dataMatchingSa) <- seq_len(na)
     
     # Estimation of the y_1k on Smr
-    if (!all(phi[maskSm] == 0.0))
+    if (!all(phiSmr == 0.0))
     {
-      matchingControl <- 
+      matchingSmr <- 
         MatchIt::matchit(mode ~ ., data = dataMatchingSa, estimand = "ATC", ...)
       
-      Y1SaEst[!maskm1Sa] <- YobsSa[as.integer(matchingControl$match.matrix)]
+      Y1SaEst[!maskm1Sa] <- YobsSa[as.integer(matchingSmr$match.matrix[, 1L])]
       
-      rm(matchingControl)
+      rm(matchingSmr)
     }
     
     # Estimation of the y_2k on Sr
-    if (!all(phi[maskSr] == 1.0))
+    if (!all(phiSr == 1.0))
     {
-      matchingTreated <- 
+      matchingSr <- 
         MatchIt::matchit(mode ~ ., data = dataMatchingSa, estimand = "ATT", ...)
     
-      Y2SaEst[maskm1Sa] <- YobsSa[as.integer(matchingTreated$match.matrix)]
+      Y2SaEst[maskm1Sa] <- YobsSa[as.integer(matchingSr$match.matrix[, 1L])]
       
-      rm(matchingTreated)
+      rm(matchingSr)
     }
     
     rm(dataMatchingSa)
@@ -636,10 +645,10 @@ estim_appr_var_seq_m1_m2 <- function(Yobs,
       (piSr * p1Sr)^-1L * PhiYSr
     
     varpSrEst <-
-    t(correctedPhiYSrp) %*%
-    (covarpSr / piSr_mat) %*%
-    correctedPhiYSrp %>%
-    as.numeric()
+      t(correctedPhiYSrp) %*%
+      (covarpSr / piSr_mat) %*%
+      correctedPhiYSrp %>%
+      as.numeric()
     varpSrEst <- varpSrEst + 
       sum((1.0 - piSr) * piSr^-2L * p1Sr^-1L * (1.0 - p1Sr^-1L) *
             PhiYSr^2L)
@@ -665,37 +674,111 @@ estim_appr_var_seq_m1_m2 <- function(Yobs,
   # q1 variability (R1)
   if  (correcEstimWeights)
   {
-    estLinCoefq1 <- NULL
+    ZSr <- Z[maskSr, , drop = FALSE]
+    estLinCoefq1 <- 0.0
     if (!m2Only)
     {
-      estVPhi11 <- -crossprod(Z[maskSr, , drop = FALSE],
-                          (pi[maskSr] * p1Sr)^-1L *
-                            phi[maskSr] * Yobs[maskSr] * (1.0 - p1Sr))
+      estVPhi11 <- -crossprod(ZSr,
+                              (piSr * p1Sr)^-1L *
+                                phiY1Sr * (1.0 - p1Sr))
 
       
-      estbPhi11 <- solve(Fisher_Information_Matrix(p1, Z, I)) %*% estVPhi11
+      estbPhi11 <- solve(Fisher_Information_Matrix(p1, Z, I)) %*% 
+        estVPhi11
+      
       estLinCoefq1 <- estLinCoefq1 + estbPhi11
     }
     
     if (!m1Only)
     {
+      ZSmr <- Z[maskSmr, , drop = FALSE]
+      estVPhibar21 <- crossprod(ZSmr,
+                                (piSmr * (1.0 - p1Smr) * p2Smr)^-1L *
+                                  phiY2Smr * p1Smr)
       
+      estbPhibar21 <- solve(Fisher_Information_Matrix(p1, Z, I)) %*% 
+        estVPhibar21
+      
+      estLinCoefq1 <- estLinCoefq1 + estbPhibar21
     }
   }
+    # If we use only the m1 outcomes
+    # (we do not weight by phi)
   if (m1Only)
   {
     
+    correctedY1Srq1 <- correctedY1Srp
+    
+    if (correcEstimWeights)
+      correctedY1Srq1 <- correctedY1Srq1 + ZSr %*% estLinCoefq1
+    
+    varq1Est <- sum((1.0 - p1Sr) * correctedY1Srq1^2L)
   }
+    # If we use only the m2 outcomes
+    # (we do not weight by phi)
   else if (m2Only)
   {
+    correctedY2Smrq1 <- (piSmr * p1barSmr)^-1L * Y2Smr
     
+    if (correcEstimWeights)
+      correctedY2Smrq1 <- correctedY2Smrq1 - ZSmr %*% estLinCoefq1
+    
+    varq1Est <- sum(p1Smr * p2Smr^-1L * correctedY2Smrq1^2L)
   }
+    # If we use the m1 and m2 outcomes
+    # We will use the estimations of the counterfactuals
   else
   {
+     correctedPhiYSaq1 <- piSa^-1L * 
+       (p1Sa^-1L * phiY1SaEst - p1barSa^-1L * phiY2SaEst)
+     
+     if (correcEstimWeights)
+     {
+       correctedPhiYSaq1 <- 
+         correctedPhiYSaq1 + Z[maskSa, , drop = FALSE] %*% estLinCoefq1
+     }
     
+      weightsq1 <- numeric(na)
+      weightsq1[maskm1Sa] <- 1.0 - p1Sr
+      weightsq1[!maskm1Sa] <- p1Smr * p2Smr^-1L
+      
+      varq1Est <- 0.5 * sum(weightsq1 * correctedPhiYSaq1^2L)
   }
   
   
+  # q2 variability (R2)
+  # There is variability only if we consider m2. We do not need
+  # to use counterfactuals estimators
+  if (!m1Only)
+  {
+    correctedY2Smrq2 <- (piSmr * p1barSmr * p2Smr)^-1L * phiY2Smr
+    if (correcEstimWeights)
+    {
+      estVPhibar22 <- -crossprod(ZSmr,
+                          (piSmr * (1.0 - p1Smr) * p2Smr)^-1L *
+                            (1.0 - p2Smr) * phiY2Smr)
+
+
+      estbPhibar22 <- 
+        solve(Fisher_Information_Matrix(p2, Z, maskSm)) %*% estVPhibar22
+      
+      correctedY2Smrq2 <- correctedY2Smrq2 + ZSmr %*% estbPhibar22
+    }
+    
+    varq2Est <- sum((1.0 - p2Smr) * correctedY2Smrq2^2L)
+  }
+  else
+    varq2Est <- 0.0
+  
+  
+  # Potential outcomes variability
+  varphiYEst <- 
+    mean(phi^2L, na.rm = TRUE) * N * sd1^2L +
+    2.0 * mean(phi * (1.0 - phi), na.rm = TRUE) * N * rho * sd1 * sd2 +
+    mean((1.0 - phi)^2L, na.rm = TRUE) * N * sd2^2L
+  
+  
+  varpEst + varq1Est + varq2Est + varphiYEst
 }
 ```
 
