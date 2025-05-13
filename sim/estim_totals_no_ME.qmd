@@ -25,8 +25,9 @@ theme_set(theme_light())
 ## library(Matrix)
 library(progress)
 ## library(marginaleffects)
-## library(mc2d)
+library(mc2d)
 library(mvtnorm)
+library(MatchIt)
 ```
 
 # Population generation
@@ -462,7 +463,7 @@ estim_appr_var_seq_m1_m2 <- function(Yobs,
                                      sd2 = sd1,
                                      rho = 0.8,
                                      phi = rep(0.5, length(Yobs)),
-                                     correcEstimWeights = FALSE,
+                                     correcEstimWeights = TRUE,
                                      Z = matrix(1.0, nrow = length(Yobs), ncol = 1L),
                                      m1Only = FALSE,
                                      m2Only = FALSE,
@@ -601,7 +602,8 @@ estim_appr_var_seq_m1_m2 <- function(Yobs,
     if (!all(phiSmr == 0.0))
     {
       matchingSmr <- 
-        MatchIt::matchit(mode ~ ., data = dataMatchingSa, estimand = "ATC", ...)
+        MatchIt::matchit(mode ~ ., data = dataMatchingSa, 
+                         estimand = "ATC", replace = TRUE, ...)
       
       Y1SaEst[!maskm1Sa] <- YobsSa[as.integer(matchingSmr$match.matrix[, 1L])]
       
@@ -612,7 +614,8 @@ estim_appr_var_seq_m1_m2 <- function(Yobs,
     if (!all(phiSr == 1.0))
     {
       matchingSr <- 
-        MatchIt::matchit(mode ~ ., data = dataMatchingSa, estimand = "ATT", ...)
+        MatchIt::matchit(mode ~ ., data = dataMatchingSa, 
+                         estimand = "ATT", replace = TRUE, ...)
     
       Y2SaEst[maskm1Sa] <- YobsSa[as.integer(matchingSr$match.matrix[, 1L])]
       
@@ -777,19 +780,49 @@ estim_appr_var_seq_m1_m2 <- function(Yobs,
 ```
 
 ```{r}
-estim_appr_var_seq_m1 <- purrr::partial(estim_appr_var_seq_m1_m2,
-                                        phi = rep(1.0, length(Yobs)), 
-                                        m1Only = TRUE,
-                                        sd2 = 0.0,
-                                        rho = 0.0)
+estim_appr_var_seq_m1 <- function(Yobs, modes, 
+                                  I, pi_mat, 
+                                  p1, sd1,
+                                  correcEstimWeights = TRUE,
+                                  Z = matrix(1.0, 
+                                             nrow = length(Yobs), ncol = 1L),
+                                  ...)
+{
+  estim_appr_var_seq_m1_m2(Yobs, modes, 
+                           I, pi_mat, 
+                           p1, p2 = NULL,
+                           sd1,
+                           sd2 = 0.0,
+                           rho = 0.0,
+                           phi = rep(1.0, length(Yobs)),
+                           correcEstimWeights,
+                           Z = Z,
+                           m1Only = TRUE,
+                           ...)
+}
 ```
 
 ```{r}
-estim_appr_var_seq_m2 <- purr::partial(estim_appr_var_seq_m1_m2,
-                                       phi = numeric(Yobs),
-                                       m2Only = TRUE,
-                                       sd1 = 0.0,
-                                       rho = 0.0)
+estim_appr_var_seq_m2 <- function(Yobs, modes, 
+                                  I, pi_mat, 
+                                  p1, p2, sd2,
+                                  correcEstimWeights = TRUE,
+                                  Z = matrix(1.0, 
+                                             nrow = length(Yobs), ncol = 1L),
+                                  ...)
+{
+  estim_appr_var_seq_m1_m2(Yobs, modes, 
+                           I, pi_mat, 
+                           p1, p2,
+                           sd1 = 0.0,
+                           sd2,
+                           rho = 0.0,
+                           phi = numeric(length(Yobs)),
+                           correcEstimWeights,
+                           Z,
+                           m2Only = TRUE,
+                           ...)
+}
 ```
 
 ```{r}
@@ -799,7 +832,7 @@ estim_appr_var_seq_a <- function(Yobs,
                                  pi_mat,
                                  pa,
                                  sd = NULL,
-                                 correcEstimWeights = FALSE,
+                                 correcEstimWeights = TRUE,
                                  Z = matrix(1.0, nrow = length(Yobs), ncol = 1L),
                                  ...)
 {
@@ -814,7 +847,7 @@ estim_appr_var_seq_a <- function(Yobs,
 ```
 
 
-##Expansion estimators true variance
+## Expansion estimators true variance
 
 CONDITIONS INDEPENDANCE
 
@@ -838,7 +871,7 @@ var_expansion_m1_m2 <- function(Y1exp, Y2exp,
   correctedY1p <- pi^-1L * (phi * Y1exp + phibar * Y2exp)
   varp <- as.numeric(t(correctedY1p) %*% covarPi %*% correctedY1p) +
     sum(pi^-1L * (1.0 - pi) * 
-          ((phi^2L * sd1^2L + phibar^2L * sd2^2L +
+          (phi^2L * sd1^2L + phibar^2L * sd2^2L +
              2.0 * phi * phibar * rho * sd1 * sd2))
   
   # q1 variability (R1)
@@ -849,7 +882,7 @@ var_expansion_m1_m2 <- function(Y1exp, Y2exp,
        p1bar^-2L * phibar^2L * sd2^2L -
        2.0 * (p1 * p1bar)^-1L * phi * phibar * rho * sd1 * sd2)
   varq1 <- 
-    sum(pi^-1L * p1 * p1Bar * 
+    sum(pi^-1L * p1 * p1bar * 
     (varCorrectedDifference + 
        p1^-1L * phi * Y1exp - p1bar^-1L * phibar * Y2exp))
      
@@ -875,16 +908,34 @@ var_expansion_m1_m2 <- function(Y1exp, Y2exp,
 ```
 
 ```{r}
-var_expansion_m1 <- purrr::partial(var_expansion_m1_m2,
-                                   Y2exp = numeric(length(Y1exp)), 
-                                   p2 = NULL,
-                                   sd2 = 0.0, rho = 0.0)
+var_expansion_m1 <- function(Y1exp, 
+                             pi_mat, 
+                             p1, 
+                             sd1 = 0.0,
+                             phi = rep(1.0, length(Y1exp)))
+{
+  var_expansion_m1_m2(Y1exp, numeric(length(Y1exp)), 
+                      pi_mat,
+                      p1, p2 = NULL, 
+                      sd1, sd2 = 0.0, rho = 0.0, 
+                      phi)
+}
 ```
 
+
 ```{r}
-var_expansion_m2 <- purrr::partial(var_expansion_m1_m2,
-                                   Y1exp = numeric(length(Y2exp)),
-                                   sd1 = 0.0, rho = 0.0) 
+var_expansion_m2 <- function(Y2exp, 
+                             pi_mat, 
+                             p1, p2, 
+                             sd2 = 0.0, 
+                             phi = rep(1.0, length(Y2exp)))
+{
+  var_expansion_m1_m2(Y1exp = numeric(length(Y2exp)), Y2exp, 
+                      pi_mat, 
+                      p1, p2, 
+                      sd1 = 0.0, sd2, rho = 0.0, 
+                      1.0 - phi)
+}
 ```
 
 
@@ -924,7 +975,7 @@ var_expansion_m2 <- purrr::partial(var_expansion_m1_m2,
 #                              phi = rep(1.0, length(Y2exp)))
 # {
 #   pi <- diag(pi_mat)
-#   p1Bar <- 1.0 - p1
+#   p1bar <- 1.0 - p1
 # 
 #   # Sampling variability (S)
 #   covarPi <- pi2_to_covarInc(pi_mat)
@@ -934,10 +985,10 @@ var_expansion_m2 <- purrr::partial(var_expansion_m1_m2,
 # 
 #   # q1 variability (R1)
 #   varPhiY2 <- phi^2L * (sd2^2L + Y2exp^2L) # Variance of each phi_k y_2k
-#   varq1 <- sum((pi * p1Bar)^-1L * p1 * varPhiY2)
+#   varq1 <- sum((pi * p1bar)^-1L * p1 * varPhiY2)
 # 
 #   # q2 variability (R2)
-#   varq2 <- sum((pi * p1Bar * p2)^-1L * (1.0 - p2) * varPhiY2)
+#   varq2 <- sum((pi * p1bar * p2)^-1L * (1.0 - p2) * varPhiY2)
 # 
 #   # Y2 variability
 #   varY2 <- sum(phi^2L) * sd2^2L
@@ -1271,22 +1322,44 @@ simulation_tphi <- function(Z,
       # With true probabilities
     totPhiTW <- estim_tot_m1_m2(Yobs, modes, pi, p1, p2, phi)
     
-    totPhiEW <- estim_tot_m1_m2(Yobs, modes, pi, estimp1, estimp2, phi)
-    
     if (calcVariance)
     {
-      apprVarPhiTW <- NaN
+      apprVarPhiTW <- 
+        estim_appr_var_seq_m1_m2(Yobs,
+                                 modes,
+                                 I,
+                                 pi_mat,
+                                 p1,
+                                 p2,
+                                 sd1,
+                                 sd2,
+                                 rho,
+                                 phi,
+                                 correcEstimWeights = FALSE,
+                                 Z)
     }
     else
       apprVarPhiTW <- NA_real_
     
       # With estimated probabilities
-    totphiEW <- estim_tot_m1_m2(Yobs, modes, pi, estimp1, estimp2, phi)
+    totPhiEW <- estim_tot_m1_m2(Yobs, modes, pi, estimp1, estimp2, phi)
     
     
     if (calcVariance)
     {
-      apprVarPhiEW <- NaN
+      apprVarPhiEW <- 
+        estim_appr_var_seq_m1_m2(Yobs,
+                                 modes,
+                                 I,
+                                 pi_mat,
+                                 estimp1,
+                                 estimp2,
+                                 sd1,
+                                 sd2,
+                                 rho,
+                                 phi,
+                                 correcEstimWeights = TRUE,
+                                 Z)
     }
     else
       apprVarPhiEW <- NA_real_
@@ -1301,7 +1374,8 @@ simulation_tphi <- function(Z,
                             sum(phi * Y1 + (1.0 - phi) * Y2)), each = 2L),
            estimation = c(tot1TW, tot1EW, 
                           tot2TW, tot2EW, 
-                          totaTW, totaEW),
+                          totaTW, totaEW,
+                          totPhiTW, totPhiEW),
            apprVar = c(apprVar1TW, apprVar1EW, 
                        apprVar2TW, apprVar2EW,
                        apprVaraTW, apprVaraTW,
@@ -1324,8 +1398,7 @@ simulation_tphi <- function(Z,
   else
     trueVaraTW <- NaN
   
-  ## À FAIRE
-  trueVarPhi <- -1.0
+  trueVarPhi <- var_expansion_m1_m2(Yexp, Yexp, p1, p2, sd1, sd2, rho, phi)
   
   trueVar <- rep.int(c(trueVar1TW, NA_real_, 
                        trueVar2TW, NA_real_,
@@ -1344,7 +1417,7 @@ simulation_tphi <- function(Z,
 ## Simulation
 
 ```{r}
-Msim <- 1000L
+Msim <- 10L
 ```
 
 The different lines of the grid have the same seed. It is useful to run in different orders the evaluations and because the results from different parameters are never mixed there is no independency issue.

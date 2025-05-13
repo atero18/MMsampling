@@ -849,13 +849,13 @@ And for $\hat{t}_{e\phi2}$ :
 ```{r}
 true_variance_tephi2 <- function(Y2exp, pi, covpMat, p1, p2, phi, sd2 = 1.0)
 {
-  p1Bar <- 1.0 - p1
+  p1bar <- 1.0 - p1
   Y2expMat <- Y2exp %*% t(Y2exp)
   diag(Y2expMat) <- sd2^2L + Y2exp^2L
   # q2 variability
-    sum((1.0 - p2) * phi^2L / (pi * p1Bar * p2) * (sd2^2L + Y2exp^2L)) +
+    sum((1.0 - p2) * phi^2L / (pi * p1bar * p2) * (sd2^2L + Y2exp^2L)) +
   # q1 variability
-    sum(p1 * phi^2L / (pi * p1Bar) * (sd2^2L + Y2exp^2L)) +
+    sum(p1 * phi^2L / (pi * p1bar) * (sd2^2L + Y2exp^2L)) +
   # S variability
     t(phi / pi) %*% (covpMat * Y2expMat) %*% (phi / pi) +
   # Y2 variability
