@@ -147,7 +147,7 @@ var_expansion_seq_phi1 <- function(Y1exp,
   # Sampling variability (S)
   covarPi <- pi2_to_covarInc(pi_mat)
   correctedY1p <- pi^-1L * phi * Y1exp
-  varS <- t(correctedY1p) %*% covarPi %*% correctedY1p +
+  varp <- t(correctedY1p) %*% covarPi %*% correctedY1p +
     sum(pi^-1L * (1.0 - pi) * phi^2L) * sd1^2L
 
   # q1 variability (R1)
@@ -158,7 +158,7 @@ var_expansion_seq_phi1 <- function(Y1exp,
   # Y1 variability
   varY1 <- sum(phi^2L) * sd1^2L
 
-  varS + varq1 + varY1
+  varp + varq1 + varY1
 }
 
 #' Estimates the approximate variance of the HT estimator of t_phi2 with known
@@ -272,7 +272,7 @@ var_expansion_seq_phi2 <- function(Y2exp,
   # Sampling variability (S)
   covarPi <- pi2_to_covarInc(pi_mat)
   correctedY2p <- pi^-1L * phi * Y2exp
-  varS <- t(correctedY2p) %*% covarPi %*% correctedY2p +
+  varp <- t(correctedY2p) %*% covarPi %*% correctedY2p +
     sum(pi^-1L * (1.0 - pi) * phi^2L) * sd2^2L
 
   # q1 variability (R1)
@@ -285,7 +285,7 @@ var_expansion_seq_phi2 <- function(Y2exp,
   # Y2 variability
   varY2 <- sum(phi^2L) * sd2^2L
 
-  varS + varq1 + varq2 + varY2
+  varp + varq1 + varq2 + varY2
 }
 
 covar_difference_HT <- function(Y1exp, Y2exp, I,
@@ -315,7 +315,7 @@ covar_difference_HT <- function(Y1exp, Y2exp, I,
   }
   else
   {
-    varS <- weightedY1 / pi %*% t(weightedY2 / pi) * covarPi
+    varp <- weightedY1 / pi %*% t(weightedY2 / pi) * covarPi
   }
 
   # q1 variability (R1)
@@ -348,7 +348,7 @@ covar_difference_HT <- function(Y1exp, Y2exp, I,
   }
 
 
-  sum(varS + varq1)
+  sum(varp + varq1)
 }
 
 var_difference_HT <- function(Y1exp, Y2exp, I,
@@ -404,9 +404,9 @@ covar_HT_seq_phi1_phi2 <- function(Y1exp, Y2exp,
 
   # sampling variability
   covarPi <- pi2_to_covarInc(pi_mat)
-  varS <- prodexpY12Mat * covarPi
+  varp <- prodexpY12Mat * covarPi
 
-  vMat <- varq1 + varS
+  vMat <- varq1 + varp
 
   sum((phi / pi) %*% t((1.0 - phi) / pi) * vMat)
 }
@@ -472,9 +472,9 @@ var_estim_tot_BM <- function(modeTotBiased = "HT", modeTotRef = "HT",
     sumY1Y2 <- Y1exp / p1 + Y2exp / p1Bar
     varq1 <- sumY1Y2 %*% t(sumY1Y2) * pi_mat * covarq1
 
-    varS <- expDeltas %*% t(expDeltas) * covarPi
+    varp <- expDeltas %*% t(expDeltas) * covarPi
 
-    vDelta <- varY2 + varY1 + varq2 + varq1 + varS
+    vDelta <- varY2 + varY1 + varq2 + varq1 + varp
 
     b <- t(t(phi) %*% Z %*% solve(t(Z) %*% Z) %*% t(Z) / pi)
 
@@ -489,9 +489,9 @@ var_estim_tot_BM <- function(modeTotBiased = "HT", modeTotRef = "HT",
     weightedY1 <- Y1exp / p1
     varq1 <- weightedY1 %*% t(weightedY1 + Y2exp / p1Bar) * pi_mat * covarq1
 
-    varS <- Y1exp %*% t(expDeltas) * covarPi
+    varp <- Y1exp %*% t(expDeltas) * covarPi
 
-    v1Delta <- varY1 + varq1 + varS
+    v1Delta <- varY1 + varq1 + varp
 
     #b <- t(phi) %*% Z %*% solve(t(Z) %*% Z) %*% t(Z) / pi
 
@@ -508,9 +508,9 @@ var_estim_tot_BM <- function(modeTotBiased = "HT", modeTotRef = "HT",
     weightedY2 <- Y2exp / p1Bar
     varq1 <- weightedY2 %*% t(Y1exp / p1 + weightedY2) * pi_mat * covarq1
 
-    varS <- -Y2exp %*% t(expDeltas) * covarPi
+    varp <- -Y2exp %*% t(expDeltas) * covarPi
 
-    v2Delta <- varY2 + varq2 + varq1 + varS
+    v2Delta <- varY2 + varq2 + varq1 + varp
 
     #b <- t(phi) %*% Z %*% solve(t(Z) %*% Z) %*% t(Z) / pi
 

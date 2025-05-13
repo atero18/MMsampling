@@ -253,7 +253,7 @@ estim_tot_m2 <- function(Yobs, modes, pi, p1, p2, phi = rep(1.0, length(Yobs)))
 ```
 
 ```{r}
-estim_tot_m1_m2 <- function(Yobs, modes, pi, p1, p2, phi)
+estim_tot_m1_m2 <- function(Yobs, modes, pi, p1, p2, phi = rep(0.5, length(Yobs)))
 {
   estim_tot_m1(Yobs, modes, pi, p1, phi) +
     estim_tot_m2(Yobs, modes, pi, p1, p2, 1.0 - phi)
@@ -262,11 +262,11 @@ estim_tot_m1_m2 <- function(Yobs, modes, pi, p1, p2, phi)
 
 
 ```{r}
-estim_tot_a <- function(Yobs, modes, pi, pa)
+estim_tot_a <- function(Yobs, responses, pi, pa)
 {
-  modes[modes == "m2"] <- "m1"
+  maskSa <- responses == "r"
   
-  estim_tot_m1(Yobs, modes, pi, pa)
+  sum((pi[maskSa] * pa[maskSa])^-1L * Yobs[maskSa])
 }
 ```
 
@@ -830,7 +830,7 @@ estim_appr_var_seq_m2 <- function(Yobs,
 
 ```{r}
 estim_appr_var_seq_a <- function(Yobs,
-                                 respStat,
+                                 responses,
                                  I, 
                                  pi_mat,
                                  pa,
@@ -839,9 +839,9 @@ estim_appr_var_seq_a <- function(Yobs,
                                  Z = matrix(1.0, nrow = length(Yobs), ncol = 1L),
                                  ...)
 {
-  respStat[respStat == "r"] <- "m1"
+  responses[responses == "r"] <- "m1"
   
-  estim_appr_var_seq_m1(Yobs, respStat, I, 
+  estim_appr_var_seq_m1(Yobs, responses, I, 
                         pi_mat, pa, sd, 
                         correcEstimWeights = correcEstimWeights,
                         Z = Z,
@@ -864,7 +864,7 @@ var_expansion_m1 <- function(Y1exp,
   # Sampling variability (S)
   covarPi <- pi2_to_covarInc(pi_mat)
   correctedY1p <- pi^-1L * phi * Y1exp
-  varS <- t(correctedY1p) %*% covarPi %*% correctedY1p +
+  varp <- as.numeric(t(correctedY1p) %*% covarPi %*% correctedY1p) +
     sum(pi^-1L * (1.0 - pi) * phi^2L) * sd1^2L
 
   # q1 variability (R1)
@@ -874,7 +874,7 @@ var_expansion_m1 <- function(Y1exp,
   # Y1 variability
   varY1 <- sum(phi^2L) * sd1^2L
 
-  varS + varq1 + varY1
+  varp + varq1 + varY1
 }
 ```
 
@@ -882,8 +882,8 @@ var_expansion_m1 <- function(Y1exp,
 var_expansion_m2 <- function(Y2exp,
                              pi_mat,
                              p1, p2,
-                             phi = rep(1.0, length(Y2exp)),
-                             sd2 = 0.0)
+                             sd2 = 0.0,
+                             phi = rep(1.0, length(Y2exp)))
 {
   pi <- diag(pi_mat)
   p1Bar <- 1.0 - p1
@@ -891,7 +891,7 @@ var_expansion_m2 <- function(Y2exp,
   # Sampling variability (S)
   covarPi <- pi2_to_covarInc(pi_mat)
   correctedY2p <- pi^-1L * phi * Y2exp
-  varS <- t(correctedY2p) %*% covarPi %*% correctedY2p +
+  varp <- as.numeric(t(correctedY2p) %*% covarPi %*% correctedY2p) +
     sum(pi^-1L * (1.0 - pi) * phi^2L) * sd2^2L
 
   # q1 variability (R1)
@@ -904,7 +904,7 @@ var_expansion_m2 <- function(Y2exp,
   # Y2 variability
   varY2 <- sum(phi^2L) * sd2^2L
 
-  varS + varq1 + varq2 + varY2
+  varp + varq1 + varq2 + varY2
 }
 ```
 
@@ -914,7 +914,7 @@ var_expansion_a <- function(Yexp,
                             pa,
                             sd = 0.0)
 {
-  var_expansion_m1(Yexp, pi_mat, pa ,sd)
+  var_expansion_m1(Yexp, pi_mat, pa, sd)
 }
 ```
 
@@ -1159,13 +1159,19 @@ simulation_tphi <- function(Z,
     if (sd1 == sd2)
     {
       Ra <- runif(n = N) <= pa
-      respStat <- if_else(Ra, "r", "nr")
-      YobsEq <- rep(NA_real_, N)
+      # "r" if unit k would agree to answer by any mode
+      # if asked
+      respStat <- if_else(Ra, "r", "nr") 
+    
       maskSa <- I & Ra
+      # "r" if unit k answered by any mode
+      answers <- if_else(maskSa, "r", "nr")
+      
+      YobsEq <- rep(NA_real_, N)
       YobsEq[maskSa] <- Y1[maskSa]
       
       # With true probabilities
-      totaTW <- estim_tot_a(YobsEq, respStat, pi, pa)
+      totaTW <- estim_tot_a(YobsEq, answers, pi, pa)
       
       if (calcVariance)
       {
@@ -1173,8 +1179,8 @@ simulation_tphi <- function(Z,
         # The variance of Y is assumed known. The true probabilities are
         # used in the calculation.
         apprVaraTW <-
-          estim_appr_var_seq_a(Yobs,
-                               modes,
+          estim_appr_var_seq_a(YobsEq,
+                               answers,
                                I,
                                pi_mat,
                                pa,
@@ -1183,8 +1189,7 @@ simulation_tphi <- function(Z,
       }
       else
         apprVaraTW <- NA_real_
-      
-      browser()
+
       # With estimated probabilities
       dataEstimpa <- 
         cbind(response = as.integer(Ra), Z) %>% 
@@ -1196,7 +1201,7 @@ simulation_tphi <- function(Z,
       
       rm(dataEstimpa, model)
     
-      totaEW <- estim_tot_a(Yobs, modes, pi, estimpa)
+      totaEW <- estim_tot_a(YobsEq, answers, pi, estimpa)
       
       if (calcVariance)
       {
@@ -1204,8 +1209,8 @@ simulation_tphi <- function(Z,
         # The variance of Y is assumed known. The true probabilities are
         # used in the calculation.
         apprVaraEW <-
-          estim_appr_var_seq_a(Yobs,
-                               modes,
+          estim_appr_var_seq_a(YobsEq,
+                               answers,
                                I,
                                pi_mat,
                                estimpa,
@@ -1241,6 +1246,9 @@ simulation_tphi <- function(Z,
     tibble(estimator = c("tot1TW", "tot1EW", 
                          "tot2TW", "tot2EW", 
                          "totaTW", "totaEW"), 
+           estimand = c(sum(Y1), sum(Y1),
+                        sum(Y2), sum(Y2),
+                        sum(Y1), sum(Y1)),
            estimation = c(tot1TW, tot1EW, 
                           tot2TW, tot2EW, 
                           totaTW, totaEW),
@@ -1256,9 +1264,9 @@ simulation_tphi <- function(Z,
   
   res <- do.call("rbind", res)
   
-  trueVar1TW <- var_expansion_m1(Yexp, pi_mat, p1, phi, sd1)
+  trueVar1TW <- var_expansion_m1(Yexp, pi_mat, p1, sd1)
   
-  trueVar2TW <- var_expansion_m2(Yexp, pi_mat, p1, p2, phi, sd2)
+  trueVar2TW <- var_expansion_m2(Yexp, pi_mat, p1, p2, sd2)
   
   if (sd1 == sd2)
     trueVaraTW <- var_expansion_a(Yexp, pi_mat, p1, sd1)
@@ -1271,7 +1279,7 @@ simulation_tphi <- function(Z,
                      times = M)
   
   res <- res %>% 
-    mutate(expEstimand = Yexp, .after = "estimand") %>% 
+    mutate(expEstimand = sum(Yexp), .after = "estimand") %>% 
     mutate(trueVar = trueVar, .after = "apprVar")
   
   res
@@ -1281,7 +1289,7 @@ simulation_tphi <- function(Z,
 
 
 ```{r}
-Msim <- 10L
+Msim <- 1000L
 ```
 
 The different lines of the grid have the same seed. It is useful to run in different orders the evaluations and because the results from different parameters are never mixed there is no independency issue.
@@ -1297,9 +1305,12 @@ pb <- progress::progress_bar$new(format = "[:bar] :percent eta: :eta",
 
 pb$tick(0L)
 
+phi = rep(0.5, N)
+
 ## alphaa à changer
 for (k in seq_len(nrow(parameters)))
 {
+  
   
   simFun <- function(calcVariance = TRUE)
   {
@@ -1310,7 +1321,7 @@ for (k in seq_len(nrow(parameters)))
                     alpha2 = alpha2,
                     alphaa = alpha1,
                     beta = beta,
-                    phi = "eq",
+                    phi = phi,
                     sd1 = parameters[k, "sd1"],
                     sd2 = parameters[k, "sd2"],
                     n = parameters[k, "n"],
