@@ -1442,9 +1442,9 @@ simulation_tphi <- function(Z,
              .after = "sample")
   }
   
-  res <- lapply(seq_len(M), FUN = monoSim)
+  # res <- lapply(seq_len(M), FUN = monoSim)
   
-  # res <- mclapply(seq_len(M), FUN = monoSim, mc.cores = nCores)
+  res <- mclapply(seq_len(M), FUN = monoSim, mc.cores = nCores)
   
   res <- do.call("rbind", res)
   
@@ -1452,7 +1452,10 @@ simulation_tphi <- function(Z,
   
   trueVar2TW <- var_expansion_m2(Yexp, pi_mat, p1, p2, sd2)
   
-  trueVaraTW <- var_expansion_a(Yexp, pi_mat, pa, sd1)
+  if (sd1 == sd2 && rho == 1.0)
+    trueVaraTW <- var_expansion_a(Yexp, pi_mat, pa, sd1)
+  else
+    trueVaraTW <- NA_real_
   
   trueVarPhi <- var_expansion_m1_m2(Yexp, Yexp, 
                                     pi_mat, 
@@ -1476,7 +1479,7 @@ simulation_tphi <- function(Z,
 ## Simulation
 
 ```{r}
-Msim <- 1000L
+Msim <- 10000L
 ```
 
 The different lines of the grid have the same seed. It is useful to run in different orders the evaluations and because the results from different parameters are never mixed there is no independency issue.
@@ -1514,7 +1517,7 @@ for (k in seq_len(nrow(parameters)))
                     n = parameters[k, "n"],
                     rho = parameters[k, "rho"],
                     seed = NULL,
-                    nCores = 30L,
+                    nCores = 80L,
                     calcVariance = calcVariance)
   }
   
