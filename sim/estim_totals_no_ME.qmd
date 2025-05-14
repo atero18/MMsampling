@@ -316,7 +316,7 @@ Fisher_Information_Matrix <- function(prob,
 # 
 #   # Sampling variability (S)
 #   # There is no correction needed for probabilities estimation
-#   piSr_mat <- pi_mat[maskSr, maskSr]
+#   piSr_mat <- pi_mat[maskSr, maskSr, drop = FALSE]
 #   covarpSr <- pi2_to_covarInc(piSr_mat)
 # 
 #   correctedY1Srp <- (piSr * p1Sr)^-1L * weightedY1Sr
@@ -389,7 +389,7 @@ Fisher_Information_Matrix <- function(prob,
 #   weightedY2Smr <- phi[maskSmr] * Yobs[maskSmr]
 # 
 #   # Sampling variability (S)
-#   piSmr_mat <- pi_mat[maskSmr, maskSmr]
+#   piSmr_mat <- pi_mat[maskSmr, maskSmr, drop = FALSE]
 #   covarpSmr <- pi2_to_covarInc(piSmr_mat)
 # 
 #   correctedY2Smrp <- (piSmr * p1barSmr * p2Smr)^-1L * weightedY2Smr
@@ -452,6 +452,71 @@ Fisher_Information_Matrix <- function(prob,
 ```
 
 ```{r}
+estim_counterfactuals <- function(Yobs,
+                                  modes,
+                                  Z,
+                                  ...)
+{
+  requireNamespace(package = "MatchIt", versionCheck = NULL, quietly = FALSE)
+  
+  maskSr <- modes == "m1"
+  maskSmr <- modes == "m2"
+  maskSa <- maskSr | maskSmr
+
+  # Vectors that contains "estimation" of the counterfactuals of the outcomes.
+  Y1Est <- Y2Est <- Yobs
+  YobsSa <- Yobs[maskSa]
+  
+  dataMatchingSa <- as.data.frame(Z[maskSa, , drop = FALSE])
+  dataMatchingSa$mode <- as.integer(modes[maskSa] == "m1")
+  row.names(dataMatchingSa) <- seq_len(na)
+  
+  # Estimation of the y_1k on Smr
+  matchingSmr <- 
+    MatchIt::matchit(mode ~ ., data = dataMatchingSa, 
+                     estimand = "ATC", replace = TRUE, ...)
+  
+  Y1Est[maskSmr] <- YobsSa[as.integer(matchingSmr$match.matrix[, 1L])]
+  
+  # Estimation of the y_2k on Sr
+  matchingSr <- 
+    MatchIt::matchit(mode ~ ., data = dataMatchingSa, 
+                     estimand = "ATT", replace = TRUE, ...)
+
+  Y2Est[maskSr] <- YobsSa[as.integer(matchingSr$match.matrix[, 1L])]
+  
+  cbind(Y1Est = Y1Est, Y2Est = Y2Est)
+}
+```
+
+```{r}
+estim_cov_12 <- function(Y1, Y2, sd1, sd2, Z, Yobs = NULL, modes, ...)
+{
+  # If the observation vector Yobs is given we do the estimation
+  # of the counterfactuals
+  if (!is.null(Yobs))
+  {
+    Yest <- estim_counterfactuals(Yobs, modes, Z, ...)
+    Y1 <- Yest[, "Y1Est"]
+    Y2 <- Yest[, "Y2Est"]
+    maskResp <- modes %in% c("m1", "m2")
+  }
+  else
+  {
+    # The estimation is made with units such that 
+    # both potential outcomes are known (or generally estimated)
+    maskResp <- !is.na(Y1) & !is.na(Y2)
+  }
+  
+  # Assuming a linear model for the differences y_1k - y_2k
+  sdDelta <- summary.lm(lm(Y1 - Y2 ~ Z, subset = maskResp))$sigma
+  
+  (sd1^2L - sdDelta^2L + sd2^2L) / 2.0
+}
+```
+
+
+```{r}
 # ... : arguments for matching
 estim_appr_var_seq_m1_m2 <- function(Yobs,
                                      modes,
@@ -459,9 +524,9 @@ estim_appr_var_seq_m1_m2 <- function(Yobs,
                                      pi_mat,
                                      p1,
                                      p2,
-                                     sd1 = NULL,
+                                     sd1 = 0.0,
                                      sd2 = sd1,
-                                     rho = 0.8,
+                                     cov12 = NULL,
                                      phi = rep(0.5, length(Yobs)),
                                      correcEstimWeights = TRUE,
                                      Z = matrix(1.0, nrow = length(Yobs), ncol = 1L),
@@ -487,9 +552,6 @@ estim_appr_var_seq_m1_m2 <- function(Yobs,
   else if (m2Only)
     phi <- numeric(N)
   
-  if (!m1Only && !m2Only)
-    requireNamespace(package = "MatchIt", versionCheck = NULL, quietly = FALSE)
-  
   piSa <- pi[maskSa]
   p1Sa <- p1[maskSa]
   p1barSa <- 1.0 - p1Sa
@@ -509,12 +571,12 @@ estim_appr_var_seq_m1_m2 <- function(Yobs,
     piSr <- pi[maskSr]
     p1Sr <- p1[maskSr]
     
-    piSr_mat <- pi_mat[maskSr, maskSr]
+    piSr_mat <- pi_mat[maskSr, maskSr, drop = FALSE]
     covarpSr <- pi2_to_covarInc(piSr_mat)
   }
   else
   {
-    rho <- 0.0
+    cov12 <- 0.0
     sd1 <- 0.0
   }
     
@@ -537,14 +599,12 @@ estim_appr_var_seq_m1_m2 <- function(Yobs,
     p2Smr <- p2[maskSmr]
     p2Sa <- p2[maskSa]
     
-    piSmr_mat <- pi_mat[maskSmr, maskSmr]
+    piSmr_mat <- pi_mat[maskSmr, maskSmr, drop = FALSE]
     covarpSmr <- pi2_to_covarInc(piSmr_mat)
-    
-    
   }
   else
   {
-    rho <- 0.0
+    cov12 <- 0.0
     sd2 <- 0.0
     p2 <- NULL
   }
@@ -589,46 +649,16 @@ estim_appr_var_seq_m1_m2 <- function(Yobs,
     # on Sr (y_2k) and Smr (y_2k) by single matching with Z
   else
   {
-    # Vectors that contains "estimation" of Y1 and Y2 respectively.
-    # It is equal to the true value when it is known.
-    YobsSa <- Yobs[maskSa]
-    Y1SaEst <- Y2SaEst <- YobsSa
+    YEst <- estim_counterfactuals(Yobs, modes, Z, ...)
+    Y1Est <- YEst[maskSa, "Y1Est"]
+    Y2Est <- YEst[maskSa, "Y2Est"]
     
-    dataMatchingSa <- as.data.frame(Z[maskSa, , drop = FALSE])
-    dataMatchingSa$mode <- as.integer(maskm1Sa)
-    row.names(dataMatchingSa) <- seq_len(na)
+    phiY1SaEst <- phi[maskSa] * Y1Est
+    phiY2SaEst <- (1.0 - phi[maskSa]) * Y2Est
     
-    # Estimation of the y_1k on Smr
-    if (!all(phiSmr == 0.0))
-    {
-      matchingSmr <- 
-        MatchIt::matchit(mode ~ ., data = dataMatchingSa, 
-                         estimand = "ATC", replace = TRUE, ...)
-      
-      Y1SaEst[!maskm1Sa] <- YobsSa[as.integer(matchingSmr$match.matrix[, 1L])]
-      
-      rm(matchingSmr)
-    }
+    rm(YEst)
     
-    # Estimation of the y_2k on Sr
-    if (!all(phiSr == 1.0))
-    {
-      matchingSr <- 
-        MatchIt::matchit(mode ~ ., data = dataMatchingSa, 
-                         estimand = "ATT", replace = TRUE, ...)
-    
-      Y2SaEst[maskm1Sa] <- YobsSa[as.integer(matchingSr$match.matrix[, 1L])]
-      
-      rm(matchingSr)
-    }
-    
-    rm(dataMatchingSa)
-    
-    phiY1SaEst <- phi[maskSa] * Y1SaEst
-    phiY2SaEst <- (1.0 - phi[maskSa]) * Y2SaEst
-    
-    
-    piSa_mat <- pi_mat[maskSa, maskSa]
+    piSa_mat <- pi_mat[maskSa, maskSa, drop = FALSE]
     covarpSa <- pi2_to_covarInc(piSa_mat)
     
     
@@ -769,9 +799,15 @@ estim_appr_var_seq_m1_m2 <- function(Yobs,
   
   # Potential outcomes variability
   # We use the mean of the phi_k in case some of them are unknown
+  if (sd1 == 0.0 || sd2 == 0.0)
+    cov12 <- 0.0
+  
+  else if (is.null(cov12))
+    cov12 <- estim_cov_12(Y1Est, Y2Est, sd1, sd2, Z)
+  
   varphiYEst <- 
     mean(phi^2L, na.rm = TRUE) * N * sd1^2L +
-    2.0 * mean(phi * (1.0 - phi), na.rm = TRUE) * N * rho * sd1 * sd2 +
+    2.0 * mean(phi * (1.0 - phi), na.rm = TRUE) * N * cov12 +
     mean((1.0 - phi)^2L, na.rm = TRUE) * N * sd2^2L
   
   
@@ -793,7 +829,7 @@ estim_appr_var_seq_m1 <- function(Yobs, modes,
                            p1, p2 = NULL,
                            sd1,
                            sd2 = 0.0,
-                           rho = 0.0,
+                           cov12 = 0.0,
                            phi = rep(1.0, length(Yobs)),
                            correcEstimWeights,
                            Z = Z,
@@ -816,7 +852,7 @@ estim_appr_var_seq_m2 <- function(Yobs, modes,
                            p1, p2,
                            sd1 = 0.0,
                            sd2,
-                           rho = 0.0,
+                           cov12 = 0.0,
                            phi = numeric(length(Yobs)),
                            correcEstimWeights,
                            Z,
@@ -855,7 +891,7 @@ CONDITIONS INDEPENDANCE
 var_expansion_m1_m2 <- function(Y1exp, Y2exp, 
                                 pi_mat, 
                                 p1, p2, 
-                                sd1 = 0.0, sd2 = 0.0, rho = 0.0, 
+                                sd1 = 0.0, sd2 = 0.0, cov12 = 0.0, 
                                 phi = rep(0.5, length(Y1exp)))
 {
   pi <- diag(pi_mat)
@@ -872,7 +908,7 @@ var_expansion_m1_m2 <- function(Y1exp, Y2exp,
   varp <- as.numeric(t(correctedY1p) %*% covarPi %*% correctedY1p) +
     sum(pi^-1L * (1.0 - pi) * 
           (phi^2L * sd1^2L + phibar^2L * sd2^2L +
-             2.0 * phi * phibar * rho * sd1 * sd2))
+             2.0 * phi * phibar * cov12))
   
   # q1 variability (R1)
   # with the independence between p and q1
@@ -880,7 +916,7 @@ var_expansion_m1_m2 <- function(Y1exp, Y2exp,
   varCorrectedDifference <- 
     (p1^-2L * phi^2L * sd1^2L + 
        p1bar^-2L * phibar^2L * sd2^2L -
-       2.0 * (p1 * p1bar)^-1L * phi * phibar * rho * sd1 * sd2)
+       2.0 * (p1 * p1bar)^-1L * phi * phibar * cov12)
   varq1 <- 
     sum(pi^-1L * p1 * p1bar * 
     (varCorrectedDifference + 
@@ -900,7 +936,7 @@ var_expansion_m1_m2 <- function(Y1exp, Y2exp,
   # potential outcomes variability
   varPhiY <- 
     sum(phi^2L) * sd1^2L +
-    2.0 * sum(phi * phibar) * rho * sd1 * sd2 +
+    2.0 * sum(phi * phibar) * cov12 +
     sum(phibar^2L) * sd2^2L
   
   varp + varq1 + varq2 + varPhiY
@@ -917,7 +953,7 @@ var_expansion_m1 <- function(Y1exp,
   var_expansion_m1_m2(Y1exp, Y2exp = numeric(length(Y1exp)), 
                       pi_mat,
                       p1, p2 = NULL, 
-                      sd1, sd2 = 0.0, rho = 0.0, 
+                      sd1, sd2 = 0.0, cov12 = 0.0, 
                       phi)
 }
 ```
@@ -933,7 +969,7 @@ var_expansion_m2 <- function(Y2exp,
   var_expansion_m1_m2(Y1exp = numeric(length(Y2exp)), Y2exp, 
                       pi_mat, 
                       p1, p2, 
-                      sd1 = 0.0, sd2, rho = 0.0, 
+                      sd1 = 0.0, sd2, cov12 = 0.0, 
                       1.0 - phi)
 }
 ```
@@ -1165,6 +1201,8 @@ simulation_tphi <- function(Z,
     names(Yobs) <- paste0("yobs", seq_len(N))
     
     # Estimations with Y1 (total of the y_1k)
+    estimsd1 <- summary.lm(lm(Yobs ~ Z, subset = maskSr))$sigma
+    
      # With true probabilities
     tot1TW <- estim_tot_m1(Yobs, modes, pi, p1)
     
@@ -1179,7 +1217,7 @@ simulation_tphi <- function(Z,
                               I,
                               pi_mat,
                               p1,
-                              sd1,
+                              estimsd1,
                               correcEstimWeights = FALSE)
     }
     else
@@ -1199,7 +1237,7 @@ simulation_tphi <- function(Z,
                               I,
                               pi_mat,
                               estimp1,
-                              sd1,
+                              estimsd1,
                               correcEstimWeights = TRUE,
                               Z)
     }
@@ -1207,6 +1245,7 @@ simulation_tphi <- function(Z,
       apprVar1EW <- NA_real_
     
     # Estimations with Y2 (total of the y_2k)
+    estimsd2 <- summary.lm(lm(Yobs ~ Z, subset = maskSmr))$sigma
       # With true probabilities
     tot2TW <- estim_tot_m2(Yobs, modes, pi, p1, p2)
     
@@ -1222,7 +1261,7 @@ simulation_tphi <- function(Z,
                               pi_mat,
                               p1,
                               p2,
-                              sd2,
+                              estimsd2,
                               correcEstimWeights = FALSE)
     }
     else
@@ -1242,7 +1281,7 @@ simulation_tphi <- function(Z,
                               pi_mat,
                               estimp1,
                               estimp2,
-                              sd2,
+                              estimsd2,
                               correcEstimWeights = TRUE,
                               Z)
     }
@@ -1276,11 +1315,14 @@ simulation_tphi <- function(Z,
     # Case 2
     else
     {
+      maskSa <- maskSr | maskSmr
       answers <- if_else(modes %in% c("m1", "m2"), "r", "nr")
       YobsEq <- Yobs
     }
     
-    # With true probabilities
+    estimsd <- summary.lm(lm(YobsRq ~ Z, subset = maskSa))$sigma
+    
+      # With true probabilities
     totaTW <- estim_tot_a(YobsEq, answers, pi, pa)
     
     if (calcVariance)
@@ -1294,13 +1336,13 @@ simulation_tphi <- function(Z,
                              I,
                              pi_mat,
                              pa,
-                             sd1,
+                             estimsd,
                              correcEstimWeights = FALSE)
     }
     else
       apprVaraTW <- NA_real_
 
-    # With estimated probabilities
+      # With estimated probabilities
     dataEstimpa <- 
       cbind(response = as.integer(Ra), Z) %>% 
       as.data.frame()
@@ -1324,7 +1366,7 @@ simulation_tphi <- function(Z,
                              I,
                              pi_mat,
                              estimpa,
-                             sd1,
+                             estimsd,
                              correcEstimWeights = TRUE,
                              Z)
     }
@@ -1332,6 +1374,9 @@ simulation_tphi <- function(Z,
       apprVaraEW <- NA_real_
     
     # Estimations with Y1 and Y2 weighted by phi
+    estimcov12 <- 
+      estimcov_12(Yobs = Yobs, modes = modes, 
+                  sd1 = estimsd1, sd2 = estimsd2, Z = Z)
       # With true probabilities
     totPhiTW <- estim_tot_m1_m2(Yobs, modes, pi, p1, p2, phi)
     
@@ -1344,9 +1389,9 @@ simulation_tphi <- function(Z,
                                  pi_mat,
                                  p1,
                                  p2,
-                                 sd1,
-                                 sd2,
-                                 rho,
+                                 estimsd1,
+                                 estimsd2,
+                                 estimcov12,
                                  phi,
                                  correcEstimWeights = FALSE)
     }
@@ -1366,9 +1411,9 @@ simulation_tphi <- function(Z,
                                  pi_mat,
                                  estimp1,
                                  estimp2,
-                                 sd1,
-                                 sd2,
-                                 rho,
+                                 estimsd1,
+                                 estimsd2,
+                                 estimcov12,
                                  phi,
                                  correcEstimWeights = TRUE,
                                  Z)

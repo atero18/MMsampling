@@ -92,7 +92,7 @@ estim_appr_var_seq_phi1 <- function(Yobs,
 
   # Sampling variability (S)
   # There is no correction needed for probabilities estimation
-  piSr_mat <- pi_mat[maskSr, maskSr]
+  piSr_mat <- pi_mat[maskSr, maskSr, drop = FALSE]
   covarpSr <- pi2_to_covarInc(piSr_mat)
 
   correctedY1Srp <- (piSr * p1Sr)^-1L * weightedY1Sr
@@ -197,7 +197,7 @@ estim_appr_var_seq_phi2 <- function(Yobs,
   weightedY2Smr <- phi[maskSmr] * Yobs[maskSmr]
 
   # Sampling variability (S)
-  piSmr_mat <- pi_mat[maskSmr, maskSmr]
+  piSmr_mat <- pi_mat[maskSmr, maskSmr, drop = FALSE]
   covarpSmr <- pi2_to_covarInc(piSmr_mat)
 
   correctedY2Smrp <- (piSmr * p1barSmr * p2Smr)^-1L * weightedY2Smr
