@@ -469,7 +469,7 @@ estim_counterfactuals <- function(Yobs,
   
   dataMatchingSa <- as.data.frame(Z[maskSa, , drop = FALSE])
   dataMatchingSa$mode <- as.integer(modes[maskSa] == "m1")
-  row.names(dataMatchingSa) <- seq_len(na)
+  row.names(dataMatchingSa) <- seq_len(sum(maskSa))
   
   # Estimation of the y_1k on Smr
   matchingSmr <- 
@@ -1090,6 +1090,8 @@ parameters <- parameters %>%
   distinct() %>% 
   mutate(n = as.integer(ratio_n * N), .after = "ratio_n") %>% 
   mutate(sd2 = sd1 * ratio_sd, .after = "ratio_sd")
+
+rm(paramVar_n, paramVar_sd, paramVar_sdEq, paramVar_rho)
 ```
 
 ```{r}
@@ -1320,7 +1322,7 @@ simulation_tphi <- function(Z,
       YobsEq <- Yobs
     }
     
-    estimsd <- summary.lm(lm(YobsRq ~ Z, subset = maskSa))$sigma
+    estimsd <- summary.lm(lm(YobsEq ~ Z, subset = maskSa))$sigma
     
       # With true probabilities
     totaTW <- estim_tot_a(YobsEq, answers, pi, pa)
@@ -1344,7 +1346,7 @@ simulation_tphi <- function(Z,
 
       # With estimated probabilities
     dataEstimpa <- 
-      cbind(response = as.integer(Ra), Z) %>% 
+      cbind(response = as.integer(maskSa), Z) %>% 
       as.data.frame()
     model <- glm(response ~ Z, data = dataEstimpa,
                  family = binomial, subset = I)
@@ -1375,8 +1377,8 @@ simulation_tphi <- function(Z,
     
     # Estimations with Y1 and Y2 weighted by phi
     estimcov12 <- 
-      estimcov_12(Yobs = Yobs, modes = modes, 
-                  sd1 = estimsd1, sd2 = estimsd2, Z = Z)
+      estim_cov_12(Yobs = Yobs, modes = modes, 
+                   sd1 = estimsd1, sd2 = estimsd2, Z = Z)
       # With true probabilities
     totPhiTW <- estim_tot_m1_m2(Yobs, modes, pi, p1, p2, phi)
     
@@ -1474,7 +1476,7 @@ simulation_tphi <- function(Z,
 ## Simulation
 
 ```{r}
-Msim <- 10L
+Msim <- 1000L
 ```
 
 The different lines of the grid have the same seed. It is useful to run in different orders the evaluations and because the results from different parameters are never mixed there is no independency issue.
