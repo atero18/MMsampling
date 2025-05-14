@@ -1019,7 +1019,7 @@ n_ref <- integer(ratio_n_ref * N)
 sd1_vec <- c(1.0, 2.0, 5.0)
 sd1_ref <- sd1_vec[1L]
 ratio_sd_vec <- c(0.25, 0.5, 1.0, 2.0, 4.0)
-rho_vec <- c(0.8, 0.9)
+rho_vec <- c(0.8, 0.9, 1.0)
 rho_ref <- rho_vec[1L]
 
 # Variation of the sample fraction n / N and sd1 with sd1 = sd2 
@@ -1035,6 +1035,12 @@ paramVar_sd <-
               sd1 = sd1_vec, ratio_sd = ratio_sd_vec,
               rho = rho_ref)
 
+# Variation of the variance with sd1 = sd2 and rho = 1
+paramVar_sdEq <- 
+  expand.grid(ratio_n = ratio_n_ref, 
+              sd1 = sd1_vec, ratio_sd = 1.0,
+              rho = 1.0)
+
 # Variation of the correlation between Y1 and Y2 (rho) with 
 # sd1 = sd2 fixed
 paramVar_rho <- 
@@ -1042,7 +1048,7 @@ paramVar_rho <-
               sd1 = sd1_ref, ratio_sd = 1.0,
               rho = rho_vec)
 
-parameters <- rbind(paramVar_n, paramVar_sd, paramVar_rho)
+parameters <- rbind(paramVar_n, paramVar_sd, paramVar_sdEq, paramVar_rho)
 
 parameters <- parameters %>% 
   distinct() %>% 
@@ -1243,10 +1249,17 @@ simulation_tphi <- function(Z,
     else
       apprVar2EW <- NA_real_
     
-    # Estimations with Y1 and Y2 considered equal (to some Y)
-    # In the case of V[Y1 | Z] != V[Y2 | Z] the equality
-    # is clearly not respected
-    if (sd1 == sd2)
+
+    # Estimations with Y1 and Y2 assumezd equal (total of the y_k)
+    # 
+    # We consider two cases here :
+    # 1) when p_a follow a logistic model and we have Y1 = Y2 
+    #  (considered when sd1 = sd2 and rho = 1)
+    # 2) when p_1 and p_2 follow a logistic model like before 
+    #  and Y1 != Y2 in general
+   
+    # Case 1
+    if (sd1 == sd2 && rho == 1.0)
     {
       Ra <- runif(n = N) <= pa
       # "r" if unit k would agree to answer by any mode
@@ -1256,67 +1269,67 @@ simulation_tphi <- function(Z,
       maskSa <- I & Ra
       # "r" if unit k answered by any mode
       answers <- if_else(maskSa, "r", "nr")
-      
+    
       YobsEq <- rep(NA_real_, N)
       YobsEq[maskSa] <- Y1[maskSa]
-      
-      # With true probabilities
-      totaTW <- estim_tot_a(YobsEq, answers, pi, pa)
-      
-      if (calcVariance)
-      {
-        # Unbiased estimation of the variance of the total estimator.
-        # The variance of Y is assumed known. The true probabilities are
-        # used in the calculation.
-        apprVaraTW <-
-          estim_appr_var_seq_a(YobsEq,
-                               answers,
-                               I,
-                               pi_mat,
-                               pa,
-                               sd1,
-                               correcEstimWeights = FALSE)
-      }
-      else
-        apprVaraTW <- NA_real_
-
-      # With estimated probabilities
-      dataEstimpa <- 
-        cbind(response = as.integer(Ra), Z) %>% 
-        as.data.frame()
-      model <- glm(response ~ Z, data = dataEstimpa,
-                   family = binomial, subset = I)
-
-      estimpa <- predict(model, newdata = as.data.frame(Z), type = "response")
-      
-      rm(dataEstimpa, model)
-    
-      totaEW <- estim_tot_a(YobsEq, answers, pi, estimpa)
-      
-      if (calcVariance)
-      {
-        # Unbiased estimation of the variance of the total estimator.
-        # The variance of Y is assumed known. The true probabilities are
-        # used in the calculation.
-        apprVaraEW <-
-          estim_appr_var_seq_a(YobsEq,
-                               answers,
-                               I,
-                               pi_mat,
-                               estimpa,
-                               sd1,
-                               correcEstimWeights = TRUE,
-                               Z)
-      }
-      else
-        apprVaraEW <- NA_real_
-        
     }
+    # Case 2
     else
     {
-      totaTW <- apprVaraTW <- NaN
-      totaEW <- apprVaraEW <- NaN
+      answers <- if_else(modes %in% c("m1", "m2"), "r", "nr")
+      YobsEq <- Yobs
     }
+    
+    # With true probabilities
+    totaTW <- estim_tot_a(YobsEq, answers, pi, pa)
+    
+    if (calcVariance)
+    {
+      # Unbiased estimation of the variance of the total estimator.
+      # The variance of Y is assumed known. The true probabilities are
+      # used in the calculation.
+      apprVaraTW <-
+        estim_appr_var_seq_a(YobsEq,
+                             answers,
+                             I,
+                             pi_mat,
+                             pa,
+                             sd1,
+                             correcEstimWeights = FALSE)
+    }
+    else
+      apprVaraTW <- NA_real_
+
+    # With estimated probabilities
+    dataEstimpa <- 
+      cbind(response = as.integer(Ra), Z) %>% 
+      as.data.frame()
+    model <- glm(response ~ Z, data = dataEstimpa,
+                 family = binomial, subset = I)
+
+    estimpa <- predict(model, newdata = as.data.frame(Z), type = "response")
+    
+    rm(dataEstimpa, model)
+  
+    totaEW <- estim_tot_a(YobsEq, answers, pi, estimpa)
+    
+    if (calcVariance)
+    {
+      # Unbiased estimation of the variance of the total estimator.
+      # The variance of Y is assumed known. The true probabilities are
+      # used in the calculation.
+      apprVaraEW <-
+        estim_appr_var_seq_a(YobsEq,
+                             answers,
+                             I,
+                             pi_mat,
+                             estimpa,
+                             sd1,
+                             correcEstimWeights = TRUE,
+                             Z)
+    }
+    else
+      apprVaraEW <- NA_real_
     
     # Estimations with Y1 and Y2 weighted by phi
       # With true probabilities
@@ -1418,7 +1431,7 @@ simulation_tphi <- function(Z,
 ## Simulation
 
 ```{r}
-Msim <- 10000L
+Msim <- 1000L
 ```
 
 The different lines of the grid have the same seed. It is useful to run in different orders the evaluations and because the results from different parameters are never mixed there is no independency issue.
@@ -1467,9 +1480,6 @@ for (k in seq_len(nrow(parameters)))
     cbind(parameters[k, ], 
           rbind(resTempWithVar, resTempWithoutVar), 
           row.names = NULL) %>%
-    filter(!is.nan(estimation), 
-           !estimator %in% c("totaTW", "totaEW") | rho == rho_ref) %>% 
-    mutate(rho = if_else(estimator %in% c("totaTW", "totaEW"), 1.0, rho)) %>% 
     rbind(resSimulation)
 
   pb$tick()
@@ -1510,15 +1520,21 @@ Here we show average approximate variance and variance of different estimators, 
 ### Quality of the approximate variance estimators
 
 ```{r}
-resSimulation %>% 
+temp <- resSimulation %>% 
   mutate(estimation = if_else(subset == 1L, estimation, NA_real_)) %>% 
-  group_by(estimand, sample, weights, n, sd1, sd2, rho) %>% 
+  group_by(n, sd1, sd2, rho, estimand, sample, weights) %>% 
   summarize(M = n() / 2L,
             MC_AV = mean(apprVar, na.rm = TRUE),
             MC_var = var(estimation, na.rm = TRUE),
             true_var = first(trueVar)) %>% 
-  mutate(MC_AV_by_var = MC_AV / MC_var) %>% 
-  ungroup()
+  mutate(MC_AV_by_var = MC_AV / MC_var)
+
+temp
+```
+```{r}
+temp %>% 
+  ungroup(estimand, sample, weights) %>% 
+  slice_min(MC_AV)
 ```
 
 ## Convergence in law
