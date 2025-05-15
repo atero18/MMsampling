@@ -1194,6 +1194,12 @@ simulation_tphi <- function(Z,
     names(Y2) <- paste0("y2", seq_len(N))
     
     rm(YpotOutRes_mat)
+    
+      # If variances of Y1 and Y2 are equal and the
+      # correlation of (y_1k, y_2k) is equal to one,
+      # we consider the equality Y1 = Y2
+    if (sd1 == sd2 && rho == 1.0)
+      Y2 <- Y1
 
     
     # Creating the observed outcome vector
@@ -1479,13 +1485,15 @@ simulation_tphi <- function(Z,
 ## Simulation
 
 ```{r}
-Msim <- 10000L
+Msim <- 2500L
 ```
 
 The different lines of the grid have the same seed. It is useful to run in different orders the evaluations and because the results from different parameters are never mixed there is no independency issue.
 
 
 If the number of parallel cores changes, the results might be different.
+
+We define the case $\sigma_1 = \sigma_2$ and $\rho = 1$ as $Y_1 = Y_2$.
 
 ```{r}
 resSimulation <- NULL
@@ -1528,7 +1536,9 @@ for (k in seq_len(nrow(parameters)))
     cbind(parameters[k, ], 
           rbind(resTempWithVar, resTempWithoutVar), 
           row.names = NULL) %>%
+    mutate(eq12 = sd1 == sd2 && rho == 1.0) %>% 
     rbind(resSimulation)
+    
 
   pb$tick()
 }
