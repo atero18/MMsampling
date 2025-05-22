@@ -1448,9 +1448,10 @@ simulation_tphi <- function(Z,
              .after = "sample")
   }
   
-  # res <- lapply(seq_len(M), FUN = monoSim)
-  
-  res <- mclapply(seq_len(M), FUN = monoSim, mc.cores = nCores)
+  if (nCores == 0L)
+    res <- lapply(seq_len(M), FUN = monoSim)
+  else
+    res <- mclapply(seq_len(M), FUN = monoSim, mc.cores = nCores)
   
   res <- do.call("rbind", res)
   
@@ -1525,7 +1526,7 @@ for (k in seq_len(nrow(parameters)))
                     n = parameters[k, "n"],
                     rho = parameters[k, "rho"],
                     seed = NULL,
-                    nCores = 80L,
+                    nCores = 45L,
                     calcVariance = calcVariance)
   }
   
@@ -1536,7 +1537,8 @@ for (k in seq_len(nrow(parameters)))
     cbind(parameters[k, ], 
           rbind(resTempWithVar, resTempWithoutVar), 
           row.names = NULL) %>%
-    mutate(eq12 = sd1 == sd2 && rho == 1.0) %>% 
+    mutate(eq12 = parameters[k, "sd1"] == parameters[k, "sd2"] &&
+             parameters[k, "rho"] == 1.0) %>% 
     rbind(resSimulation)
     
 
