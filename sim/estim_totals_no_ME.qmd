@@ -144,7 +144,7 @@ data.frame(mode = factor(rep(c("m1", "m2"), each = N)),
   ggplot() + 
   geom_density(aes(x = prob, color = mode)) +
   ggtitle("Distribution of p1 and p2") +
-  xlab("mode selection probability")
+  xlab("Mode selection probability")
 ```
 
 ```{r}
@@ -157,6 +157,17 @@ Probability to answer by $m_2$ under to the sequential protocol (i.e. do not ans
 pRep2 <- (1.0 - p1) * p2
 summary(pRep2)
 ```
+Probability to answer under the sequential protocol
+```{r}
+pRep <- p1 + (1.0 - p1) * p2
+summary(pRep)
+data.frame(pRep = pRep) %>% 
+  ggplot() + 
+  geom_density(aes(pRep)) +
+  ggtitle("Distribution of the probability to answer (sequential logistic)") +
+  xlab("Probability to answer if asked (p_1k + [1 - p_1k]p_2k)")
+```
+
 
 About $S_{r\bullet}$ (case of SRS with $f = \frac{1}{10}$):
 
@@ -228,6 +239,20 @@ rm(f, pCov, pi, pi_mat)
 rm(expSizeSr, varSizeSr, 
    expSizeSmr, varSizeSmr, 
    expSizeSa, varSizeSa)
+```
+
+
+```{r}
+alphaa <- c(+1.3, -0.01, -0.35)
+pa <- gen_selection_probabilities(Z, alphaa)
+```
+
+```{r}
+data.frame(pa = pa) %>% 
+  ggplot() + 
+  geom_density(aes(pa)) +
+  ggtitle("Distribution of pa (global logistic)") +
+  xlab("Probability to answer if asked (p_ak)")
 ```
 
 # Total estimation
@@ -1105,7 +1130,7 @@ glue("Size of the grid: {nrow(parameters)} iterations.")
 simulation_tphi <- function(Z,
                             sampling = "SRS",
                             alpha1, alpha2,
-                            alphaa,
+                            alphaa = alpha1,
                             beta, 
                             sd1 = 1.0, sd2 = sd1, 
                             rho = 0.8,
@@ -1125,7 +1150,16 @@ simulation_tphi <- function(Z,
 
   p1 <- expit(Z %*% alpha1) %>% as.numeric()
   p2 <- expit(Z %*% alpha2) %>% as.numeric()
-  pa <- expit(Z %*% alphaa) %>% as.numeric()
+  
+  # If variances of Y1 and Y2 are equal and the
+  # correlation of (y_1k, y_2k) is equal to one,
+  # we consider the equality Y1 = Y2 and will
+  # consider a logistic model for the global
+  # answer mechanism, apart of the sequel logistic
+  # model
+  if (sd1 == sd2 && rho == 1.0)
+    pa <- expit(Z %*% alphaa) %>% as.numeric()
+  
   
   Yexp <- Z %*% beta
 
@@ -1195,9 +1229,6 @@ simulation_tphi <- function(Z,
     
     rm(YpotOutRes_mat)
     
-      # If variances of Y1 and Y2 are equal and the
-      # correlation of (y_1k, y_2k) is equal to one,
-      # we consider the equality Y1 = Y2
     if (sd1 == sd2 && rho == 1.0)
       Y2 <- Y1
 
@@ -1298,14 +1329,7 @@ simulation_tphi <- function(Z,
     
 
     # Estimations with Y1 and Y2 assumezd equal (total of the y_k)
-    # 
-    # We consider two cases here :
-    # 1) when p_a follow a logistic model and we have Y1 = Y2 
-    #  (considered when sd1 = sd2 and rho = 1)
-    # 2) when p_1 and p_2 follow a logistic model like before 
-    #  and Y1 != Y2 in general
-   
-    # Case 1
+    # (considered when sd1 = sd2 and rho = 1)
     if (sd1 == sd2 && rho == 1.0)
     {
       Ra <- runif(n = N) <= pa
@@ -1319,67 +1343,66 @@ simulation_tphi <- function(Z,
     
       YobsEq <- rep(NA_real_, N)
       YobsEq[maskSa] <- Y1[maskSa]
-    }
-    # Case 2
-    else
-    {
-      maskSa <- maskSr | maskSmr
-      answers <- if_else(modes %in% c("m1", "m2"), "r", "nr")
-      YobsEq <- Yobs
-    }
-    
-    estimsd <- summary.lm(lm(YobsEq ~ Z, subset = maskSa))$sigma
+      
+      estimsd <- summary.lm(lm(YobsEq ~ Z, subset = maskSa))$sigma
     
       # With true probabilities
-    totaTW <- estim_tot_a(YobsEq, answers, pi, pa)
-    
-    if (calcVariance)
-    {
-      # Unbiased estimation of the variance of the total estimator.
-      # The variance of Y is assumed known. The true probabilities are
-      # used in the calculation.
-      apprVaraTW <-
-        estim_appr_var_seq_a(YobsEq,
-                             answers,
-                             I,
-                             pi_mat,
-                             pa,
-                             estimsd,
-                             correcEstimWeights = FALSE)
-    }
-    else
-      apprVaraTW <- NA_real_
-
-      # With estimated probabilities
-    dataEstimpa <- 
-      cbind(response = as.integer(maskSa), Z) %>% 
-      as.data.frame()
-    model <- glm(response ~ Z, data = dataEstimpa,
-                 family = binomial, subset = I)
-
-    estimpa <- predict(model, newdata = as.data.frame(Z), type = "response")
-    
-    rm(dataEstimpa, model)
+      totaTW <- estim_tot_a(YobsEq, answers, pi, pa)
+      
+      if (calcVariance)
+      {
+        # Unbiased estimation of the variance of the total estimator.
+        # The variance of Y is assumed known. The true probabilities are
+        # used in the calculation.
+        apprVaraTW <-
+          estim_appr_var_seq_a(YobsEq,
+                               answers,
+                               I,
+                               pi_mat,
+                               pa,
+                               estimsd,
+                               correcEstimWeights = FALSE)
+      }
+      else
+        apprVaraTW <- NA_real_
   
-    totaEW <- estim_tot_a(YobsEq, answers, pi, estimpa)
+      # With estimated probabilities
+      dataEstimpa <- 
+        cbind(response = as.integer(maskSa), Z) %>% 
+        as.data.frame()
+      model <- glm(response ~ Z, data = dataEstimpa,
+                   family = binomial, subset = I)
+  
+      estimpa <- predict(model, newdata = as.data.frame(Z), type = "response")
+      
+      rm(dataEstimpa, model)
     
-    if (calcVariance)
-    {
-      # Unbiased estimation of the variance of the total estimator.
-      # The variance of Y is assumed known. The true probabilities are
-      # used in the calculation.
-      apprVaraEW <-
-        estim_appr_var_seq_a(YobsEq,
-                             answers,
-                             I,
-                             pi_mat,
-                             estimpa,
-                             estimsd,
-                             correcEstimWeights = TRUE,
-                             Z)
+      totaEW <- estim_tot_a(YobsEq, answers, pi, estimpa)
+      
+      if (calcVariance)
+      {
+        # Unbiased estimation of the variance of the total estimator.
+        # The variance of Y is assumed known. The true probabilities are
+        # used in the calculation.
+        apprVaraEW <-
+          estim_appr_var_seq_a(YobsEq,
+                               answers,
+                               I,
+                               pi_mat,
+                               estimpa,
+                               estimsd,
+                               correcEstimWeights = TRUE,
+                               Z)
+      }
+      else
+        apprVaraEW <- NA_real_
     }
     else
-      apprVaraEW <- NA_real_
+    {
+      totaTW <- apprVaraTW <- NA_real_
+      totaEW <- apprVaraEW <- NA_real_
+    }
+    
     
     # Estimations with Y1 and Y2 weighted by phi
     estimcov12 <- 
@@ -1435,6 +1458,8 @@ simulation_tphi <- function(Z,
                          "totaTW", "totaEW",
                          "totphiTW", "totphiEW"),
            sample = rep(c("Sr", "Smr", "Sa", "Sa"), each = 2L),
+           mechanism = rep(c("sequentialLogit", "sequentialLogit", 
+                             "globalLogit", "sequentialLogit"), each = 2L),
            estimand = rep(c("t_1", "t_2", "t_=", "t_phi"), each = 2L),
            estimation = c(tot1TW, tot1EW, 
                           tot2TW, tot2EW, 
@@ -1477,7 +1502,8 @@ simulation_tphi <- function(Z,
   
   res <- res %>% 
     mutate(expEstimand = sum(Yexp), .after = "estimand") %>% 
-    mutate(trueVar = trueVar, .after = "apprVar")
+    mutate(trueVar = trueVar, .after = "apprVar") %>% 
+    filter(!is.na(estimation))
   
   res
 }
@@ -1566,7 +1592,7 @@ The first subset will be used for the estimations of the expectation of the tota
 ```{r}
 resSimulation %>% 
   filter(subset == 1L) %>% 
-  group_by(estimand, sample, weights, n, sd1, sd2, rho) %>% 
+  group_by(n, sd1, sd2, rho, mechanism, estimand, sample, weights) %>% 
   summarize(M = n(),
             true_expectation = first(expEstimand),
             MC_expectation = mean(estimation, na.rm = TRUE)) %>% 
@@ -1582,7 +1608,7 @@ Here we show average approximate variance and variance of different estimators, 
 ```{r}
 temp <- resSimulation %>% 
   mutate(estimation = if_else(subset == 1L, estimation, NA_real_)) %>% 
-  group_by(n, sd1, sd2, rho, estimand, sample, weights) %>% 
+  group_by(n, sd1, sd2, rho, mechanism, estimand, sample, weights) %>% 
   summarize(M = n() / 2L,
             MC_AV = mean(apprVar, na.rm = TRUE),
             MC_var = var(estimation, na.rm = TRUE),
@@ -1591,6 +1617,7 @@ temp <- resSimulation %>%
 
 temp
 ```
+
 ```{r}
 temp %>% 
   ungroup(estimand, sample, weights) %>% 
