@@ -1534,7 +1534,6 @@ pb$tick(0L)
 
 phi = rep(0.5, N)
 
-## alphaa à changer
 for (k in seq_len(nrow(parameters)))
 {
   simFun <- function(calcVariance = TRUE)
@@ -1544,7 +1543,7 @@ for (k in seq_len(nrow(parameters)))
                     sampling = "SRS",
                     alpha1 = alpha1,
                     alpha2 = alpha2,
-                    alphaa = alpha1,
+                    alphaa = alphaa,
                     beta = beta,
                     phi = phi,
                     sd1 = parameters[k, "sd1"],
