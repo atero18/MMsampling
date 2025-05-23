@@ -30,6 +30,10 @@ library(mvtnorm)
 library(MatchIt)
 ```
 
+```{r}
+devtools::load_all()
+```
+
 # Population generation
 
 ```{r}
@@ -260,6 +264,20 @@ data.frame(pa = pa) %>%
 ## Total estimators
 
 ```{r}
+#' Estimation of t_1
+#' @param Yobs vector of the observed outcomes. For the m1 non-respondents
+#' the value is not considered and therefore can be equal to NA
+#' (numeric vector of size N the size of the population).
+#' @param modes vector of the selected mode of each unit.
+#' The first mode of the protocol is defined as "m1"
+#' (character vector or factor of size N).
+#' @param pi vector containing the inclusion probabilities pi_k. Can be
+#' equal to NA for the m1 non-respondents (numeric vector of size N).
+#' @param p1 vector containing the true or estimated probabilities p_1k.
+#' Can be equal to NA for the m1 non-respondents (numeric vector of size N).
+#' @param phi optional vector containing weights for the total
+#' (numeric vector of size N).
+#' @return the estimation of the total t_1, possibly weighted (scalar).
 estim_tot_m1 <- function(Yobs, modes, pi, p1, phi = rep(1.0, length(Yobs)))
 {
   maskSr <- modes == "m1"
@@ -269,6 +287,22 @@ estim_tot_m1 <- function(Yobs, modes, pi, p1, phi = rep(1.0, length(Yobs)))
 ```
 
 ```{r}
+#' Estimation of t_2
+#' @param Yobs vector of the observed outcomes. For the m2 non-respondents
+#' the value is not considered and therefore can be equal to NA
+#' (numeric vector of size N the size of the population).
+#' @param modes vector of the selected mode of each unit. 
+#' The second mode of the protocol is defined as "m2"
+#' (character vector or factor of size N).
+#' @param pi vector containing the inclusion probabilities pi_k. Can be
+#' equal to NA for the m2 non-respondents (numeric vector of size N).
+#' @param p1 vector containing the true or estimated probabilities p_1k.
+#' Can be equal to NA for the m2 non-respondents (numeric vector of size N).
+#' @param p2 vector containing the true or estimated probabilities p_2k.
+#' Can be equal to NA for the m2 non-respondents (numeric vector of size N).
+#' @param phi optional vector containing weights for the total
+#' (numeric vector of size N).
+#' @return the estimation of the total t_2, possibly weighted (scalar).
 estim_tot_m2 <- function(Yobs, modes, pi, p1, p2, phi = rep(1.0, length(Yobs)))
 {
   maskSmr <- modes == "m2"
@@ -279,6 +313,22 @@ estim_tot_m2 <- function(Yobs, modes, pi, p1, p2, phi = rep(1.0, length(Yobs)))
 ```
 
 ```{r}
+#' Estimation of t_phiy
+#' @param Yobs vector of the observed outcomes. For the non-respondents
+#' the value is not considered and therefore can be equal to NA
+#' (numeric vector of size N the size of the population).
+#' @param modes vector of the selected mode of each unit.
+#' The first mode of the protocol is defined as "m1" and the second as "m2"
+#' (character vector or factor of size N).
+#' @param pi vector containing the inclusion probabilities pi_k. Can be
+#' equal to NA for the non-respondents (numeric vector of size N).
+#' @param p1 vector containing the true or estimated probabilities p_1k.
+#' Can be equal to NA for the non-respondents (numeric vector of size N).
+#' @param p2 vector containing the true or estimated probabilities p_2k.
+#' Can be equal to NA for the non-respondents (numeric vector of size N).
+#' @param phi vector containing weights for the total. Must be known on the
+#' set of respondents (numeric vector of size N).
+#' @return the estimation of the total t_phiy (scalar).
 estim_tot_m1_m2 <- function(Yobs, modes, pi, p1, p2, phi = rep(0.5, length(Yobs)))
 {
   estim_tot_m1(Yobs, modes, pi, p1, phi) +
@@ -288,6 +338,18 @@ estim_tot_m1_m2 <- function(Yobs, modes, pi, p1, p2, phi = rep(0.5, length(Yobs)
 
 
 ```{r}
+#' Estimation of t_ay
+#' @param Yobs vector of the observed outcomes. For the non-respondents
+#' the value is not considered and therefore can be equal to NA
+#' (numeric vector of size N the size of the population).
+#' @param responses vector indicating which unit answered.
+#' If a unit answered then the corresponding value is "r"
+#' (character vector or factor of size N).
+#' @param pi vector containing the inclusion probabilities pi_k. Can be
+#' equal to NA for the non-respondents (numeric vector of size N).
+#' @param pa vector containing the true or estimated probabilities p_ak.
+#' Can be equal to NA for the non-respondents (numeric vector of size N).
+#' @return the estimation of the total t_ay (scalar).
 estim_tot_a <- function(Yobs, responses, pi, pa)
 {
   maskSa <- responses == "r"
@@ -301,6 +363,18 @@ estim_tot_a <- function(Yobs, responses, pi, pa)
 Fisher Information Matrix with a logistic model and weights equal to 1.
 
 ```{r}
+#' Fisher Information Matrix (FIM) for a logistic model and weights
+#' equal to 1
+#' @param prob probability to answer. Can be true or estimated.
+#' Can be equal to NA for the units that are not in the subset defined by `maskSubset`
+#' (numeric vector of size N the size of the population).
+#' @param Z design matrix. The rows corresponding to the units that are not in
+#' the subset can contain NA (numeric matrix with N rows and q columns).
+#' @param maskSubset mask indicating which unit should be used
+#' in the calculation of the FIM. Default to the entire set 
+#' (logical vector of size N).
+#' @return the Fisher Information Matrix or its estimation
+#' (numeric matrix of order q).
 Fisher_Information_Matrix <- function(prob, 
                                       Z, 
                                       maskSubset = !logical(length(prob)))
@@ -312,6 +386,7 @@ Fisher_Information_Matrix <- function(prob,
 }
 ```
 
+Old to calculate the approximate variance of $\hat{t}_{pq\phi1}$. Replaced by the function `estim_appr_var_seq_m1_m2` the is more general but more difficult to read.
 ```{r}
 # estim_appr_var_seq_m1 <- function(Yobs,
 #                                   modes,
@@ -382,6 +457,8 @@ Fisher_Information_Matrix <- function(prob,
 # }
 ```
 
+
+Old to calculate the approximate variance of $\hat{t}_{pq\phi2}$. Replaced by the function `estim_appr_var_seq_m1_m2` the is more general but more difficult to read.
 ```{r}
 # estim_appr_var_seq_m2 <- function(Yobs,
 #                                   modes,
@@ -476,7 +553,23 @@ Fisher_Information_Matrix <- function(prob,
 # }
 ```
 
+### Counterfactuals estimation and covariance
+
 ```{r}
+#' Estimation of the counterfactuals of each respondent
+#' @param Yobs vector of the observed outcomes. For the non-respondents
+#' the value is not considered and therefore can be equal to NA
+#' (numeric vector of size N the size of the population).
+#' @param modes vector of the selected mode of each unit.
+#' The first mode of the protocol is defined as "m1" and the second as "m2"
+#' (character vector or factor of size N).
+#' @param Z design matrix. The rows corresponding to the non-respondents 
+#' can contain NA (numeric matrix with N rows).
+#' @param ... arguments for the function `MatchIt::matchit`.
+#' @return for each mode a vector of size N containing for each respondent
+#' its outcome or its estimated counterfactual depending on if it answered
+#' by the mode or the other. Equal to NA for the non-respondents
+#' (numeric matrix of dimension (N,2)).
 estim_counterfactuals <- function(Yobs,
                                   modes,
                                   Z,
@@ -515,7 +608,38 @@ estim_counterfactuals <- function(Yobs,
 ```
 
 ```{r}
-estim_cov_12 <- function(Y1, Y2, sd1, sd2, Z, Yobs = NULL, modes, ...)
+#' Estimation of the covariance between the m1 and m2 potential outcomes
+#' under homoscedasticity assumptions and linearity
+#' 
+#' We suppose the homoscedasticity within the m1, the m2 
+#' and between the m1 and m2 outcomes. We will have an unbiased an consistent
+#' estimator if the measure effect y_1k - y_2k follow a linear model with z_k
+#' and for some units both potential outcomes are known (which can be under
+#' a sequential protocol). The standard deviations `sd1` and `sd2` must be 
+#' the true values or consistent estimators as well. We must have at least 
+#' q + 1 (q the number of covariates) units such that their potential outcomes 
+#' are known or well estimated.
+#' @param Y1 vector of the m1-outcomes
+#' (numeric vector of size N the size of the population).
+#' @param Y2 vector of the m2-outcomes
+#' (numeric vector of size N).
+#' @param sd1 true or estimated value (from a consistent estimator if possible)
+#' of the standard deviation of the m1 potential outcomes (positive scalar).
+#' @param sd2 true or estimated value (from a consistent estimator if possible)
+#' of the standard deviation of the m1 potential outcomes (positive scalar).
+#' @param Z design matrix (numeric matrix with N rows and q columns).
+#' @param Yobs vector of the observed outcomes. Optional. Useful if `Y1` 
+#' and `Y2` are not given. In that case the counterfactuals of the respondents
+#' are estimated with the function `estim_counterfactuals`.
+#' the value is not considered and therefore can be equal to NA
+#' (numeric vector of size N the size of the population).
+#' @param modes vector of the selected mode of each unit. Optional. Used if
+#' the counterfactuals must be estimated 
+#' (character vector or factor of size N).
+#' @param ... arguments for the function `MatchIt::matchit`.
+#' @return an estimator of the covariance between the m1 and m2
+#' potential outcomes (scalar).
+estim_cov_12 <- function(Y1, Y2, sd1, sd2, Z, Yobs = NULL, modes = NULL, ...)
 {
   # If the observation vector Yobs is given we do the estimation
   # of the counterfactuals
@@ -540,20 +664,62 @@ estim_cov_12 <- function(Y1, Y2, sd1, sd2, Z, Yobs = NULL, modes, ...)
 }
 ```
 
+### Approximate variance estimators
 
 ```{r}
-# ... : arguments for matching
+#' Estimation of the variance of t_ephiy and the approximate variance 
+#' of t_pqphiy
+#' 
+#' 
+#' HOMOSCEDASTICITY
+#' @param Yobs vector of the observed outcomes. For the non-respondents
+#' the value is not considered and therefore can be equal to NA
+#' (numeric vector of size N the size of the population).
+#' @param modes vector of the selected mode of each unit.
+#' The first mode of the protocol is defined as "m1" and the second as "m2"
+#' (character vector or factor of size N).
+#' @param I vector containing the indicators I_k equal to TRUE if unit k
+#' has been selected (logical vector of size N).
+#' @param pi_mat matrix containing the second order inclusion probabilities
+#' pi_kl. The values must be known on Sr^2 (except if `m2Only` = TRUE) and
+#' Smr^2 (except if `m1Only` = TRUE) and can be equal to NA otherwise
+#' (symmetric numeric matrix of order N).
+#' @param p1 vector containing the true or estimated probabilities p_1k.
+#' Can be equal to NA for the non-respondents or the units that didn't answer 
+#' by m1 is `m1Only` = TRUE (numeric vector of size N).
+#' @param p2 vector containing the true or estimated probabilities p_2k.
+#' Used if `m1Only` = FALSE. Can be equal to NA for the non-respondents 
+#' or the units that didn't answer by m2 is `m2Only` = TRUE (numeric vector of size N).
+#' @param sd1 true or estimated value (from a consistent estimator if possible)
+#' of the standard deviation of the m1 potential outcomes.
+#' Used when `m2Only` = FALSE and `phi` != 0 (positive scalar).
+#' @param sd2 true or estimated value (from a consistent estimator if possible)
+#' of the standard deviation of the m1 potential outcomes. 
+#' Used when `m1Only` = FALSE and `phi` != 1 (positive scalar).
+#' @param cov12 the true or estimated covariance between the m1 and m2
+#' potential outcomes. Default to `sd1` * `sd2` (scalar).
+#' @param phi vector containing weights for the total. Must be known on the
+#' set of respondents (numeric vector of size N).
+#' @param correcEstimWeights TRUE if we must apply a correction due to the
+#' use of estimations of `p1` and `p2` (boolean).
+#' @param Z design matrix. Used only when `correcEstimWeights` = TRUE
+#' (numeric matrix with N rows and q columns).
+#' @param m1Only TRUE if we estimate the variance of t_{pq1} and only with
+#' the m1 respondents (boolean).
+#' @param m2Only TRUE if we estimate the variance of t_{pq2} and only with
+#' the m2 respondents (boolean).
+#' @param ... arguments for the function `MatchIt::matchit`.
 estim_appr_var_seq_m1_m2 <- function(Yobs,
                                      modes,
-                                     I,
                                      pi_mat,
                                      p1,
                                      p2,
                                      sd1 = 0.0,
                                      sd2 = sd1,
-                                     cov12 = NULL,
+                                     cov12 = sd1 * sd2,
                                      phi = rep(0.5, length(Yobs)),
                                      correcEstimWeights = TRUE,
+                                     I,
                                      Z = matrix(1.0, nrow = length(Yobs), ncol = 1L),
                                      m1Only = FALSE,
                                      m2Only = FALSE,
@@ -568,9 +734,6 @@ estim_appr_var_seq_m1_m2 <- function(Yobs,
   maskSa <- maskSr | maskSmr
   na <- sum(maskSa) # Number of respondents
   maskm1Sa <- modes[maskSa] == "m1" # mask of the m1 respondents within Sa
-  
-  m1Only <- (m1Only || all(phi == 1.0, na.rm = TRUE))
-  m2Only <- (m2Only || all(phi == 0.0, na.rm = TRUE)) && !m1Only
   
   if (m1Only)
     phi <- rep(1.0, N)
@@ -600,10 +763,8 @@ estim_appr_var_seq_m1_m2 <- function(Yobs,
     covarpSr <- pi2_to_covarInc(piSr_mat)
   }
   else
-  {
-    cov12 <- 0.0
     sd1 <- 0.0
-  }
+
     
   
   if (!m1Only)
@@ -629,7 +790,6 @@ estim_appr_var_seq_m1_m2 <- function(Yobs,
   }
   else
   {
-    cov12 <- 0.0
     sd2 <- 0.0
     p2 <- NULL
   }
@@ -841,23 +1001,53 @@ estim_appr_var_seq_m1_m2 <- function(Yobs,
 ```
 
 ```{r}
+#' Estimation of the variance of t_e1 and the approximate variance 
+#' of t_pq1
+#' 
+#' 
+#' HOMOSCEDASTICITY
+#' @param Yobs vector of the observed outcomes. For the non-respondents
+#' the value is not considered and therefore can be equal to NA
+#' (numeric vector of size N the size of the population).
+#' @param modes 
+#' @param I vector containing the indicators I_k equal to TRUE if unit k
+#' has been selected (logical vector of size N).
+#' @param pi_mat matrix containing the second order inclusion probabilities
+#' pi_kl. The values must be known on Sr^2 and can be equal to NA otherwise
+#' (symmetric numeric matrix of order N).
+#' @param p1 vector containing the true or estimated probabilities p_1k.
+#' Can be equal to NA for the units that didn't answer by m1
+#' (numeric vector of size N).
+#' @param sd1 true or estimated value (from a consistent estimator if possible)
+#' of the standard deviation of the m1 potential outcomes (positive scalar).
+#' @param correcEstimWeights TRUE if we must apply a correction due to the
+#' use of estimations of `p1` (boolean).
+#' @param Z design matrix. Used only when `correcEstimWeights` = TRUE
+#' (numeric matrix with N rows and q columns).
+#' @param m1Only TRUE if we estimate the variance of t_{pq1} and only with
+#' the m1 respondents (boolean).
+#' @param m2Only TRUE if we estimate the variance of t_{pq2} and only with
+#' the m2 respondents (boolean).
+#' @param ... arguments for the function `MatchIt::matchit`.
 estim_appr_var_seq_m1 <- function(Yobs, modes, 
-                                  I, pi_mat, 
+                                  pi_mat, 
                                   p1, sd1,
                                   correcEstimWeights = TRUE,
+                                  I,
                                   Z = matrix(1.0, 
                                              nrow = length(Yobs), ncol = 1L),
                                   ...)
 {
   estim_appr_var_seq_m1_m2(Yobs, modes, 
-                           I, pi_mat, 
+                           pi_mat, 
                            p1, p2 = NULL,
                            sd1,
                            sd2 = 0.0,
                            cov12 = 0.0,
                            phi = rep(1.0, length(Yobs)),
                            correcEstimWeights,
-                           Z = Z,
+                           I,
+                           Z,
                            m1Only = TRUE,
                            ...)
 }
@@ -865,21 +1055,23 @@ estim_appr_var_seq_m1 <- function(Yobs, modes,
 
 ```{r}
 estim_appr_var_seq_m2 <- function(Yobs, modes, 
-                                  I, pi_mat, 
+                                  pi_mat, 
                                   p1, p2, sd2,
                                   correcEstimWeights = TRUE,
+                                  I,
                                   Z = matrix(1.0, 
                                              nrow = length(Yobs), ncol = 1L),
                                   ...)
 {
   estim_appr_var_seq_m1_m2(Yobs, modes, 
-                           I, pi_mat, 
+                           pi_mat, 
                            p1, p2,
                            sd1 = 0.0,
                            sd2,
                            cov12 = 0.0,
                            phi = numeric(length(Yobs)),
                            correcEstimWeights,
+                           I,
                            Z,
                            m2Only = TRUE,
                            ...)
@@ -889,19 +1081,20 @@ estim_appr_var_seq_m2 <- function(Yobs, modes,
 ```{r}
 estim_appr_var_seq_a <- function(Yobs,
                                  responses,
-                                 I, 
                                  pi_mat,
                                  pa,
                                  sd = NULL,
                                  correcEstimWeights = TRUE,
+                                 I,
                                  Z = matrix(1.0, nrow = length(Yobs), ncol = 1L),
                                  ...)
 {
   responses[responses == "r"] <- "m1"
   
-  estim_appr_var_seq_m1(Yobs, responses, I, 
+  estim_appr_var_seq_m1(Yobs, responses,  
                         pi_mat, pa, sd, 
                         correcEstimWeights,
+                        I,
                         Z,
                         ...)
 }
@@ -1085,9 +1278,9 @@ rho_ref <- rho_vec[1L]
 
 # Variation of the sample fraction n / N and sd1 with sd1 = sd2 
 # and correlation rho between Y1 and Y2 fixed
-paramVar_n <- 
-  expand.grid(ratio_n = ratio_n_vec, 
-              sd1 = sd1_vec, ratio_sd = 1.0, 
+paramVar_n <-
+  expand.grid(ratio_n = ratio_n_vec,
+              sd1 = sd1_vec, ratio_sd = 1.0,
               rho = rho_ref)
 
 # Variation of sd1 and sd2 with correlation rho between Y1 and Y2 fixed
@@ -1110,6 +1303,7 @@ paramVar_rho <-
               rho = rho_vec)
 
 parameters <- rbind(paramVar_n, paramVar_sd, paramVar_sdEq, paramVar_rho)
+# parameters <- rbind(paramVar_sd, paramVar_sdEq, paramVar_rho)
 
 parameters <- parameters %>% 
   distinct() %>% 
@@ -1253,7 +1447,6 @@ simulation_tphi <- function(Z,
       apprVar1TW <-
         estim_appr_var_seq_m1(Yobs,
                               modes,
-                              I,
                               pi_mat,
                               p1,
                               estimsd1,
@@ -1273,11 +1466,11 @@ simulation_tphi <- function(Z,
       apprVar1EW <-
         estim_appr_var_seq_m1(Yobs,
                               modes,
-                              I,
                               pi_mat,
                               estimp1,
                               estimsd1,
                               correcEstimWeights = TRUE,
+                              I,
                               Z)
     }
     else
@@ -1296,7 +1489,6 @@ simulation_tphi <- function(Z,
       apprVar2TW <-
         estim_appr_var_seq_m2(Yobs,
                               modes,
-                              I,
                               pi_mat,
                               p1,
                               p2,
@@ -1316,12 +1508,12 @@ simulation_tphi <- function(Z,
       apprVar2EW <-
         estim_appr_var_seq_m2(Yobs,
                               modes,
-                              I,
                               pi_mat,
                               estimp1,
                               estimp2,
                               estimsd2,
                               correcEstimWeights = TRUE,
+                              I,
                               Z)
     }
     else
@@ -1357,7 +1549,6 @@ simulation_tphi <- function(Z,
         apprVaraTW <-
           estim_appr_var_seq_a(YobsEq,
                                answers,
-                               I,
                                pi_mat,
                                pa,
                                estimsd,
@@ -1387,11 +1578,11 @@ simulation_tphi <- function(Z,
         apprVaraEW <-
           estim_appr_var_seq_a(YobsEq,
                                answers,
-                               I,
                                pi_mat,
                                estimpa,
                                estimsd,
                                correcEstimWeights = TRUE,
+                               I,
                                Z)
       }
       else
@@ -1416,7 +1607,6 @@ simulation_tphi <- function(Z,
       apprVarPhiTW <- 
         estim_appr_var_seq_m1_m2(Yobs,
                                  modes,
-                                 I,
                                  pi_mat,
                                  p1,
                                  p2,
@@ -1438,7 +1628,6 @@ simulation_tphi <- function(Z,
       apprVarPhiEW <- 
         estim_appr_var_seq_m1_m2(Yobs,
                                  modes,
-                                 I,
                                  pi_mat,
                                  estimp1,
                                  estimp2,
@@ -1447,6 +1636,7 @@ simulation_tphi <- function(Z,
                                  estimcov12,
                                  phi,
                                  correcEstimWeights = TRUE,
+                                 I,
                                  Z)
     }
     else
@@ -1512,7 +1702,7 @@ simulation_tphi <- function(Z,
 ## Simulation
 
 ```{r}
-Msim <- 500L
+Msim <- 2500L
 ```
 
 The different lines of the grid have the same seed. It is useful to run in different orders the evaluations and because the results from different parameters are never mixed there is no independency issue.
