@@ -987,9 +987,6 @@ estim_appr_var_seq_m1_m2 <- function(Yobs,
   if (sd1 == 0.0 || sd2 == 0.0)
     cov12 <- 0.0
   
-  else if (is.null(cov12))
-    cov12 <- estim_cov_12(Y1Est, Y2Est, sd1, sd2, Z)
-  
   varphiYEst <- 
     mean(phi^2L, na.rm = TRUE) * N * sd1^2L +
     2.0 * mean(phi * (1.0 - phi), na.rm = TRUE) * N * cov12 +
