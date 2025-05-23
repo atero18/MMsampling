@@ -1106,7 +1106,7 @@ CONDITIONS INDEPENDANCE
 var_expansion_m1_m2 <- function(Y1exp, Y2exp, 
                                 pi_mat, 
                                 p1, p2, 
-                                sd1 = 0.0, sd2 = 0.0, cov12 = 0.0, 
+                                sd1 = 0.0, sd2 = 0.0, cov12 = sd1 * sd2, 
                                 phi = rep(0.5, length(Y1exp)))
 {
   pi <- diag(pi_mat)
