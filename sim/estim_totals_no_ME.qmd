@@ -1565,7 +1565,7 @@ for (k in seq_len(nrow(parameters)))
           row.names = NULL) %>%
     mutate(equalOutcomes = 
              ifelse(parameters[k, "sd1"] == parameters[k, "sd2"] &&
-                      parameters[k, "rho"] == 1.0, "yes","no")) %>% 
+                      parameters[k, "rho"] == 1.0, "yes", "no")) %>% 
     rbind(resSimulation)
     
 
