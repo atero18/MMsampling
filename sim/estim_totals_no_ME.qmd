@@ -1452,7 +1452,7 @@ simulation_tphi <- function(Z,
     else
       apprVarPhiEW <- NA_real_
     
-
+    
     tibble(estimator = c("tot1TW", "tot1EW", 
                          "tot2TW", "tot2EW", 
                          "totaTW", "totaEW",
@@ -1460,7 +1460,7 @@ simulation_tphi <- function(Z,
            sample = rep(c("Sr", "Smr", "Sa", "Sa"), each = 2L),
            mechanism = rep(c("sequentialLogit", "sequentialLogit", 
                              "globalLogit", "sequentialLogit"), each = 2L),
-           estimand = rep(c("t_1", "t_2", "t_=", "t_phi"), each = 2L),
+           estimand = rep(c("t_1", "t_2", "t_ay", "t_phiy"), each = 2L),
            estimation = c(tot1TW, tot1EW, 
                           tot2TW, tot2EW, 
                           totaTW, totaEW,
@@ -1512,7 +1512,7 @@ simulation_tphi <- function(Z,
 ## Simulation
 
 ```{r}
-Msim <- 2500L
+Msim <- 500L
 ```
 
 The different lines of the grid have the same seed. It is useful to run in different orders the evaluations and because the results from different parameters are never mixed there is no independency issue.
@@ -1532,9 +1532,9 @@ pb <- progress::progress_bar$new(format = "[:bar] :percent eta: :eta",
 
 pb$tick(0L)
 
-phi = rep(0.5, N)
+constPhi <- 0.5
+phi = rep(constPhi, N)
 
-## alphaa à changer
 for (k in seq_len(nrow(parameters)))
 {
   simFun <- function(calcVariance = TRUE)
@@ -1544,7 +1544,7 @@ for (k in seq_len(nrow(parameters)))
                     sampling = "SRS",
                     alpha1 = alpha1,
                     alpha2 = alpha2,
-                    alphaa = alpha1,
+                    alphaa = alphaa,
                     beta = beta,
                     phi = phi,
                     sd1 = parameters[k, "sd1"],
@@ -1563,8 +1563,9 @@ for (k in seq_len(nrow(parameters)))
     cbind(parameters[k, ], 
           rbind(resTempWithVar, resTempWithoutVar), 
           row.names = NULL) %>%
-    mutate(eq12 = parameters[k, "sd1"] == parameters[k, "sd2"] &&
-             parameters[k, "rho"] == 1.0) %>% 
+    mutate(equalOutcomes = 
+             ifelse(parameters[k, "sd1"] == parameters[k, "sd2"] &&
+                      parameters[k, "rho"] == 1.0, "yes","no")) %>% 
     rbind(resSimulation)
     
 
@@ -1575,12 +1576,8 @@ rm(pb, resTempWithVar, resTempWithoutVar)
 
 resSimulation <-
   resSimulation %>%
-  mutate(phi = 0.5) %>% 
+  mutate(phi = if_else(estimand == "t_phiy", constPhi, NaN)) %>% 
   arrange(n, sd1, sd2, rho)
-```
-
-```{r}
-rm(Msim)
 ```
 
 ## Properties of the estimators
@@ -1592,7 +1589,7 @@ The first subset will be used for the estimations of the expectation of the tota
 ```{r}
 resSimulation %>% 
   filter(subset == 1L) %>% 
-  group_by(n, sd1, sd2, rho, mechanism, estimand, sample, weights) %>% 
+  group_by(n, sd1, sd2, rho, equalOutcomes, mechanism, estimand, phi, sample, weights) %>% 
   summarize(M = n(),
             true_expectation = first(expEstimand),
             MC_expectation = mean(estimation, na.rm = TRUE)) %>% 
@@ -1608,7 +1605,7 @@ Here we show average approximate variance and variance of different estimators, 
 ```{r}
 temp <- resSimulation %>% 
   mutate(estimation = if_else(subset == 1L, estimation, NA_real_)) %>% 
-  group_by(n, sd1, sd2, rho, mechanism, estimand, sample, weights) %>% 
+  group_by(n, sd1, sd2, rho, equalOutcomes, mechanism, estimand, sample, weights) %>% 
   summarize(M = n() / 2L,
             MC_AV = mean(apprVar, na.rm = TRUE),
             MC_var = var(estimation, na.rm = TRUE),
