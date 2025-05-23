@@ -671,7 +671,7 @@ estim_cov_12 <- function(Y1, Y2, sd1, sd2, Z, Yobs = NULL, modes = NULL, ...)
 #' of t_pqphiy
 #' 
 #' 
-#' HOMOSCEDASTICITY
+#' HOMOSCEDASTICITY, INDEPENDENCE
 #' @param Yobs vector of the observed outcomes. For the non-respondents
 #' the value is not considered and therefore can be equal to NA
 #' (numeric vector of size N the size of the population).
@@ -1100,7 +1100,7 @@ estim_appr_var_seq_a <- function(Yobs,
 
 ## Expansion estimators true variance
 
-CONDITIONS INDEPENDANCE
+CONDITIONS INDEPENDANCE HOMOSCEDASTICITE
 
 ```{r}
 var_expansion_m1_m2 <- function(Y1exp, Y2exp, 
