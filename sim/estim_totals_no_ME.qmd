@@ -612,13 +612,13 @@ estim_counterfactuals <- function(Yobs,
 #' under homoscedasticity assumptions and linearity
 #' 
 #' We suppose the homoscedasticity within the m1, the m2 
-#' and between the m1 and m2 outcomes. We will have an unbiased an consistent
-#' estimator if the measure effect y_1k - y_2k follow a linear model with z_k
-#' and for some units both potential outcomes are known (which can be under
-#' a sequential protocol). The standard deviations `sd1` and `sd2` must be 
-#' the true values or consistent estimators as well. We must have at least 
-#' q + 1 (q the number of covariates) units such that their potential outcomes 
-#' are known or well estimated.
+#' and between the m1 and m2 outcomes. We will have an unbiased
+#' estimator if the ignorability, unconfounded-ness and conditional mutual
+#' independence assumptions are verified ; the measure effect y_1k - y_2k 
+#' follow a linear model with z_k and for some units both potential
+#' outcomes are known (which can't be under a sequential protocol). 
+#' We must have at least q + 1 (q the number of covariates) units such that 
+#' their potential outcomes are known or well estimated.
 #' @param Y1 vector of the m1-outcomes
 #' (numeric vector of size N the size of the population).
 #' @param Y2 vector of the m2-outcomes
@@ -638,9 +638,13 @@ estim_counterfactuals <- function(Yobs,
 #' (character vector or factor of size N).
 #' @param ... arguments for the function `MatchIt::matchit`.
 #' @return an estimator of the covariance between the m1 and m2
-#' potential outcomes (scalar).
+#' potential outcomes, unbiased under the assumptions, if `sd1`^2 and `sd2`^2
+#' are unbiased and the counterfactuals are the true values (scalar).
 estim_cov_12 <- function(Y1, Y2, sd1, sd2, Z, Yobs = NULL, modes = NULL, ...)
 {
+  if (sd1 == 0.0 || sd2 == 0.0)
+    return (0.0)
+  
   # If the observation vector Yobs is given we do the estimation
   # of the counterfactuals
   if (!is.null(Yobs))
@@ -660,7 +664,20 @@ estim_cov_12 <- function(Y1, Y2, sd1, sd2, Z, Yobs = NULL, modes = NULL, ...)
   # Assuming a linear model for the differences y_1k - y_2k
   sdDelta <- summary.lm(lm(Y1 - Y2 ~ Z, subset = maskResp))$sigma
   
-  (sd1^2L - sdDelta^2L + sd2^2L) / 2.0
+  c12 <- (sd1^2L - sdDelta^2L + sd2^2L) / 2.0
+  
+  # If |c12| > sd1 * sd2 because the model is not correct, 
+  # we clampe it
+  if (c12 > abs(sd1 * sd2))
+  {
+    warningSent <- paste("Covariance between the two modes counterfactuals",
+                         "not well estimated. Value clamped")
+    warning(warningSent)
+    c12 <- sign(c12) * sd1 * sd2
+  }
+    
+  
+  c12
 }
 ```
 
@@ -697,7 +714,9 @@ estim_cov_12 <- function(Y1, Y2, sd1, sd2, Z, Yobs = NULL, modes = NULL, ...)
 #' of the standard deviation of the m1 potential outcomes. 
 #' Used when `m1Only` = FALSE and `phi` != 1 (positive scalar).
 #' @param cov12 the true or estimated covariance between the m1 and m2
-#' potential outcomes. Default to `sd1` * `sd2` (scalar).
+#' potential outcomes (from a consistent estimator if possible).
+#' Default to `sd1` * `sd2` (i.e. Y1 and Y2 are conditionally col linear)
+#' (scalar).
 #' @param phi vector containing weights for the total. Must be known on the
 #' set of respondents (numeric vector of size N).
 #' @param correcEstimWeights TRUE if we must apply a correction due to the
