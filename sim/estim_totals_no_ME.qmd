@@ -10,7 +10,13 @@ format:
 ```{r}
 #| message: false
 #| warning: false
-install.packages("pacman")
+if (!"pacman" %in% rownames(installed.packages()))
+  install.packages("pacman")
+```
+
+```{r}
+#| message: false
+#| warning: false
 pacman::p_load(dplyr)
 options(dplyr.summarise.inform = FALSE)
 pacman::p_load(tibble)
@@ -19,10 +25,8 @@ pacman::p_load(glue)
 pacman::p_load(parallel)
 pacman::p_load(ggplot2)
 theme_set(theme_light())
-## pacman::p_load(Matrix)
 pacman::p_load(progress)
 ## pacman::p_load(marginaleffects)
-# pacman::p_install(mc2d, force = FALSE)
 pacman::p_install(mvtnorm, force = FALSE)
 pacman::p_install(MatchIt, force = FALSE)
 ```

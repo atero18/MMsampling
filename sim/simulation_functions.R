@@ -1,5 +1,5 @@
-library(Matrix)
-library(mc2d)
+pacman::p_install(Matrix, force = FALSE)
+pacman::p_install(mc2d, force = FALSE)
 
 # Generation of a vector of probabilities under a logistic model
 gen_selection_probabilities <- function(Z, alpha)
