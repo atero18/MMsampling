@@ -96,7 +96,7 @@ estim_appr_var_seq_phi1 <- function(Yobs,
 
   weightedY1Sr <- phi[maskSr] * Yobs[maskSr]
 
-  # Sampling variability (S)
+  # Sampling design variability (p, S)
   # There is no correction needed for probabilities estimation
   piSr_mat <- pi_mat[maskSr, maskSr, drop = FALSE]
   covarpSr <- pi2_to_covarInc(piSr_mat)
@@ -111,7 +111,7 @@ estim_appr_var_seq_phi1 <- function(Yobs,
     sum((1.0 - piSr) * piSr^-2L * p1Sr^-1L * (1.0 - p1Sr^-1L) *
           weightedY1Sr^2L)
 
-  # q1 variability (R1)
+  # m1 selection variability (q1, R1)
   # If we use estimated p_1k weights we have to make a correction
   correctedY1Srq1 <- correctedY1Srp
 
@@ -150,13 +150,13 @@ var_expansion_seq_phi1 <- function(Y1exp,
 
   pi <- diag(pi_mat)
 
-  # Sampling variability (S)
+  # Sampling design variability (p, S)
   covarPi <- pi2_to_covarInc(pi_mat)
   correctedY1p <- pi^-1L * phi * Y1exp
   varp <- t(correctedY1p) %*% covarPi %*% correctedY1p +
     sum(pi^-1L * (1.0 - pi) * phi^2L) * sd1^2L
 
-  # q1 variability (R1)
+  # m1 selection variability (q1, R1)
   #  With the independence between p and q1
   varq1 <- sum((pi * p1)^-1L * (1.0 - p1) * phi^2L * (sd1^2L + Y1exp^2L))
 
@@ -202,7 +202,7 @@ estim_appr_var_seq_phi2 <- function(Yobs,
   # The y_2k are weighted with the phi_k
   weightedY2Smr <- phi[maskSmr] * Yobs[maskSmr]
 
-  # Sampling variability (S)
+  # Sampling design variability (p, S)
   piSmr_mat <- pi_mat[maskSmr, maskSmr, drop = FALSE]
   covarpSmr <- pi2_to_covarInc(piSmr_mat)
 
@@ -217,7 +217,7 @@ estim_appr_var_seq_phi2 <- function(Yobs,
           (1.0 - (p1barSmr * p2Smr)^-1L) * weightedY2Smr^2L)
 
 
-  # q1 variability (R1)
+  # m1 selection variability (q1, R1)
   correctedY2Smrq1 <- (piSmr * p1barSmr)^-1L * weightedY2Smr
 
   #   If the probabilities p_1k are estimations we add a term
@@ -232,7 +232,7 @@ estim_appr_var_seq_phi2 <- function(Yobs,
   varq1Est <- sum(p1Smr * p2Smr^-1L * correctedY2Smrq1^2L)
 
 
-  # q2 variability (R2)
+  # m2 selection variability (q2, R2)
   correctedY2Smrq2 <- correctedY2Smrp
 
   #   If the probabilities p_1k are estimations we add a term
@@ -275,17 +275,17 @@ var_expansion_seq_phi2 <- function(Y2exp,
   pi <- diag(pi_mat)
   p1bar <- 1.0 - p1
 
-  # Sampling variability (S)
+  # Sampling design variability (p, S)
   covarPi <- pi2_to_covarInc(pi_mat)
   correctedY2p <- pi^-1L * phi * Y2exp
   varp <- t(correctedY2p) %*% covarPi %*% correctedY2p +
     sum(pi^-1L * (1.0 - pi) * phi^2L) * sd2^2L
 
-  # q1 variability (R1)
+  # m1 selection variability (q1, R1)
   varPhiY2 <- phi^2L * (sd2^2L + Y2exp^2L) # Variance of each phi_k y_2k
   varq1 <- sum((pi * p1bar)^-1L * p1 * varPhiY2)
 
-  # q2 variability (R2)
+  # m2 selection variability (q2, R2)
   varq2 <- sum((pi * p1bar * p2)^-1L * (1.0 - p2) * varPhiY2)
 
   # Y2 variability
@@ -313,7 +313,7 @@ covar_difference_HT <- function(Y1exp, Y2exp, I,
   weightedY1 <- phi * Y1exp
   weightedY2 <- phi * Y2exp
 
-  # Sampling variability (S)
+  # Sampling design variability (p, S)
   covarPi <- pi2_to_covarInc(pi_mat)
   if (constY)
   {
@@ -324,7 +324,7 @@ covar_difference_HT <- function(Y1exp, Y2exp, I,
     varp <- weightedY1 / pi %*% t(weightedY2 / pi) * covarPi
   }
 
-  # q1 variability (R1)
+  # m1 selection variability (q1, R1)
 
   covarq1 <- pi2_to_covarInc(p1_mat)
   if (constY)
