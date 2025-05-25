@@ -8,10 +8,6 @@ format:
 ---
 
 ```{r}
-# knitr::purl("./sim/test_estim.qmd")
-```
-
-```{r}
 #| message: false
 #| warning: false
 install.packages("pacman")
@@ -32,11 +28,9 @@ pacman::p_install(MatchIt, force = FALSE)
 ```
 
 ```{r}
-
-
-```
-
-```{r}
+#| message: false
+#| warning: false
+pacman::p_install(devtools, force = FALSE)
 devtools::load_all()
 ```
 
