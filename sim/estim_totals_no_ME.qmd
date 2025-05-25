@@ -642,11 +642,16 @@ estim_counterfactuals <- function(Yobs,
 #' @param modes vector of the selected mode of each unit. Optional. Used if
 #' the counterfactuals must be estimated 
 #' (character vector or factor of size N).
+#' @param clamp TRUE if the estimation of the covariance must be clamped if
+#' its absolute value is superior to `sd1` * `sd2` (boolean).
+#' @param warnClamp TRUE if a warning must be sent when a clamp is
+#' made (boolean).
 #' @param ... arguments for the function `MatchIt::matchit`.
 #' @return an estimator of the covariance between the m1 and m2
 #' potential outcomes, unbiased under the assumptions, if `sd1`^2 and `sd2`^2
 #' are unbiased and the counterfactuals are the true values (scalar).
-estim_cov_12 <- function(Y1, Y2, sd1, sd2, Z, Yobs = NULL, modes = NULL, ...)
+estim_cov_12 <- function(Y1, Y2, sd1, sd2, Z, Yobs = NULL, modes = NULL,
+                         clamp = FALSE, warnClamp = TRUE, ...)
 {
   if (sd1 == 0.0 || sd2 == 0.0)
     return (0.0)
@@ -673,13 +678,16 @@ estim_cov_12 <- function(Y1, Y2, sd1, sd2, Z, Yobs = NULL, modes = NULL, ...)
   c12 <- (sd1^2L - sdDelta^2L + sd2^2L) / 2.0
   
   # If |c12| > sd1 * sd2 because the model is not correct, 
-  # we clamp it
-  if (abs(c12) > sd1 * sd2)
+  # we clamp it if clamp == TRUE
+  if (isTRUE(clamp) && abs(c12) > sd1 * sd2)
   {
-    warningSent <- paste("Covariance between the two modes counterfactuals",
-                         "not well estimated. Value clampd")
-    warning(warningSent)
     c12 <- sign(c12) * sd1 * sd2
+    if (isTRUE(warnClamp))
+    {
+      warningClamp <- paste("Covariance between the two modes counterfactuals",
+                         "not well estimated. Value clampd")
+      warning(warningClamp)
+    }
   }
     
   
@@ -1645,7 +1653,7 @@ simulation_tphi <- function(Z,
     # Estimations with Y1 and Y2 weighted by phi
     estimcov12 <- 
       estim_cov_12(Yobs = Yobs, modes = modes, 
-                   sd1 = estimsd1, sd2 = estimsd2, Z = Z)
+                   sd1 = estimsd1, sd2 = estimsd2, Z = Z, clamp = FALSE)
       # With true probabilities
     totPhiTW <- estim_tot_m1_m2(Yobs, modes, pi, p1, p2, phi)
     
@@ -1791,7 +1799,7 @@ for (k in seq_len(nrow(parameters)))
                     n = parameters[k, "n"],
                     rho = parameters[k, "rho"],
                     seed = NULL,
-                    nCores = 45L,
+                    nCores = 0L,
                     calcVariance = calcVariance)
   }
   
