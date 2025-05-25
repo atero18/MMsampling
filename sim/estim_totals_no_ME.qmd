@@ -673,11 +673,11 @@ estim_cov_12 <- function(Y1, Y2, sd1, sd2, Z, Yobs = NULL, modes = NULL, ...)
   c12 <- (sd1^2L - sdDelta^2L + sd2^2L) / 2.0
   
   # If |c12| > sd1 * sd2 because the model is not correct, 
-  # we clampe it
-  if (c12 > abs(sd1 * sd2))
+  # we clamp it
+  if (abs(c12) > sd1 * sd2)
   {
     warningSent <- paste("Covariance between the two modes counterfactuals",
-                         "not well estimated. Value clamped")
+                         "not well estimated. Value clampd")
     warning(warningSent)
     c12 <- sign(c12) * sd1 * sd2
   }
@@ -1751,7 +1751,7 @@ simulation_tphi <- function(Z,
 ## Simulation
 
 ```{r}
-Msim <- 2500L
+Msim <- 30L
 ```
 
 The different lines of the grid have the same seed. It is useful to run in different orders the evaluations and because the results from different parameters are never mixed there is no independency issue.
