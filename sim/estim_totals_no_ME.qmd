@@ -644,8 +644,7 @@ estim_counterfactuals <- function(Yobs,
 #' (character vector or factor of size N).
 #' @param clamp TRUE if the estimation of the covariance must be clamped if
 #' its absolute value is superior to `sd1` * `sd2` (boolean).
-#' @param warnClamp TRUE if a warning must be sent when a clamp is
-#' made (boolean).
+#' @param warnClamp TRUE if a warning must be sent when a clamp is made (boolean).
 #' @param ... arguments for the function `MatchIt::matchit`.
 #' @return an estimator of the covariance between the m1 and m2
 #' potential outcomes, unbiased under the assumptions, if `sd1`^2 and `sd2`^2
