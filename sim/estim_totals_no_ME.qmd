@@ -14,20 +14,26 @@ format:
 ```{r}
 #| message: false
 #| warning: false
-library(dplyr)
+install.packages("pacman")
+pacman::p_load(dplyr)
 options(dplyr.summarise.inform = FALSE)
-library(tibble)
-library(tidyr)
-library(glue)
-library(parallel)
-library(ggplot2)
+pacman::p_load(tibble)
+pacman::p_load(tidyr)
+pacman::p_load(glue)
+pacman::p_load(parallel)
+pacman::p_load(ggplot2)
 theme_set(theme_light())
-## library(Matrix)
-library(progress)
-## library(marginaleffects)
-library(mc2d)
-library(mvtnorm)
-library(MatchIt)
+## pacman::p_load(Matrix)
+pacman::p_load(progress)
+## pacman::p_load(marginaleffects)
+# pacman::p_install(mc2d, force = FALSE)
+pacman::p_install(mvtnorm, force = FALSE)
+pacman::p_install(MatchIt, force = FALSE)
+```
+
+```{r}
+
+
 ```
 
 ```{r}
@@ -1704,10 +1710,12 @@ simulation_tphi <- function(Z,
              .after = "sample")
   }
   
-  if (nCores == 0L)
+  nCores <- min(nCores, M, detectCores() - 1L)
+  if (nCores <= 1L)
     res <- lapply(seq_len(M), FUN = monoSim)
   else
     res <- mclapply(seq_len(M), FUN = monoSim, mc.cores = nCores)
+    
   
   res <- do.call("rbind", res)
   
