@@ -10,6 +10,8 @@ format:
 ```{r}
 #| message: false
 #| warning: false
+# Installation of the library `pacman` if not
+# already installed
 if (!"pacman" %in% rownames(installed.packages()))
   install.packages("pacman")
 ```
@@ -1830,6 +1832,7 @@ resSimulation %>%
   summarize(M = n(),
             true_expectation = first(expEstimand),
             MC_expectation = mean(estimation, na.rm = TRUE)) %>% 
+  # mutate(bias_MC = MC_expectation - true_expectation) %>% 
   mutate(ratio_MC_true = MC_expectation / true_expectation) %>% 
   ungroup()
 ```
