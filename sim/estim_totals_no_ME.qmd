@@ -653,7 +653,7 @@ estim_cov_12 <- function(Y1, Y2, sd1, sd2, Z, Yobs = NULL, modes = NULL,
                          clamp = FALSE, warnClamp = TRUE, ...)
 {
   if (sd1 == 0.0 || sd2 == 0.0)
-    return (0.0)
+    return(0.0)
   
   # If the observation vector Yobs is given we do the estimation
   # of the counterfactuals
@@ -752,7 +752,7 @@ estim_appr_var_seq_m1_m2 <- function(Yobs,
                                      p1,
                                      p2,
                                      sd1 = 0.0,
-                                     sd2 = sd1,
+                                     sd2 = 0.0,
                                      cov12 = sd1 * sd2,
                                      phi = rep(0.5, length(Yobs)),
                                      correcEstimWeights = TRUE,
