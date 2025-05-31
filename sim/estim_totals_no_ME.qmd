@@ -14,7 +14,6 @@ format:
 # already installed
 if (!"pacman" %in% rownames(installed.packages()))
   install.packages("pacman")
-```
 
 ```{r}
 #| message: false
@@ -55,6 +54,8 @@ set.seed(145L)
 N <- 10000L
 ```
 
+## Covariates
+
 Creating independent covariates, using the 2022 French age pyramid ([INSEE](https://www.insee.fr/fr/statistiques/6688661?sommaire=6686521))
 
 ```{r}
@@ -80,7 +81,10 @@ levels(sex) <- c("Woman", "Man")
 ```
 
 ```{r}
-summary(Z[, -1L])
+cat("About the age:\n")
+summary(Z$age)
+cat("About the sex:\n")
+table(sex)
 ```
 
 ```{r}
@@ -89,7 +93,7 @@ data$sex <- sex
 ggplot(data) + 
   geom_density(aes(x = age, colour = sex)) +
   ggtitle("Age density conditionally to the sex")
-
+  ggsave(p, file = "sim_age_cond_sexe.eps", device = "svg", units = "cm")
 data %>% 
   group_by(sex) %>% 
   summarize(meanAge = mean(age))
@@ -100,7 +104,9 @@ rm(data)
 Z <- as.matrix(Z)
 ```
 
-Creating a regression vector for both mode : $\beta$ is defined to have in average a counterfactual expectation for each mode equal to one.
+## Potential outcomes
+
+Creating a regression vector for both mode : $\beta$ is defined to have in average a potential outcome expectation for each mode equal to one.
 
 ```{r}
 beta <- c(0.0, -0.1, 4.0)
@@ -108,14 +114,24 @@ beta[1L] <- 1.0 - mean(Z %*% beta)
 print(beta)
 ```
 
-$Y_{1}$ and $Y_{2}$ expectations depebd on `Z`:
+$Y_{1}$ and $Y_{2}$ expectations depend on `Z`:
 
 ```{r}
 data.frame(Yexp = Z %*% beta) %>% 
   ggplot() + 
   geom_density(aes(x = Yexp)) +
-  ggtitle("Distribution of the potential outcomes expected values")
+  ggtitle("Distribution of the potential outcomes expected values") +
+  xlab("z_k^T beta")
 ```
+Average of the expectations of the potential outcomes on $U$:
+
+```{r}
+mean(Z %*% beta)
+```
+
+## Mode selection mechanisms
+
+### Generation of the probabilities (logistic models)
 
 We simulate a mode selection MAR (Missing At Random) under a logistic model, with $Z$ as variable:
 
@@ -149,11 +165,12 @@ summary(p2) %>% print()
 ```
 
 ```{r}
-data.frame(mode = factor(rep(c("m1", "m2"), each = N)), 
+data.frame(mode = factor(rep(c("m1", "m2"), each = N), 
+                         levels = c("m1", "m2")), 
            prob = c(p1, p2)) %>% 
   ggplot() + 
   geom_density(aes(x = prob, color = mode)) +
-  ggtitle("Distribution of p1 and p2") +
+  ggtitle("Distribution of p1 and p2 (sequential logistic model)") +
   xlab("Mode selection probability")
 ```
 
@@ -177,17 +194,22 @@ data.frame(pRep = pRep) %>%
   ggtitle("Distribution of the probability to answer (sequential logistic)") +
   xlab("Probability to answer if asked (p_1k + [1 - p_1k]p_2k)")
 ```
+### Size of the sets
 
-
-About $S_{r\bullet}$ (case of SRS with $f = \frac{1}{10}$):
+About $S_{r\bullet}$:
 
 ```{r}
-# Calculation of the inclusion covariance matrix using the
-# second order inclusion probabilities.
-pi2_to_covarInc <- function(pi2)
+#' Calculation of the inclusion covariance matrix using the
+#' second order inclusion probabilities.
+#'
+#' @param pi_mat matrix containing the second order inclusion 
+#' probabilities pi_kl (symmetric numeric matrix of order N).
+#' @return the corresponding covariance matrix
+#' (symmetric numeric matrix of order N).
+pi2_to_covarInc <- function(pi_mat)
 {
-  pi <- diag(pi2)
-  pi2 - outer(pi, pi)
+  pi <- diag(pi_mat)
+  pi_mat - outer(pi, pi)
 }
 
 # Generates the second order inclusion probabilities matrix of a
@@ -203,7 +225,7 @@ piMat_SRS <- function(n, N)
 
 
 ```{r}
-f <- 1.0 / 10.0
+f <- 1.6 / 10.0
 n <- f * N
 expSizeSr <- f * sum(p1)
 
@@ -245,12 +267,12 @@ varSizeSa <- f * sum(pRep2 * (1.0 - p2)) +
 glue("Expected size of Sa : {expSizeSa}")
 glue("Variance of the size of Sa : {varSizeSa}")
 
-rm(f, pCov, pi, pi_mat)
 rm(expSizeSr, varSizeSr, 
    expSizeSmr, varSizeSmr, 
    expSizeSa, varSizeSa)
 ```
 
+## Global answer mechanism
 
 ```{r}
 alphaa <- c(+1.3, -0.01, -0.35)
@@ -263,6 +285,28 @@ data.frame(pa = pa) %>%
   geom_density(aes(pa)) +
   ggtitle("Distribution of pa (global logistic)") +
   xlab("Probability to answer if asked (p_ak)")
+```
+```{r}
+data.frame(pa = c(pRep, pa),
+           mechanism = factor(rep(c("sequential", "global"), each = N),
+                              levels = c("sequential", "global"))) %>% 
+  ggplot() + 
+  geom_density(aes(pa, color = mechanism)) +
+  ggtitle("Distribution of the probability to answer depending on the mechanism") +
+  xlab("Probability to answer if asked by any mode (pa)")
+```
+
+```{r}
+expSizeSa <- f * sum(pa)
+
+varSizeSa <- f * sum(pa * (1.0 - pa)) + 
+  t(pa) %*% pCov %*% pa %>% 
+  as.numeric()
+
+glue("Expected size of Sa : {expSizeSa}")
+glue("Variance of the size of Sa : {varSizeSa}")
+
+rm(f, pCov, pi, pi_mat)
 ```
 
 # Total estimation
@@ -1852,20 +1896,66 @@ Here we show average approximate variance and variance of different estimators, 
 ```{r}
 temp <- resSimulation %>% 
   mutate(estimation = if_else(subset == 1L, estimation, NA_real_)) %>% 
+  filter(weights == "estimated") %>% 
   group_by(n, sd1, sd2, rho, equalOutcomes, mechanism, estimand, sample, weights) %>% 
   summarize(M = n() / 2L,
             MC_AV = mean(apprVar, na.rm = TRUE),
             MC_var = var(estimation, na.rm = TRUE),
             true_var = first(trueVar)) %>% 
-  mutate(MC_AV_by_var = MC_AV / MC_var)
+  mutate(MC_AV_by_var = MC_AV / MC_var) %>% 
+  ungroup()
 
 temp
 ```
 
+### Impact of the potential outcome variability
+
+The impact is supposed be negligible when the sampling fraction $nN^{-1}$ is small.
+
 ```{r}
-temp %>% 
-  ungroup(estimand, sample, weights) %>% 
-  slice_min(MC_AV)
+resSimulation %>% 
+  filter(subset == 2L) %>% 
+  group_by(n, sd1, sd2, rho, equalOutcomes, estimand, weights) %>% 
+  summarize(MC_var = var(estimation, na.rm = TRUE)) %>%
+  group_by(n, sd2, rho, estimand, weights) %>% 
+  summarise(min_SD1 = min(sd1),
+            max_SD1 = max(sd1),
+            ratio_SD1 = max(sd1) / min(sd1),
+            ratio_MC_var = max(MC_var) / min(MC_var),
+            ratio_MC_var_ratio_SD1 = ratio_MC_var / ratio_SD1) %>% 
+  filter(ratio_SD1 != 1.0)
 ```
 
+When $\sigma_2$ vary
+
+```{r}
+resSimulation %>% 
+  filter(subset == 2L) %>% 
+  group_by(n, sd1, sd2, rho, equalOutcomes, estimand, weights) %>% 
+  summarize(MC_var = var(estimation, na.rm = TRUE)) %>%
+  group_by(n, sd1, rho, estimand, weights) %>% 
+  summarise(min_SD2 = min(sd2),
+            max_SD2 = max(sd2),
+            ratio_SD2 = max(sd2) / min(sd2),
+            ratio_MC_var = max(MC_var) / min(MC_var),
+            ratio_MC_var_ratio_SD2 = ratio_MC_var / ratio_SD2) %>% 
+  filter(ratio_SD2 != 1.0)
+```
+
+
+### Which estimator should we use
+
+Considering the approximate variance, on the last $M$ iterations
+
+Only for the sequential logistic model. Consider the estimators with true and estimated probabilities.
+
+```{r}
+resSimulation %>% 
+  filter(subset == 2L, mechanism == "sequentialLogit") %>% 
+  group_by(n, sd1, sd2, rho, equalOutcomes, estimand, phi, sample, weights) %>%
+  summarize(MC_var = var(estimation, na.rm = TRUE)) %>% 
+  group_by(n, sd1, sd2, rho) %>% 
+  slice_min(MC_var) %>% 
+  arrange(estimand)
+```
 
