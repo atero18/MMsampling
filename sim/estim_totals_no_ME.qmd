@@ -1376,10 +1376,10 @@ rho_ref <- rho_vec[1L]
 
 # Variation of the sample fraction n / N and sd1 with sd1 = sd2 
 # and correlation rho between Y1 and Y2 fixed
-paramVar_n <-
-  expand.grid(ratio_n = ratio_n_vec,
-              sd1 = sd1_vec, ratio_sd = 1.0,
-              rho = rho_ref)
+# paramVar_n <-
+#   expand.grid(ratio_n = ratio_n_vec,
+#               sd1 = sd1_vec, ratio_sd = 1.0,
+#               rho = rho_ref)
 
 # Variation of sd1 and sd2 with correlation rho between Y1 and Y2 fixed
 paramVar_sd <- 
@@ -1400,8 +1400,8 @@ paramVar_rho <-
               sd1 = sd1_ref, ratio_sd = 1.0,
               rho = rho_vec)
 
-parameters <- rbind(paramVar_n, paramVar_sd, paramVar_sdEq, paramVar_rho)
-# parameters <- rbind(paramVar_sd, paramVar_sdEq, paramVar_rho)
+# parameters <- rbind(paramVar_n, paramVar_sd, paramVar_sdEq, paramVar_rho)
+parameters <- rbind(paramVar_sd, paramVar_sdEq, paramVar_rho)
 
 parameters <- parameters %>% 
   distinct() %>% 
@@ -1901,8 +1901,8 @@ temp <- resSimulation %>%
   summarize(M = n() / 2L,
             MC_AV = mean(apprVar, na.rm = TRUE),
             MC_var = var(estimation, na.rm = TRUE),
-            true_var = first(trueVar)) %>% 
-  mutate(MC_AV_by_var = MC_AV / MC_var) %>% 
+            true_var = first(trueVar),) %>% 
+  mutate(MC_AV_by_var = MC_AV / MC_var, MC_sd = sqrt(MC_var)) %>% 
   ungroup()
 
 temp
@@ -1910,7 +1910,23 @@ temp
 
 ### Impact of the potential outcome variability
 
-The impact is supposed be negligible when the sampling fraction $nN^{-1}$ is small.
+The impact is supposed be negligible when the sampling fraction $f := nN^{-1}$ is small.
+
+```{r}
+resSimulation %>% 
+  filter(subset == 2L) %>% 
+  group_by(n, sd1, sd2, rho, equalOutcomes, estimand, weights) %>% 
+  summarize(MC_var = var(estimation, na.rm = TRUE)) %>%
+  group_by(n, sd2, rho, estimand, weights) %>% 
+  summarise(min_SD1 = min(sd1),
+            max_SD1 = max(sd1),
+            ratio_SD1 = max(sd1) / min(sd1),
+            ratio_MC_var = max(MC_var) / min(MC_var),
+            ratio_MC_var_ratio_SD1 = ratio_MC_var / ratio_SD1) %>% 
+  filter(ratio_SD1 != 1.0)
+```
+
+When $\sigma_1$ vary
 
 ```{r}
 resSimulation %>% 
@@ -1942,6 +1958,20 @@ resSimulation %>%
   filter(ratio_SD2 != 1.0)
 ```
 
+```{r}
+resSimulation %>% 
+  filter(subset == 2L, rho == 0.8, 
+         ratio_sd == 1.0, 
+         estimand %in% c("t_1", "t_2"), 
+         weights == "estimated") %>% 
+  mutate(sd = sd2) %>% 
+  group_by(n, sd, rho, estimand) %>% 
+  summarise(MC_var = var(estimation, na.rm = TRUE),
+            ratio_MC_var = MC_var) %>% 
+  ungroup() %>% 
+  ggplot() + geom_point(aes(x = sd, y = MC_var, color = estimand))
+  
+```
 
 ### Which estimator should we use
 
@@ -1955,7 +1985,82 @@ resSimulation %>%
   group_by(n, sd1, sd2, rho, equalOutcomes, estimand, phi, sample, weights) %>%
   summarize(MC_var = var(estimation, na.rm = TRUE)) %>% 
   group_by(n, sd1, sd2, rho) %>% 
+  mutate(ratio_MC_var = max(MC_var) / min(MC_var)) %>% 
   slice_min(MC_var) %>% 
   arrange(estimand)
+```
+
+When $\sigma_1 < \sigma_2$:
+
+```{r}
+resSimulation %>% 
+  filter(subset == 2L, mechanism == "sequentialLogit") %>% 
+  filter(ratio_sd > 1.0) %>% 
+  group_by(n, sd1, sd2, rho, estimand, phi, weights) %>%
+  summarize(MC_var = var(estimation, na.rm = TRUE)) %>% 
+  group_by(n, sd1, sd2, rho) %>% 
+  mutate(ratio_MC_var = max(MC_var) / min(MC_var)) %>% 
+  arrange(MC_var, .by_group = TRUE)
+```
+
+
+When $\sigma_1 > \sigma_2$:
+
+```{r}
+resSimulation %>% 
+  filter(subset == 2L, mechanism == "sequentialLogit") %>% 
+  filter(ratio_sd < 1.0) %>% 
+  group_by(n, sd1, sd2, rho, estimand, phi, weights) %>%
+  summarize(MC_var = var(estimation, na.rm = TRUE)) %>% 
+  group_by(n, sd1, sd2, rho) %>% 
+  mutate(ratio_MC_var = max(MC_var) / min(MC_var)) %>% 
+  arrange(MC_var, .by_group = TRUE)
+```
+
+With estimated probabilities only:
+
+```{r}
+temp <- resSimulation %>% 
+  filter(subset == 2L, mechanism == "sequentialLogit", weights == "estimated") %>% 
+  group_by(n, sd1, ratio_sd, rho, estimand) %>%
+  summarize(MC_var = var(estimation, na.rm = TRUE)) %>%
+  select(-n) %>% 
+  group_by(sd1, ratio_sd, rho) %>% 
+  arrange(MC_var, .by_group = TRUE) %>% 
+  slice(c(1L, n())) %>% 
+  arrange(sd1, ratio_sd, rho, .by_group = TRUE) %>% 
+  arrange(MC_var, .by_group = TRUE) %>% 
+  ungroup()
+
+compareVar <- temp %>% select(sd1, ratio_sd, rho) %>% slice(seq(1L, nrow(temp), 2L))
+compareVar$bestEstimator <- compareVar$worseEstimator <- NA_character_
+compareVar$ratio_MC_var <- NA_real_
+
+for (k in seq_len(nrow(temp) / 2L))
+{
+  group <- temp %>% 
+    slice(c(2L * k - 1L, 2L * k))
+  
+  compareVar$worseEstimator[k] <-
+    group %>% 
+    slice_max(MC_var) %>% 
+    select(estimand) %>% 
+    pull()
+  
+  compareVar$bestEstimator[k] <-
+    group %>% 
+    slice_min(MC_var) %>% 
+    select(estimand) %>% 
+    pull()
+  
+  compareVar$ratio_MC_var[k] <- max(group$MC_var) / min(group$MC_var)
+}
+
+rm(group)
+
+compareVar
+```
+```{r}
+rm(temp, compareVar)
 ```
 
