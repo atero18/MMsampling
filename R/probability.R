@@ -41,16 +41,17 @@ cor2cov <- function(cor, sigmas)
   return(cov)
 }
 
-#' @describeIn mats_interaction Calcul de la matrice de covariance
-#' d'inclusion d'individus à partir des probabilités d'inclusion du
-#' second ordre.
-#' @param pi2 Matrice d'inclusion du second ordre
-#' @export
-pi2_to_covarInc <- function(pi2)
+#' Calculation of the inclusion covariance matrix using the
+#' second order inclusion probabilities.
+#'
+#' @param pi_mat matrix containing the second order inclusion
+#' probabilities pi_kl (symmetric numeric matrix of order N).
+#' @return the corresponding covariance matrix
+#' (symmetric numeric matrix of order N).
+pi2_to_covarInc <- function(pi_mat)
 {
-  pi <- diag(pi2)
-
-  pi2 - outer(pi, pi)
+  pi <- diag(pi_mat)
+  pi_mat - outer(pi, pi)
 }
 
 #' @describeIn mats_interaction Calcul of the second order probability matrix
@@ -65,7 +66,8 @@ pi_to_pi2 <- function(pi)
   # Replacement of the diagonal of pi2 by pi
   # (this affection seems faster than diag<-)
   N <- length(pi)
-  idx <- 1L + seq(from = 0, to = N - 1L) * (N + 1L)  # Linear indices for diagonal elements
+  # Linear indices for diagonal elements
+  idx <- 1L + seq(from = 0, to = N - 1L) * (N + 1L)
   pi2[idx] <- pi
   # diag(pi2) <- pi
 

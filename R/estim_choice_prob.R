@@ -221,3 +221,23 @@ estim_response_prob_sequential <- function(I, Z, modes, orderModes,
   list(unconditional = unconditionalProbs,
        conditional = conditionalProbs)
 }
+
+#' Fisher Information Matrix (FIM) for a logistic model and weights
+#' equal to 1
+#' @param prob probability to answer. Can be true or estimated.
+#' Can be equal to NA for the units that are not in the subset defined
+#' by `maskSubset` (numeric vector of size N the size of the population).
+#' @param Z design matrix. The rows corresponding to the units that are not in
+#' the subset can contain NA (numeric matrix with N rows and q columns).
+#' @param maskSubset mask indicating which unit should be used
+#' in the calculation of the FIM. Default to the entire set
+#' (logical vector of size N).
+#' @return the Fisher Information Matrix or its estimation
+#' (numeric matrix of order q).
+Fisher_Information_Matrix <- function(prob, Z, maskSubset = !logical(nrow(Z)))
+{
+  probSubset <- prob[maskSubset]
+  ZSubset <- Z[maskSubset, , drop = FALSE]
+
+  crossprod(ZSubset, probSubset * (1.0 - probSubset) * ZSubset)
+}
