@@ -94,7 +94,7 @@ data$sex <- sex
 ggplot(data) + 
   geom_density(aes(x = age, colour = sex)) +
   ggtitle("Age density conditionally to the sex")
-  ggsave(p, file = "sim_age_cond_sexe.eps", device = "svg", units = "cm")
+
 data %>% 
   group_by(sex) %>% 
   summarize(meanAge = mean(age))
@@ -137,9 +137,9 @@ mean(Z %*% beta)
 We simulate a mode selection MAR (Missing At Random) under a logistic model, with $Z$ as variable:
 
 ```{r}
-alpha1 <- c(0.7, -0.02, -0.5)
+alpha1 <- c(0.69, -0.02, -0.5)
 
-alpha2 <- c(0.4, -0.01, -0.3)
+alpha2 <- c(1.0, -0.01, -0.3)
 ```
 
 ```{r}
@@ -925,6 +925,32 @@ var_expansion_a <- function(Yexp,
 ## Grid of parameters
 
 ```{r}
+Rsq <- function(Z, beta, epsilon)
+{
+  Y <- Z %*% beta + epsilon
+  1.0 - sum(epsilon^2L) / sum((Y - mean(Y))^2L)
+}
+```
+
+Random generation of potential outcomes vectors, considered fixed afeter, in order to have $R²$ close to 0.2 and 0.5, respectively.
+```{r}
+set.seed(123L)
+epsilon0.2 <- rnorm(N, mean = 0.0, sd = 6.43)
+Y0.2 <- Z %*% beta + epsilon0.2
+Rsq(Z, beta, epsilon0.2)
+epsilon0.5 <- rnorm(N, mean = 0.0, sd = 3.27)
+Y0.5 <- Z %*% beta + epsilon0.5
+Rsq(Z, beta, epsilon0.5)
+rm(epsilon0.2, epsilon0.5)
+```
+
+
+
+```{r}
+Rsq(Z, beta, rnorm(N, mean = 0.0, sd = 5.0))
+```
+
+```{r}
 ratio_n_vec <- c(0.16, 0.25, 0.4)
 ratio_n_ref <- min(ratio_n_vec)
 n_vec <- as.integer(ratio_n_vec * N)
@@ -992,7 +1018,8 @@ simulation_tphi <- function(Z,
                             n = ceiling(N / 10L),
                             seed = 123L,
                             nCores = detectCores() - 1L,
-                            calcVariance = TRUE)
+                            calcVariance = TRUE,
+                            Y = NULL)
 {
   set.seed(seed)
   
@@ -1003,6 +1030,9 @@ simulation_tphi <- function(Z,
 
   p1 <- expit(Z %*% alpha1) %>% as.numeric()
   p2 <- expit(Z %*% alpha2) %>% as.numeric()
+  
+  if (sd1 == 0.0 && sd2 == 0.0)
+    rho <- 1.0
   
   # If variances of Y1 and Y2 are equal and the
   # correlation of (y_1k, y_2k) is equal to one,
@@ -1064,36 +1094,44 @@ simulation_tphi <- function(Z,
                                                  chosenOnly = FALSE)
     
     # Generating values for Y_int and Y_tel
+    if (sd1 == 0.0 && sd2 == 0.0)
+      Y1 <- Y2 <- Y
+    else
+    {
       # Generation for each unit of independent couples (e_1k, e_2k) 
       # with centered multivariate normal distribution and as variance
       # the variance of the couple (y_1k, y_2k) 
-    YpotOutRes_mat <- 
-      mvtnorm::rmvnorm(n = N, 
-                       mean = numeric(2L), sigma = varYUnit_mat,
-                       checkSymmetry = FALSE)
-    
-      # Changing the expectations to have the potential outcomes :
-      # y_1k = E[y_k | Z] + e_1k and y_1k = E[y_k | Z] + e_2k
-    Y1 <- Yexp + YpotOutRes_mat[, 1L]
-    names(Y1) <- paste0("y1", seq_len(N))
-    
-    Y2 <- Yexp + YpotOutRes_mat[, 2L]
-    names(Y2) <- paste0("y2", seq_len(N))
-    
-    rm(YpotOutRes_mat)
-    
-    if (sd1 == sd2 && rho == 1.0)
-      Y2 <- Y1
-
+      YpotOutRes_mat <- 
+        mvtnorm::rmvnorm(n = N, 
+                         mean = numeric(2L), sigma = varYUnit_mat,
+                         checkSymmetry = FALSE)
+      
+        # Changing the expectations to have the potential outcomes :
+        # y_1k = E[y_k | Z] + e_1k and y_1k = E[y_k | Z] + e_2k
+      Y1 <- Yexp + YpotOutRes_mat[, 1L]
+      names(Y1) <- paste0("y1", seq_len(N))
+      
+      Y2 <- Yexp + YpotOutRes_mat[, 2L]
+      names(Y2) <- paste0("y2", seq_len(N))
+      
+      rm(YpotOutRes_mat)
+      
+      if (sd1 == sd2 && rho == 1.0)
+        Y2 <- Y1
+    }
     
     # Creating the observed outcome vector
     Yobs <- rep(NA_real_, N)
-    Yobs[modes == "m1"] <- Y1[modes == "m1"]
-    Yobs[modes == "m2"] <- Y2[modes == "m2"]
+    Yobs[maskSr] <- Y1[maskSr]
+    Yobs[maskSmr] <- Y2[maskSmr]
     names(Yobs) <- paste0("yobs", seq_len(N))
     
     # Estimations with Y1 (total of the y_1k)
-    estimsd1 <- summary.lm(lm(Yobs ~ Z, subset = maskSr))$sigma
+      # If we have `sd1` = 0 we consider the deterministic case
+    if (sd1 == 0.0)
+      estimsd1 <- 0.0
+    else
+      estimsd1 <- summary.lm(lm(Yobs ~ Z, subset = maskSr))$sigma
     
      # With true probabilities
     tot1TW <- estim_tot_m1(Yobs, modes, pi, p1)
@@ -1136,7 +1174,12 @@ simulation_tphi <- function(Z,
       apprVar1EW <- NA_real_
     
     # Estimations with Y2 (total of the y_2k)
-    estimsd2 <- summary.lm(lm(Yobs ~ Z, subset = maskSmr))$sigma
+      # If we have `sd2` = 0 we consider the deterministic case
+    if (sd2 == 0.0)
+      estimsd2 <- 0.0
+    else
+      estimsd2 <- summary.lm(lm(Yobs ~ Z, subset = maskSmr))$sigma
+    
       # With true probabilities
     tot2TW <- estim_tot_m2(Yobs, modes, pi, p1, p2)
     
@@ -1179,7 +1222,7 @@ simulation_tphi <- function(Z,
       apprVar2EW <- NA_real_
     
 
-    # Estimations with Y1 and Y2 assumezd equal (total of the y_k)
+    # Estimations with Y1 and Y2 assumed equal (total of the y_k)
     # (considered when sd1 = sd2 and rho = 1)
     if (sd1 == sd2 && rho == 1.0)
     {
@@ -1254,12 +1297,22 @@ simulation_tphi <- function(Z,
     }
     
     
-    # Estimations with Y1 and Y2 weighted by phi
-    estimcov12 <- 
+    # Estimations with Y1 and Y2 weighted
+      # If `sd1` and `sd2` are equal to zero, we consider 
+      # the deterministic case
+    if (sd1 == 0.0 && sd2 == 0.0)
+      estimcov12 <- 0.0
+    else
+    {
+      estimcov12 <- 
       estim_cov_12(Yobs = Yobs, modes = modes, 
                    sd1 = estimsd1, sd2 = estimsd2, Z = Z, clamp = FALSE)
+    }
+    
+    phiSize <- rep(sum(maskSr) / (sum(maskSr) + sum(maskSmr)), N)
       # With true probabilities
     totPhiTW <- estim_tot_m1_m2(Yobs, modes, pi, p1, p2, phi)
+    totPhiSizeTW <- estim_tot_m1_m2(Yobs, modes, pi, p1, p2, phiSize)
     
     if (calcVariance)
     {
@@ -1274,13 +1327,25 @@ simulation_tphi <- function(Z,
                                  estimcov12,
                                  phi,
                                  correcEstimWeights = FALSE)
+      
+      apprVarPhiSizeTW <- 
+        estim_appr_var_seq_m1_m2(Yobs,
+                                 modes,
+                                 pi_mat,
+                                 p1,
+                                 p2,
+                                 estimsd1,
+                                 estimsd2,
+                                 estimcov12,
+                                 phiSize,
+                                 correcEstimWeights = FALSE)
     }
     else
-      apprVarPhiTW <- NA_real_
+      apprVarPhiTW <- apprVarPhiSizeTW <- NA_real_
     
       # With estimated probabilities
     totPhiEW <- estim_tot_m1_m2(Yobs, modes, pi, estimp1, estimp2, phi)
-    
+    totPhiSizeTW <- estim_tot_m1_m2(Yobs, modes, pi, estimp1, estimp2, phiSize)
     
     if (calcVariance)
     {
@@ -1297,27 +1362,46 @@ simulation_tphi <- function(Z,
                                  correcEstimWeights = TRUE,
                                  I,
                                  Z)
+      
+      apprVarPhiSizeEW <- 
+        estim_appr_var_seq_m1_m2(Yobs,
+                                 modes,
+                                 pi_mat,
+                                 estimp1,
+                                 estimp2,
+                                 estimsd1,
+                                 estimsd2,
+                                 estimcov12,
+                                 phiSize,
+                                 correcEstimWeights = TRUE,
+                                 I,
+                                 Z)
     }
     else
-      apprVarPhiEW <- NA_real_
+      apprVarPhiEW <- apprVarPhiSizeEW <- NA_real_
     
     
     tibble(estimator = c("tot1TW", "tot1EW", 
                          "tot2TW", "tot2EW", 
                          "totaTW", "totaEW",
-                         "totphiTW", "totphiEW"),
-           sample = rep(c("Sr", "Smr", "Sa", "Sa"), each = 2L),
+                         "totphiTW", "totphiEW",
+                         "totphiSizeTW", "totphiSizeEW"),
+           sample = rep(c("Sr", "Smr", "Sa", "Sa", "Sa"), each = 2L),
            mechanism = rep(c("sequentialLogit", "sequentialLogit", 
-                             "globalLogit", "sequentialLogit"), each = 2L),
-           estimand = rep(c("t_1", "t_2", "t_ay", "t_phiy"), each = 2L),
+                             "globalLogit", "sequentialLogit", 
+                             "sequentialLogit"), each = 2L),
+           estimand = rep(c("t_1", "t_2", "t_ay", 
+                            "t_phiy", "t_phiSizey"), each = 2L),
            estimation = c(tot1TW, tot1EW, 
                           tot2TW, tot2EW, 
                           totaTW, totaEW,
-                          totPhiTW, totPhiEW),
+                          totPhiTW, totPhiEW,
+                          totPhiSizeTW, totPhiSizeEW),
            apprVar = c(apprVar1TW, apprVar1EW, 
                        apprVar2TW, apprVar2EW,
                        apprVaraTW, apprVaraEW,
-                       apprVarPhiTW, apprVarPhiEW)) %>% 
+                       apprVarPhiTW, apprVarPhiEW,
+                       apprVarPhiSizeTW, apprVarPhiSizeEW)) %>% 
       mutate(weights = rep_len(c("true", "estimated"), length.out = n()),
              .after = "sample")
   }
@@ -1348,7 +1432,8 @@ simulation_tphi <- function(Z,
   trueVar <- rep.int(c(trueVar1TW, NA_real_, 
                        trueVar2TW, NA_real_,
                        trueVaraTW, NA_real_,
-                       trueVarPhi, NA_real_),
+                       trueVarPhi, NA_real_,
+                       NA_real_, NA_real_),
                      times = M)
   
   res <- res %>% 
