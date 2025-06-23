@@ -262,8 +262,45 @@ rm(expSizeSr, varSizeSr,
 
 ## Global answer mechanism
 
+Objective: finding the vector $\alpha_a$ that, for a global logistic model, gives the probabilities $p_{ak}$ that are the closest to $p_{1k} + (1-p_{1k})p_{2k}$ with a sequential logistic mechanism.
 ```{r}
+expit <- function(x) 1.0 / (1.0 + exp(-x))
+logit <- function(p) log(p / (1.0 - p))
+```
+
+```{r}
+score_logit_a <- function(alphaa, Z, p1, p2)
+{
+  paPrime <- p1 + (1.0 - p1) * p2
+  pa <- expit(Z %*% alphaa)
+  pabar <- 1.0 - pa
+  
+  2.0 * t(Z) %*% (pa * pabar * (pa - paPrime))
+}
+
+hessian_logit_a <- function(alphaa, Z, p1, p2)
+{
+  paPrime <- p1 + (1.0 - p1) * p2
+  pa <- expit(Z %*% alphaa)
+  pabar <- 1.0 - pa
+  
+  2.0 * diag(pa * pabar^2L * (pa - paPrime)) * t(Z) %*% Z + 
+    2.0 * diag(pa^2L * pabar * (pa - paPrime)) * t(Z) %*% Z + 
+    2.0 * diag(pa^2L * pabar^2L) * t(Z) %*% Z
+}
+
+# Initial vector
 alphaa <- c(+1.3, -0.01, -0.35)
+
+it <- 0L
+
+while (it < 50L)
+{
+  it <- it + 1L
+  alphaa <- alphaa - solve(hessian_logit_a(alphaa, Z, p1, p2)) %*% score_logit_a(alphaa, Z, p1, p2)
+}
+
+alphaa <- as.vector(alphaa)
 pa <- gen_selection_probabilities(Z, alphaa)
 ```
 
@@ -282,6 +319,10 @@ data.frame(pa = c(pRep, pa),
   geom_density(aes(pa, color = mechanism)) +
   ggtitle("Distribution of the probability to answer depending on the mechanism") +
   xlab("Probability to answer if asked by any mode (pa)")
+```
+RMSE between mechanisms for the probability to answer
+```{r}
+sqrt(mean(((pa - (p1 + (1.0 - p1) * p2))^2L)))
 ```
 
 ```{r}
@@ -336,9 +377,11 @@ rm(f, pCov, pi, pi_mat)
 #' (scalar).
 #' @param phi vector containing weights for the total. Must be known on the
 #' set of respondents (numeric vector of [0,1]^N).
-#' @param correcEstimWeights TRUE if we must apply a correction due to the
-#' use of estimations of `p1` and `p2` (boolean).
-#' @param Z design matrix. Used only when `correcEstimWeights` = TRUE
+#' @param correcEW1 TRUE if we must apply a correction due to the
+#' use of estimation of `p1` (boolean).
+#' @param correcEW2 TRUE if we must apply a correction due to the
+#' use of estimation of `p2` (boolean).
+#' @param Z design matrix. Used only when `correcEW1` or `correcEW1` are TRUE
 #' (numeric matrix with N rows and q columns).
 #' @param m1Only TRUE if we estimate the variance (resp. approximate variance)
 #' of t_{e1} (resp. t_{pq1}) and only with the m1 respondents (boolean).
@@ -359,7 +402,8 @@ estim_appr_var_seq_m1_m2 <- function(Yobs,
                                      sd2 = 0.0,
                                      cov12 = sd1 * sd2,
                                      phi = rep(0.5, length(Yobs)),
-                                     correcEstimWeights = TRUE,
+                                     correcEW1 = TRUE,
+                                     correcEW2 = TRUE,
                                      I,
                                      Z = matrix(1.0, nrow = length(Yobs), ncol = 1L),
                                      m1Only = FALSE,
@@ -540,7 +584,7 @@ estim_appr_var_seq_m1_m2 <- function(Yobs,
   
   
   # m1 selection variability (q1, R1)
-  if  (correcEstimWeights)
+  if  (correcEW1)
   {
     ZSr <- Z[maskSr, , drop = FALSE]
     estLinCoefq1 <- 0.0
@@ -577,7 +621,7 @@ estim_appr_var_seq_m1_m2 <- function(Yobs,
     
     correctedY1Srq1 <- correctedY1Srp
     
-    if (correcEstimWeights)
+    if (correcEW1)
       correctedY1Srq1 <- correctedY1Srq1 + ZSr %*% estLinCoefq1
     
     varq1Est <- sum((1.0 - p1Sr) * correctedY1Srq1^2L)
@@ -588,7 +632,7 @@ estim_appr_var_seq_m1_m2 <- function(Yobs,
   {
     correctedY2Smrq1 <- (piSmr * p1barSmr)^-1L * Y2Smr
     
-    if (correcEstimWeights)
+    if (correcEW1)
       correctedY2Smrq1 <- correctedY2Smrq1 - ZSmr %*% estLinCoefq1
     
     varq1Est <- sum(p1Smr * p2Smr^-1L * correctedY2Smrq1^2L)
@@ -602,7 +646,7 @@ estim_appr_var_seq_m1_m2 <- function(Yobs,
      correctedPhiYSaq1 <- piSa^-1L * 
        (p1Sa^-1L * phiY1SaEst - p1barSa^-1L * phibarY2SaEst)
      
-     if (correcEstimWeights)
+     if (correcEW1)
      {
        correctedPhiYSaq1 <- 
          correctedPhiYSaq1 + Z[maskSa, , drop = FALSE] %*% estLinCoefq1
@@ -622,7 +666,7 @@ estim_appr_var_seq_m1_m2 <- function(Yobs,
   if (!m1Only)
   {
     correctedY2Smrq2 <- (piSmr * p1barSmr * p2Smr)^-1L * phibarY2Smr
-    if (correcEstimWeights)
+    if (correcEW2)
     {
       estVPhibar22 <- -crossprod(ZSmr,
                           (piSmr * (1.0 - p1Smr) * p2Smr)^-1L *
@@ -679,9 +723,9 @@ estim_appr_var_seq_m1_m2 <- function(Yobs,
 #' (numeric vector of size N).
 #' @param sd1 true or estimated value (from a consistent estimator if possible)
 #' of the standard deviation of the m1 potential outcomes (positive scalar).
-#' @param correcEstimWeights TRUE if we must apply a correction due to the
+#' @param correcEW1 TRUE if we must apply a correction due to the
 #' use of estimations of `p1` (boolean).
-#' @param Z design matrix. Used only when `correcEstimWeights` = TRUE
+#' @param Z design matrix. Used only when `correcEW1` = TRUE
 #' (numeric matrix with N rows and q columns).
 #' @param m1Only TRUE if we estimate the variance of t_{pq1} and only with
 #' the m1 respondents (boolean).
@@ -691,7 +735,7 @@ estim_appr_var_seq_m1_m2 <- function(Yobs,
 estim_appr_var_seq_m1 <- function(Yobs, modes, 
                                   pi_mat, 
                                   p1, sd1,
-                                  correcEstimWeights = TRUE,
+                                  correcEW1 = TRUE,
                                   I,
                                   Z = matrix(1.0, 
                                              nrow = length(Yobs), ncol = 1L),
@@ -704,7 +748,7 @@ estim_appr_var_seq_m1 <- function(Yobs, modes,
                            sd2 = 0.0,
                            cov12 = 0.0,
                            phi = rep(1.0, length(Yobs)),
-                           correcEstimWeights,
+                           correcEW1,
                            I,
                            Z,
                            m1Only = TRUE,
@@ -716,7 +760,8 @@ estim_appr_var_seq_m1 <- function(Yobs, modes,
 estim_appr_var_seq_m2 <- function(Yobs, modes, 
                                   pi_mat, 
                                   p1, p2, sd2,
-                                  correcEstimWeights = TRUE,
+                                  correcEW1 = TRUE,
+                                  correcEW2 = TRUE,
                                   I,
                                   Z = matrix(1.0, 
                                              nrow = length(Yobs), ncol = 1L),
@@ -729,7 +774,8 @@ estim_appr_var_seq_m2 <- function(Yobs, modes,
                            sd2,
                            cov12 = 0.0,
                            phi = numeric(length(Yobs)),
-                           correcEstimWeights,
+                           correcEW1 = TRUE,
+                           correcEW2 = TRUE,
                            I,
                            Z,
                            m2Only = TRUE,
@@ -743,7 +789,7 @@ estim_appr_var_seq_a <- function(Yobs,
                                  pi_mat,
                                  pa,
                                  sd = NULL,
-                                 correcEstimWeights = TRUE,
+                                 correcEW = TRUE,
                                  I,
                                  Z = matrix(1.0, nrow = length(Yobs), ncol = 1L),
                                  ...)
@@ -752,7 +798,7 @@ estim_appr_var_seq_a <- function(Yobs,
   
   estim_appr_var_seq_m1(Yobs, responses,  
                         pi_mat, pa, sd, 
-                        correcEstimWeights,
+                        correcEW1 = correcEW,
                         I,
                         Z,
                         ...)
@@ -1032,7 +1078,13 @@ simulation_tphi <- function(Z,
   p2 <- expit(Z %*% alpha2) %>% as.numeric()
   
   if (sd1 == 0.0 && sd2 == 0.0)
+  {
     rho <- 1.0
+    if (is.null(Y))
+      Yexp <- Z %*% beta
+    else
+      Yexp <- Y
+  }
   
   # If variances of Y1 and Y2 are equal and the
   # correlation of (y_1k, y_2k) is equal to one,
@@ -1042,9 +1094,6 @@ simulation_tphi <- function(Z,
   # model
   if (sd1 == sd2 && rho == 1.0)
     pa <- expit(Z %*% alphaa) %>% as.numeric()
-  
-  
-  Yexp <- Z %*% beta
 
   if (sampling == "SRS")
   {
@@ -1147,7 +1196,7 @@ simulation_tphi <- function(Z,
                               pi_mat,
                               p1,
                               estimsd1,
-                              correcEstimWeights = FALSE)
+                              correcEW1 = FALSE)
     }
     else
       apprVar1TW <- NA_real_
@@ -1166,7 +1215,7 @@ simulation_tphi <- function(Z,
                               pi_mat,
                               estimp1,
                               estimsd1,
-                              correcEstimWeights = TRUE,
+                              correcEW1 = TRUE,
                               I,
                               Z)
     }
@@ -1195,7 +1244,8 @@ simulation_tphi <- function(Z,
                               p1,
                               p2,
                               estimsd2,
-                              correcEstimWeights = FALSE)
+                              correcEW1 = FALSE,
+                              correcEW2 = FALSE)
     }
     else
       apprVar2TW <- NA_real_
@@ -1214,7 +1264,8 @@ simulation_tphi <- function(Z,
                               estimp1,
                               estimp2,
                               estimsd2,
-                              correcEstimWeights = TRUE,
+                              correcEW1 = FALSE,
+                              correcEW2 = FALSE,
                               I,
                               Z)
     }
@@ -1254,7 +1305,7 @@ simulation_tphi <- function(Z,
                                pi_mat,
                                pa,
                                estimsd,
-                               correcEstimWeights = FALSE)
+                               correcEW = FALSE)
       }
       else
         apprVaraTW <- NA_real_
@@ -1283,7 +1334,7 @@ simulation_tphi <- function(Z,
                                pi_mat,
                                estimpa,
                                estimsd,
-                               correcEstimWeights = TRUE,
+                               correcEW = TRUE,
                                I,
                                Z)
       }
@@ -1312,7 +1363,12 @@ simulation_tphi <- function(Z,
     phiSize <- rep(sum(maskSr) / (sum(maskSr) + sum(maskSmr)), N)
       # With true probabilities
     totPhiTW <- estim_tot_m1_m2(Yobs, modes, pi, p1, p2, phi)
+    # Case phi = #S_r. / #S_a
     totPhiSizeTW <- estim_tot_m1_m2(Yobs, modes, pi, p1, p2, phiSize)
+    # Case phi = p1, which gives the estimator 
+    # t^ = \sum_{k \in \Sr} y_{1k} / pi_k 
+    #  + \sum_{k \in \Sr} y_{2k} / (pi_k p_2k)
+    totNop1TW <- estim_tot_m1_m2(Yobs, modes, pi, p1, p2, phi = p1)
     
     if (calcVariance)
     {
@@ -1326,7 +1382,8 @@ simulation_tphi <- function(Z,
                                  estimsd2,
                                  estimcov12,
                                  phi,
-                                 correcEstimWeights = FALSE)
+                                 correcEW1 = FALSE,
+                                 correcEW2 = FALSE)
       
       apprVarPhiSizeTW <- 
         estim_appr_var_seq_m1_m2(Yobs,
@@ -1338,15 +1395,30 @@ simulation_tphi <- function(Z,
                                  estimsd2,
                                  estimcov12,
                                  phiSize,
-                                 correcEstimWeights = FALSE)
+                                 correcEW1 = FALSE,
+                                 correcEW2 = FALSE)
+      
+      apprVarNop1TW <- 
+        estim_appr_var_seq_m1_m2(Yobs,
+                                 modes,
+                                 pi_mat,
+                                 p1,
+                                 p2,
+                                 estimsd1,
+                                 estimsd2,
+                                 estimcov12,
+                                 phi = p1,
+                                 correcEW1 = FALSE,
+                                 correcEW2 = FALSE)
     }
     else
-      apprVarPhiTW <- apprVarPhiSizeTW <- NA_real_
+      apprVarPhiTW <- apprVarPhiSizeTW <- apprVarNop1TW <- NA_real_
     
       # With estimated probabilities
     totPhiEW <- estim_tot_m1_m2(Yobs, modes, pi, estimp1, estimp2, phi)
     totPhiSizeTW <- estim_tot_m1_m2(Yobs, modes, pi, estimp1, estimp2, phiSize)
-    
+    # For phi = p1, we do not estimate the probabilities p1k
+    totNop1EW <- estim_tot_m1_m2(Yobs, modes, pi, p1, estimp2, phi = p1)
     if (calcVariance)
     {
       apprVarPhiEW <- 
@@ -1359,7 +1431,8 @@ simulation_tphi <- function(Z,
                                  estimsd2,
                                  estimcov12,
                                  phi,
-                                 correcEstimWeights = TRUE,
+                                 correcEW1 = FALSE,
+                                 correcEW2 = FALSE,
                                  I,
                                  Z)
       
@@ -1373,25 +1446,42 @@ simulation_tphi <- function(Z,
                                  estimsd2,
                                  estimcov12,
                                  phiSize,
-                                 correcEstimWeights = TRUE,
+                                 correcEW1 = FALSE,
+                                 correcEW2 = FALSE,
+                                 I,
+                                 Z)
+      
+      apprVarNop1EW <- 
+        estim_appr_var_seq_m1_m2(Yobs,
+                                 modes,
+                                 pi_mat,
+                                 p1,
+                                 estimp2,
+                                 estimsd1,
+                                 estimsd2,
+                                 estimcov12,
+                                 phi = p1,
+                                 correcEW1 = TRUE,
+                                 correcEW2 = TRUE,
                                  I,
                                  Z)
     }
     else
-      apprVarPhiEW <- apprVarPhiSizeEW <- NA_real_
+      apprVarPhiEW <- apprVarPhiSizeEW <- apprVarNop1EW <- NA_real_
     
     
     tibble(estimator = c("tot1TW", "tot1EW", 
                          "tot2TW", "tot2EW", 
                          "totaTW", "totaEW",
                          "totphiTW", "totphiEW",
-                         "totphiSizeTW", "totphiSizeEW"),
-           sample = rep(c("Sr", "Smr", "Sa", "Sa", "Sa"), each = 2L),
+                         "totphiSizeTW", "totphiSizeEW",
+                         "totNop1TW", "totNop1EW"),
+           sample = rep(c("Sr", "Smr", "Sa", "Sa", "Sa", "Sa"), each = 2L),
            mechanism = rep(c("sequentialLogit", "sequentialLogit", 
                              "globalLogit", "sequentialLogit", 
-                             "sequentialLogit"), each = 2L),
+                             "sequentialLogit", "sequentialLogit"), each = 2L),
            estimand = rep(c("t_1", "t_2", "t_ay", 
-                            "t_phiy", "t_phiSizey"), each = 2L),
+                            "t_phiy", "t_phiSizey", "t_nop1y"), each = 2L),
            estimation = c(tot1TW, tot1EW, 
                           tot2TW, tot2EW, 
                           totaTW, totaEW,
@@ -1428,6 +1518,11 @@ simulation_tphi <- function(Z,
                                     pi_mat, 
                                     p1, p2, 
                                     sd1, sd2, rho * sd1 * sd2, phi)
+  
+  trueVarNop1 <- var_expansion_m1_m2(Yexp, Yexp, 
+                                     pi_mat, 
+                                     p1, p2, 
+                                     sd1, sd2, rho * sd1 * sd2, p1)
   
   trueVar <- rep.int(c(trueVar1TW, NA_real_, 
                        trueVar2TW, NA_real_,
@@ -1501,7 +1596,8 @@ for (k in seq_len(nrow(parameters)))
           row.names = NULL) %>%
     mutate(equalOutcomes = 
              ifelse(parameters[k, "sd1"] == parameters[k, "sd2"] &&
-                      parameters[k, "rho"] == 1.0, "yes", "no")) %>% 
+                      (parameters[k, "sd1"] == 0.0 || parameters[k, "rho"] == 1.0), 
+                    "yes", "no")) %>% 
     rbind(resSimulation)
     
 
@@ -1512,7 +1608,10 @@ rm(pb, resTempWithVar, resTempWithoutVar)
 
 resSimulation <-
   resSimulation %>%
-  mutate(phi = if_else(estimand == "t_phiy", constPhi, NaN)) %>% 
+  mutate(phi = case_when(estimand == "t_phiy" ~ constPhi,
+                         estimand == "t_phiSizey" ~ "sizeSr.",
+                         estimand == "t_nop1y" ~ "p1",
+                         TRUE = NaN)) %>% 
   arrange(n, sd1, sd2, rho)
 ```
 
