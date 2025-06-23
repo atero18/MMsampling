@@ -137,7 +137,7 @@ mean(Z %*% beta)
 We simulate a mode selection MAR (Missing At Random) under a logistic model, with $Z$ as variable:
 
 ```{r}
-alpha1 <- c(0.69, -0.02, -0.5)
+alpha1 <- c(0.55, -0.015, -0.4)
 
 alpha2 <- c(1.0, -0.01, -0.3)
 ```
@@ -322,8 +322,30 @@ data.frame(pa = c(pRep, pa),
 ```
 RMSE between mechanisms for the probability to answer
 ```{r}
-sqrt(mean(((pa - (p1 + (1.0 - p1) * p2))^2L)))
+glue("RMSE: {sqrt(mean(((pa - (p1 + (1.0 - p1) * p2))^2L)))}")
+glue("MAE: {mean(abs(pa - (p1 + (1.0 - p1) * p2)))}")
 ```
+
+Statistics on the Mean Absolute Error (MAE):
+```{r}
+summary(abs(pa - (p1 + (1.0 - p1) * p2)))
+```
+
+Statistics on the Absolute Error rate:
+
+```{r}
+summary(abs(pa - (p1 + (1.0 - p1) * p2)) / (p1 + (1.0 - p1) * p2))
+ecdf(abs(pa - (p1 + (1.0 - p1) * p2)) /
+       (p1 + (1.0 - p1) * p2))(c(0.05, 0.08, 0.1, 0.2))
+```
+
+Main population for whom the global logistic model is incorrect (absolute error ratio superior to 0.1):
+
+```{r}
+Z[abs(pa - (p1 + (1.0 - p1) * p2)) / (p1 + (1.0 - p1) * p2) > 0.1,
+  c("age", "sex")] %>% summary()
+```
+
 
 ```{r}
 expSizeSa <- f * sum(pa)
@@ -1006,7 +1028,7 @@ ratio_n_ref <- min(ratio_n_vec)
 n_vec <- as.integer(ratio_n_vec * N)
 n_ref <- integer(ratio_n_ref * N)
 
-parameters <- tidyr::expand_grid("R²" = Rsq_vec, n = n_vec)
+parameters <- tidyr::expand_grid(n = n_vec, "R²" = Rsq_vec)
 # sd1_vec <- c(1.0, 2.0, 5.0)
 # sd1_ref <- sd1_vec[1L]
 # ratio_sd_vec <- c(0.25, 0.5, 1.0, 2.0, 4.0)
@@ -1527,7 +1549,8 @@ simulation_tphi <- function(Z,
                        trueVar2TW, NA_real_,
                        trueVaraTW, NA_real_,
                        trueVarPhi, NA_real_,
-                       NA_real_, NA_real_),
+                       NA_real_, NA_real_,
+                       trueVarNop1, NA_real_),
                      times = M)
   
   res <- res %>% 
@@ -1542,7 +1565,7 @@ simulation_tphi <- function(Z,
 ## Simulation
 
 ```{r}
-Msim <- 500L
+Msim <- 30L
 ```
 
 The different lines of the grid have the same seed. It is useful to run in different orders the evaluations and because the results from different parameters are never mixed there is no independency issue.
@@ -1580,7 +1603,7 @@ for (k in seq_len(nrow(parameters)))
                     alpha1 = alpha1,
                     alpha2 = alpha2,
                     alphaa = alphaa,
-                    beta = beta,
+                    beta = NULL,
                     phi = phi,
                     sd1 = 0.0, # parameters[k, "sd1"],
                     sd2 = 0.0, # parameters[k, "sd2"],
@@ -1598,11 +1621,7 @@ for (k in seq_len(nrow(parameters)))
   resSimulation <-
     cbind(parameters[k, ], 
           rbind(resTempWithVar, resTempWithoutVar), 
-          row.names = NULL) %>%
-    mutate(equalOutcomes = 
-             ifelse(parameters[k, "sd1"] == parameters[k, "sd2"] &&
-                      (parameters[k, "sd1"] == 0.0 || parameters[k, "rho"] == 1.0), 
-                    "yes", "no")) %>% 
+          row.names = NULL) %>% 
     rbind(resSimulation)
     
 
@@ -1613,11 +1632,11 @@ rm(pb, resTempWithVar, resTempWithoutVar, Y)
 
 resSimulation <-
   resSimulation %>%
-  mutate(phi = case_when(estimand == "t_phiy" ~ constPhi,
+  mutate(phi = case_when(estimand == "t_phiy" ~ as.character(constPhi),
                          estimand == "t_phiSizey" ~ "sizeSr.",
                          estimand == "t_nop1y" ~ "p1",
-                         TRUE = NaN)) %>% 
-  arrange(n, sd1, sd2, rho)
+                         TRUE ~ "NaN")) %>% 
+  # arrange(n, sd1, sd2, rho)
 ```
 
 ## Properties of the estimators
