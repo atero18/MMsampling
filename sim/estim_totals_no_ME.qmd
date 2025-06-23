@@ -353,8 +353,6 @@ rm(f, pCov, pi, pi_mat)
 #' @param modes vector of the selected mode of each unit.
 #' The first mode of the protocol is defined as "m1" and the second as "m2"
 #' (character vector or factor of size N).
-#' @param I vector containing the indicators I_k equal to TRUE if unit k
-#' has been selected (logical vector of size N).
 #' @param pi_mat matrix containing the second order inclusion probabilities
 #' pi_kl. The values must be known on Sr^2 (except if `m2Only` = TRUE) and
 #' Smr^2 (except if `m1Only` = TRUE) and can be equal to NA otherwise
@@ -381,6 +379,9 @@ rm(f, pCov, pi, pi_mat)
 #' use of estimation of `p1` (boolean).
 #' @param correcEW2 TRUE if we must apply a correction due to the
 #' use of estimation of `p2` (boolean).
+#' @param I vector containing the indicators I_k equal to TRUE if unit k
+#' has been selected. Used only if `correcEW1` or `correcEW2` is true
+#' (logical vector of size N).
 #' @param Z design matrix. Used only when `correcEW1` or `correcEW1` are TRUE
 #' (numeric matrix with N rows and q columns).
 #' @param m1Only TRUE if we estimate the variance (resp. approximate variance)
@@ -713,8 +714,6 @@ estim_appr_var_seq_m1_m2 <- function(Yobs,
 #' the value is not considered and therefore can be equal to NA
 #' (numeric vector of size N the size of the population).
 #' @param modes 
-#' @param I vector containing the indicators I_k equal to TRUE if unit k
-#' has been selected (logical vector of size N).
 #' @param pi_mat matrix containing the second order inclusion probabilities
 #' pi_kl. The values must be known on Sr^2 and can be equal to NA otherwise
 #' (symmetric numeric matrix of order N).
@@ -725,6 +724,9 @@ estim_appr_var_seq_m1_m2 <- function(Yobs,
 #' of the standard deviation of the m1 potential outcomes (positive scalar).
 #' @param correcEW1 TRUE if we must apply a correction due to the
 #' use of estimations of `p1` (boolean).
+#' @param I vector containing the indicators I_k equal to TRUE if unit k
+#' has been selected. Used only if `correcEW1` = TRUE
+#' (logical vector of size N).
 #' @param Z design matrix. Used only when `correcEW1` = TRUE
 #' (numeric matrix with N rows and q columns).
 #' @param m1Only TRUE if we estimate the variance of t_{pq1} and only with
@@ -749,6 +751,7 @@ estim_appr_var_seq_m1 <- function(Yobs, modes,
                            cov12 = 0.0,
                            phi = rep(1.0, length(Yobs)),
                            correcEW1,
+                           correcEW2 = FALSE,
                            I,
                            Z,
                            m1Only = TRUE,
@@ -774,8 +777,8 @@ estim_appr_var_seq_m2 <- function(Yobs, modes,
                            sd2,
                            cov12 = 0.0,
                            phi = numeric(length(Yobs)),
-                           correcEW1 = TRUE,
-                           correcEW2 = TRUE,
+                           correcEW1,
+                           correcEW2,
                            I,
                            Z,
                            m2Only = TRUE,
@@ -798,7 +801,7 @@ estim_appr_var_seq_a <- function(Yobs,
   
   estim_appr_var_seq_m1(Yobs, responses,  
                         pi_mat, pa, sd, 
-                        correcEW1 = correcEW,
+                        correcEW,
                         I,
                         Z,
                         ...)
@@ -997,15 +1000,18 @@ Rsq(Z, beta, rnorm(N, mean = 0.0, sd = 5.0))
 ```
 
 ```{r}
+Rsq_vec <- c(0.2, 0.5)
 ratio_n_vec <- c(0.16, 0.25, 0.4)
 ratio_n_ref <- min(ratio_n_vec)
 n_vec <- as.integer(ratio_n_vec * N)
 n_ref <- integer(ratio_n_ref * N)
-sd1_vec <- c(1.0, 2.0, 5.0)
-sd1_ref <- sd1_vec[1L]
-ratio_sd_vec <- c(0.25, 0.5, 1.0, 2.0, 4.0)
-rho_vec <- c(0.8, 0.9, 1.0)
-rho_ref <- rho_vec[1L]
+
+parameters <- tidyr::expand_grid("R²" = Rsq_vec, n = n_vec)
+# sd1_vec <- c(1.0, 2.0, 5.0)
+# sd1_ref <- sd1_vec[1L]
+# ratio_sd_vec <- c(0.25, 0.5, 1.0, 2.0, 4.0)
+# rho_vec <- c(0.8, 0.9, 1.0)
+# rho_ref <- rho_vec[1L]
 
 # Variation of the sample fraction n / N and sd1 with sd1 = sd2 
 # and correlation rho between Y1 and Y2 fixed
@@ -1015,33 +1021,34 @@ rho_ref <- rho_vec[1L]
 #               rho = rho_ref)
 
 # Variation of sd1 and sd2 with correlation rho between Y1 and Y2 fixed
-paramVar_sd <- 
-  expand.grid(ratio_n = ratio_n_ref, 
-              sd1 = sd1_vec, ratio_sd = ratio_sd_vec,
-              rho = rho_ref)
+# paramVar_sd <- 
+#   expand.grid(ratio_n = ratio_n_ref, 
+#               sd1 = sd1_vec, ratio_sd = ratio_sd_vec,
+#               rho = rho_ref)
 
 # Variation of the variance with sd1 = sd2 and rho = 1
-paramVar_sdEq <- 
-  expand.grid(ratio_n = ratio_n_ref, 
-              sd1 = sd1_vec, ratio_sd = 1.0,
-              rho = 1.0)
+# paramVar_sdEq <- 
+#   expand.grid(ratio_n = ratio_n_ref, 
+#               sd1 = sd1_vec, ratio_sd = 1.0,
+#               rho = 1.0)
 
 # Variation of the correlation between Y1 and Y2 (rho) with 
 # sd1 = sd2 fixed
-paramVar_rho <- 
-  expand.grid(ratio_n = ratio_n_ref, 
-              sd1 = sd1_ref, ratio_sd = 1.0,
-              rho = rho_vec)
+# paramVar_rho <- 
+#   expand.grid(ratio_n = ratio_n_ref, 
+#               sd1 = sd1_ref, ratio_sd = 1.0,
+#               rho = rho_vec)
 
 # parameters <- rbind(paramVar_n, paramVar_sd, paramVar_sdEq, paramVar_rho)
-parameters <- rbind(paramVar_sd, paramVar_sdEq, paramVar_rho)
-
-parameters <- parameters %>% 
-  distinct() %>% 
-  mutate(n = as.integer(ratio_n * N), .after = "ratio_n") %>% 
-  mutate(sd2 = sd1 * ratio_sd, .after = "ratio_sd")
-
-rm(paramVar_n, paramVar_sd, paramVar_sdEq, paramVar_rho)
+# parameters <- rbind(paramVar_sd, paramVar_sdEq, paramVar_rho)
+# 
+# parameters <- parameters %>% 
+#   distinct() %>% 
+#   mutate(n = as.integer(ratio_n * N), .after = "ratio_n") %>% 
+#   mutate(sd2 = sd1 * ratio_sd, .after = "ratio_sd")
+# 
+# rm(paramVar_n, paramVar_sd, paramVar_sdEq, paramVar_rho)
+parameters <- as.data.frame(parameters)
 ```
 
 ```{r}
@@ -1074,6 +1081,7 @@ simulation_tphi <- function(Z,
   
   expit <- function(x) 1.0 / (1.0 + exp(-x))
 
+  # Sequential logistic model
   p1 <- expit(Z %*% alpha1) %>% as.numeric()
   p2 <- expit(Z %*% alpha2) %>% as.numeric()
   
@@ -1086,12 +1094,7 @@ simulation_tphi <- function(Z,
       Yexp <- Y
   }
   
-  # If variances of Y1 and Y2 are equal and the
-  # correlation of (y_1k, y_2k) is equal to one,
-  # we consider the equality Y1 = Y2 and will
-  # consider a logistic model for the global
-  # answer mechanism, apart of the sequel logistic
-  # model
+  # Global logistic model
   if (sd1 == sd2 && rho == 1.0)
     pa <- expit(Z %*% alphaa) %>% as.numeric()
 
@@ -1264,8 +1267,8 @@ simulation_tphi <- function(Z,
                               estimp1,
                               estimp2,
                               estimsd2,
-                              correcEW1 = FALSE,
-                              correcEW2 = FALSE,
+                              correcEW1 = TRUE,
+                              correcEW2 = TRUE,
                               I,
                               Z)
     }
@@ -1273,80 +1276,74 @@ simulation_tphi <- function(Z,
       apprVar2EW <- NA_real_
     
 
-    # Estimations with Y1 and Y2 assumed equal (total of the y_k)
-    # (considered when sd1 = sd2 and rho = 1)
-    if (sd1 == sd2 && rho == 1.0)
-    {
-      Ra <- runif(n = N) <= pa
-      # "r" if unit k would agree to answer by any mode
-      # if asked
-      respStat <- if_else(Ra, "r", "nr") 
+    # Estimations with the global logistic model
+
+    Ra <- runif(n = N) <= pa
+    # "r" if unit k would agree to answer by any mode
+    # if asked
+    respStat <- if_else(Ra, "r", "nr") 
+  
+    maskSa <- I & Ra
+    # "r" if unit k answered by any mode
+    answers <- if_else(maskSa, "r", "nr")
+  
+    YobsEq <- rep(NA_real_, N)
+    YobsEq[maskSa] <- Y1[maskSa]
     
-      maskSa <- I & Ra
-      # "r" if unit k answered by any mode
-      answers <- if_else(maskSa, "r", "nr")
-    
-      YobsEq <- rep(NA_real_, N)
-      YobsEq[maskSa] <- Y1[maskSa]
-      
+    # If `sd1` and `sd2` are equal to zero, we consider 
+      # the deterministic case
+    if (sd1 == 0.0 && sd2 == 0.0)
+      estimsd <- 0.0
+    else
       estimsd <- summary.lm(lm(YobsEq ~ Z, subset = maskSa))$sigma
-    
-      # With true probabilities
-      totaTW <- estim_tot_a(YobsEq, answers, pi, pa)
-      
-      if (calcVariance)
-      {
-        # Unbiased estimation of the variance of the total estimator.
-        # The variance of Y is assumed known. The true probabilities are
-        # used in the calculation.
-        apprVaraTW <-
-          estim_appr_var_seq_a(YobsEq,
-                               answers,
-                               pi_mat,
-                               pa,
-                               estimsd,
-                               correcEW = FALSE)
-      }
-      else
-        apprVaraTW <- NA_real_
   
-      # With estimated probabilities
-      dataEstimpa <- 
-        cbind(response = as.integer(maskSa), Z) %>% 
-        as.data.frame()
-      model <- glm(response ~ Z, data = dataEstimpa,
-                   family = binomial, subset = I)
-  
-      estimpa <- predict(model, newdata = as.data.frame(Z), type = "response")
-      
-      rm(dataEstimpa, model)
+    # With true probabilities
+    totaTW <- estim_tot_a(YobsEq, answers, pi, pa)
     
-      totaEW <- estim_tot_a(YobsEq, answers, pi, estimpa)
-      
-      if (calcVariance)
-      {
-        # Unbiased estimation of the variance of the total estimator.
-        # The variance of Y is assumed known. The true probabilities are
-        # used in the calculation.
-        apprVaraEW <-
-          estim_appr_var_seq_a(YobsEq,
-                               answers,
-                               pi_mat,
-                               estimpa,
-                               estimsd,
-                               correcEW = TRUE,
-                               I,
-                               Z)
-      }
-      else
-        apprVaraEW <- NA_real_
+    if (calcVariance)
+    {
+      # Unbiased estimation of the variance of the total estimator.
+      # The variance of Y is assumed known. The true probabilities are
+      # used in the calculation.
+      apprVaraTW <-
+        estim_appr_var_seq_a(YobsEq,
+                             answers,
+                             pi_mat,
+                             pa,
+                             estimsd,
+                             correcEW = FALSE)
     }
     else
-    {
-      totaTW <- apprVaraTW <- NA_real_
-      totaEW <- apprVaraEW <- NA_real_
-    }
+      apprVaraTW <- NA_real_
+
+    # With estimated probabilities
+    dataEstimpa <- 
+      cbind(response = as.integer(maskSa), Z) %>% 
+      as.data.frame()
+    model <- glm(response ~ Z, data = dataEstimpa,
+                 family = binomial, subset = I)
+    estimpa <- predict(model, newdata = as.data.frame(Z), type = "response")
+    rm(dataEstimpa, model)
+  
+    totaEW <- estim_tot_a(YobsEq, answers, pi, estimpa)
     
+    if (calcVariance)
+    {
+      # Unbiased estimation of the variance of the total estimator.
+      # The variance of Y is assumed known. The true probabilities are
+      # used in the calculation.
+      apprVaraEW <-
+        estim_appr_var_seq_a(YobsEq,
+                             answers,
+                             pi_mat,
+                             estimpa,
+                             estimsd,
+                             correcEW = TRUE,
+                             I,
+                             Z)
+    }
+    else
+      apprVaraEW <- NA_real_
     
     # Estimations with Y1 and Y2 weighted
       # If `sd1` and `sd2` are equal to zero, we consider 
@@ -1360,10 +1357,10 @@ simulation_tphi <- function(Z,
                    sd1 = estimsd1, sd2 = estimsd2, Z = Z, clamp = FALSE)
     }
     
-    phiSize <- rep(sum(maskSr) / (sum(maskSr) + sum(maskSmr)), N)
       # With true probabilities
     totPhiTW <- estim_tot_m1_m2(Yobs, modes, pi, p1, p2, phi)
     # Case phi = #S_r. / #S_a
+    phiSize <- rep(sum(maskSr) / (sum(maskSr) + sum(maskSmr)), N)
     totPhiSizeTW <- estim_tot_m1_m2(Yobs, modes, pi, p1, p2, phiSize)
     # Case phi = p1, which gives the estimator 
     # t^ = \sum_{k \in \Sr} y_{1k} / pi_k 
@@ -1416,7 +1413,7 @@ simulation_tphi <- function(Z,
     
       # With estimated probabilities
     totPhiEW <- estim_tot_m1_m2(Yobs, modes, pi, estimp1, estimp2, phi)
-    totPhiSizeTW <- estim_tot_m1_m2(Yobs, modes, pi, estimp1, estimp2, phiSize)
+    totPhiSizeEW <- estim_tot_m1_m2(Yobs, modes, pi, estimp1, estimp2, phiSize)
     # For phi = p1, we do not estimate the probabilities p1k
     totNop1EW <- estim_tot_m1_m2(Yobs, modes, pi, p1, estimp2, phi = p1)
     if (calcVariance)
@@ -1431,8 +1428,8 @@ simulation_tphi <- function(Z,
                                  estimsd2,
                                  estimcov12,
                                  phi,
-                                 correcEW1 = FALSE,
-                                 correcEW2 = FALSE,
+                                 correcEW1 = TRUE,
+                                 correcEW2 = TRUE,
                                  I,
                                  Z)
       
@@ -1446,8 +1443,8 @@ simulation_tphi <- function(Z,
                                  estimsd2,
                                  estimcov12,
                                  phiSize,
-                                 correcEW1 = FALSE,
-                                 correcEW2 = FALSE,
+                                 correcEW1 = TRUE,
+                                 correcEW2 = TRUE,
                                  I,
                                  Z)
       
@@ -1486,12 +1483,14 @@ simulation_tphi <- function(Z,
                           tot2TW, tot2EW, 
                           totaTW, totaEW,
                           totPhiTW, totPhiEW,
-                          totPhiSizeTW, totPhiSizeEW),
+                          totPhiSizeTW, totPhiSizeEW,
+                          totNop1TW, totNop1EW),
            apprVar = c(apprVar1TW, apprVar1EW, 
                        apprVar2TW, apprVar2EW,
                        apprVaraTW, apprVaraEW,
                        apprVarPhiTW, apprVarPhiEW,
-                       apprVarPhiSizeTW, apprVarPhiSizeEW)) %>% 
+                       apprVarPhiSizeTW, apprVarPhiSizeEW,
+                       apprVarNop1TW, apprVarNop1EW)) %>% 
       mutate(weights = rep_len(c("true", "estimated"), length.out = n()),
              .after = "sample")
   }
@@ -1543,7 +1542,7 @@ simulation_tphi <- function(Z,
 ## Simulation
 
 ```{r}
-Msim <- 30L
+Msim <- 500L
 ```
 
 The different lines of the grid have the same seed. It is useful to run in different orders the evaluations and because the results from different parameters are never mixed there is no independency issue.
@@ -1568,6 +1567,11 @@ phi = rep(constPhi, N)
 
 for (k in seq_len(nrow(parameters)))
 {
+  if (parameters[k, "R²"] == 0.2)
+    Y <- Y0.2
+  else if (parameters[k, "R²"] == 0.5)
+    Y <- Y0.5
+  
   simFun <- function(calcVariance = TRUE)
   {
     simulation_tphi(M = Msim,
@@ -1578,13 +1582,14 @@ for (k in seq_len(nrow(parameters)))
                     alphaa = alphaa,
                     beta = beta,
                     phi = phi,
-                    sd1 = parameters[k, "sd1"],
-                    sd2 = parameters[k, "sd2"],
+                    sd1 = 0.0, # parameters[k, "sd1"],
+                    sd2 = 0.0, # parameters[k, "sd2"],
                     n = parameters[k, "n"],
-                    rho = parameters[k, "rho"],
+                    rho = 1.0, # parameters[k, "rho"],
                     seed = NULL,
                     nCores = 0L,
-                    calcVariance = calcVariance)
+                    calcVariance = calcVariance,
+                    Y = Y)
   }
   
   resTempWithVar <- simFun(calcVariance = TRUE) %>% mutate(subset = 1L)
@@ -1604,7 +1609,7 @@ for (k in seq_len(nrow(parameters)))
   pb$tick()
 }
 
-rm(pb, resTempWithVar, resTempWithoutVar)
+rm(pb, resTempWithVar, resTempWithoutVar, Y)
 
 resSimulation <-
   resSimulation %>%
