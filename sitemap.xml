@@ -3,6 +3,7 @@
 <url><loc>https://atero18.github.io/MMsampling/authors.html</loc></url>
 <url><loc>https://atero18.github.io/MMsampling/index.html</loc></url>
 <url><loc>https://atero18.github.io/MMsampling/news/index.html</loc></url>
+<url><loc>https://atero18.github.io/MMsampling/reference/Fisher_Information_Matrix.html</loc></url>
 <url><loc>https://atero18.github.io/MMsampling/reference/MMsampling-package.html</loc></url>
 <url><loc>https://atero18.github.io/MMsampling/reference/checkPhi_tab.html</loc></url>
 <url><loc>https://atero18.github.io/MMsampling/reference/checkX.html</loc></url>
@@ -15,18 +16,25 @@
 <url><loc>https://atero18.github.io/MMsampling/reference/estim_MC.html</loc></url>
 <url><loc>https://atero18.github.io/MMsampling/reference/estim_appr_var_seq_phi1.html</loc></url>
 <url><loc>https://atero18.github.io/MMsampling/reference/estim_appr_var_seq_phi2.html</loc></url>
+<url><loc>https://atero18.github.io/MMsampling/reference/estim_counterfactuals.html</loc></url>
+<url><loc>https://atero18.github.io/MMsampling/reference/estim_cov_12.html</loc></url>
+<url><loc>https://atero18.github.io/MMsampling/reference/estim_tot_a.html</loc></url>
+<url><loc>https://atero18.github.io/MMsampling/reference/estim_tot_m1.html</loc></url>
+<url><loc>https://atero18.github.io/MMsampling/reference/estim_tot_m1_m2.html</loc></url>
+<url><loc>https://atero18.github.io/MMsampling/reference/estim_tot_m2.html</loc></url>
 <url><loc>https://atero18.github.io/MMsampling/reference/index.html</loc></url>
 <url><loc>https://atero18.github.io/MMsampling/reference/mats_interaction.html</loc></url>
 <url><loc>https://atero18.github.io/MMsampling/reference/param_I.html</loc></url>
 <url><loc>https://atero18.github.io/MMsampling/reference/param_M.html</loc></url>
 <url><loc>https://atero18.github.io/MMsampling/reference/param_N.html</loc></url>
+<url><loc>https://atero18.github.io/MMsampling/reference/pi2_to_covarInc.html</loc></url>
 <url><loc>https://atero18.github.io/MMsampling/reference/proba_mode_estim.html</loc></url>
 <url><loc>https://atero18.github.io/MMsampling/reference/regression_Ym.html</loc></url>
 <url><loc>https://atero18.github.io/MMsampling/reference/sample.html</loc></url>
 <url><loc>https://atero18.github.io/MMsampling/reference/sampling_mode.html</loc></url>
 <url><loc>https://atero18.github.io/MMsampling/reference/seed.html</loc></url>
 <url><loc>https://atero18.github.io/MMsampling/reference/set_I.html</loc></url>
-<url><loc>https://atero18.github.io/MMsampling/reference/var_HT_seq_phi1.html</loc></url>
-<url><loc>https://atero18.github.io/MMsampling/reference/var_HT_seq_phi2.html</loc></url>
+<url><loc>https://atero18.github.io/MMsampling/reference/var_expansion_seq_phi1.html</loc></url>
+<url><loc>https://atero18.github.io/MMsampling/reference/var_expansion_seq_phi2.html</loc></url>
 </urlset>
 
