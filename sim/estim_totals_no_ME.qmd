@@ -1626,7 +1626,7 @@ simulation_tphi <- function(Z,
 ## Simulation
 
 ```{r}
-Msim <- 10L
+Msim <- 5000L
 ```
 
 The different lines of the grid have the same seed. It is useful to run in different orders the evaluations and because the results from different parameters are never mixed there is no independency issue.
@@ -1683,7 +1683,7 @@ for (k in seq_len(nrow(parameters)))
                     strata = strata,
                     rho = 1.0, # parameters[k, "rho"],
                     seed = NULL,
-                    nCores = 0L,
+                    nCores = 40L,
                     calcVariance = calcVariance,
                     Y = Y)
   }

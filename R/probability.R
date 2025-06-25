@@ -54,26 +54,6 @@ pi2_to_covarInc <- function(pi_mat)
   pi_mat - outer(pi, pi)
 }
 
-#' @describeIn mats_interaction Calcul of the second order probability matrix
-#' in case of independency
-#' @param pi First order probability vector
-#' @export
-pi_to_pi2 <- function(pi)
-{
-  # pi2 <- pi %*% t(pi)
-  pi2 <- outer(pi, pi)
-
-  # Replacement of the diagonal of pi2 by pi
-  # (this affection seems faster than diag<-)
-  N <- length(pi)
-  # Linear indices for diagonal elements
-  idx <- 1L + seq(from = 0, to = N - 1L) * (N + 1L)
-  pi2[idx] <- pi
-  # diag(pi2) <- pi
-
-  pi2
-}
-
 #' @importFrom tibble add_column
 add_nr_prob <- function(probs, nrName = "nr")
 {
