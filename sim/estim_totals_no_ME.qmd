@@ -997,7 +997,10 @@ var_expansion_a <- function(Yexp,
 
 Because we will consider STSRS, we decide to divide our population into 4 stratum of size (1000, 2000, 3000, 4000) (as did in Kim & Kim 2007). We will take the 1000 first units (order inceasingly by `age`) for the first strata, etc.
 
+With k-means on `age`, we obtain 4 strata of approximately the same size (i.e. 2500), then correspond approximately to dividing by the quartiles of `age`. With k-means on `sex` and `age`, we have two clusters per sex.
+
 ```{r}
+nbStrata <- 4L
 orderAge <- order(Z[, "age"])
 strata <- integer(N)
 strata[orderAge[seq_len(1000L)]] <- 1L
@@ -1030,19 +1033,20 @@ Rsq <- function(Z, beta, epsilon)
 }
 ```
 
-Random generation of potential outcomes vectors, considered fixed afeter, in order to have $R²$ close to 0.2 and 0.5, respectively.
+Random generation of potential outcomes vectors, considered fixed afeter, in order to have $R²$ close to 0.2 and 0.5, respectively. Variables are not dependent because values are corrected in order to have a total $t_y$ equal to $N$.
+
 ```{r}
 set.seed(123L)
 epsilon0.2 <- rnorm(N, mean = 0.0, sd = 6.43)
 Y0.2 <- Z %*% beta + epsilon0.2
+Y0.2 <- Y0.2 - mean(Y0.2 - N)
 Rsq(Z, beta, epsilon0.2)
 epsilon0.5 <- rnorm(N, mean = 0.0, sd = 3.27)
 Y0.5 <- Z %*% beta + epsilon0.5
+Y0.5 <- Y0.5 - mean(Y0.5 - N)
 Rsq(Z, beta, epsilon0.5)
 rm(epsilon0.2, epsilon0.5)
 ```
-
-
 
 ```{r}
 Rsq(Z, beta, rnorm(N, mean = 0.0, sd = 5.0))
@@ -1119,7 +1123,7 @@ simulation_tphi <- function(Z,
                             sd1 = 1.0, sd2 = sd1, 
                             rho = 0.8,
                             phi = rep(0.5, N), 
-                            M = 10000L,
+                            M = 10^4L,
                             n = ceiling(N / 10L),
                             strata = NULL,
                             seed = 123L,
@@ -1166,8 +1170,7 @@ simulation_tphi <- function(Z,
       nStratum <- n[stratum]
       NStratum <- sum(strata == stratum)
       pi_mat[which(strata == stratum), 
-             which(strata == stratum), 
-             drop = FALSE] <- piMat_SRS(nStratum, NStratum)
+             which(strata == stratum)] <- piMat_SRS(nStratum, NStratum)
     }
   }
   
@@ -1622,7 +1625,7 @@ simulation_tphi <- function(Z,
 ## Simulation
 
 ```{r}
-Msim <- 30L
+Msim <- 1500L
 ```
 
 The different lines of the grid have the same seed. It is useful to run in different orders the evaluations and because the results from different parameters are never mixed there is no independency issue.
@@ -1655,7 +1658,13 @@ for (k in seq_len(nrow(parameters)))
   if (parameters[k, "samplingDesign"] == "SRS")
     n <- parameters[k, "n"]
   else if (parameters[k, "samplingDesign"] == "STSRS")
-    n <- rep(parameters[k, "n"], length(unique(strata)))
+  {
+    if (!parameters[k, "n"] %% nbStrata == 0L)
+      warning("Non-integer sample size n_h for STSRS. Ceiled.")
+  
+    n <- rep(ceiling(parameters[k, "n"] / nbStrata), nbStrata)
+  }
+    
   
   simFun <- function(calcVariance = TRUE)
   {
@@ -1673,7 +1682,7 @@ for (k in seq_len(nrow(parameters)))
                     strata = strata,
                     rho = 1.0, # parameters[k, "rho"],
                     seed = NULL,
-                    nCores = 0L,
+                    nCores = 40L,
                     calcVariance = calcVariance,
                     Y = Y)
   }
@@ -1698,7 +1707,8 @@ resSimulation <-
   mutate(phi = case_when(estimand == "t_phiy" ~ as.character(constPhi),
                          estimand == "t_phiSizey" ~ "sizeSr.",
                          estimand == "t_nop1y" ~ "p1",
-                         TRUE ~ "NaN")) %>% 
+                         TRUE ~ "NaN"),
+         .after = "estimand")  
   # arrange(n, sd1, sd2, rho)
 ```
 
@@ -1758,7 +1768,7 @@ resSimulation %>%
   filter(ratio_SD1 != 1.0)
 ```
 
-When $\sigma_1$ vary
+When $\sigma_1$ varies
 
 ```{r}
 resSimulation %>% 
@@ -1774,7 +1784,7 @@ resSimulation %>%
   filter(ratio_SD1 != 1.0)
 ```
 
-When $\sigma_2$ vary
+When $\sigma_2$ varies
 
 ```{r}
 resSimulation %>% 
