@@ -1141,6 +1141,8 @@ simulation_tphi <- function(Z,
   # Sequential logistic model
   p1 <- expit(Z %*% alpha1) %>% as.numeric()
   p2 <- expit(Z %*% alpha2) %>% as.numeric()
+  # Global logistic model
+  pa <- expit(Z %*% alphaa) %>% as.numeric()
   
   if (sd1 == 0.0 && sd2 == 0.0)
   {
@@ -1148,11 +1150,9 @@ simulation_tphi <- function(Z,
     if (is.null(Y))
       Y <- Yexp <- Z %*% beta
   }
+  else
+    Yexp <- Z %*% beta
   
-  # Global logistic model
-  if (sd1 == sd2 && rho == 1.0)
-    pa <- expit(Z %*% alphaa) %>% as.numeric()
-
   if (samplingDesign == "SRS")
   {
     pi <- rep(n / N, N)
@@ -1533,7 +1533,7 @@ simulation_tphi <- function(Z,
         estim_appr_var_seq_m1_m2(Yobs,
                                  modes,
                                  pi_mat,
-                                 p1,
+                                 p1, # True value of p1
                                  estimp2,
                                  estimsd1,
                                  estimsd2,
