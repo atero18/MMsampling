@@ -993,6 +993,33 @@ var_expansion_a <- function(Yexp,
 
 
 # Simulation
+## Division in stratum
+
+Because we will consider STSRS, we decide to divide our population into 4 stratum of size (1000, 2000, 3000, 4000) (as did in Kim & Kim 2007). We will take the 1000 first units (order inceasingly by `age`) for the first strata, etc.
+
+```{r}
+orderAge <- order(Z[, "age"])
+strata <- integer(N)
+strata[orderAge[seq_len(1000L)]] <- 1L
+strata[orderAge[seq(1001L, 3000L)]] <- 2L
+strata[orderAge[seq(3001L, 6000L)]] <- 3L
+strata[orderAge[seq(6001L, 10000L)]] <- 4L
+```
+
+```{r}
+Z %>% 
+  as.data.frame() %>% 
+  mutate(stratum = strata) %>% 
+  group_by(stratum) %>% 
+  summarise(n = n(),
+            minAge = min(age),
+            avgAge = mean(age),
+            maxAge = max(age),
+            percMen = 100.0 * mean(sex))
+```
+
+We will consider the same number of sample units ($n / 4$) per stratum.
+
 ## Grid of parameters
 
 ```{r}
@@ -1022,13 +1049,16 @@ Rsq(Z, beta, rnorm(N, mean = 0.0, sd = 5.0))
 ```
 
 ```{r}
+samplingDesign_vec <- c("SRS", "STSRS")
 Rsq_vec <- c(0.2, 0.5)
 ratio_n_vec <- c(0.16, 0.25, 0.4)
 ratio_n_ref <- min(ratio_n_vec)
 n_vec <- as.integer(ratio_n_vec * N)
 n_ref <- integer(ratio_n_ref * N)
 
-parameters <- tidyr::expand_grid(n = n_vec, "R²" = Rsq_vec)
+parameters <- tidyr::expand_grid(samplingDesign = samplingDesign_vec, 
+                                 n = n_vec,
+                                 "R²" = Rsq_vec)
 # sd1_vec <- c(1.0, 2.0, 5.0)
 # sd1_ref <- sd1_vec[1L]
 # ratio_sd_vec <- c(0.25, 0.5, 1.0, 2.0, 4.0)
@@ -1082,7 +1112,7 @@ glue("Size of the grid: {nrow(parameters)} iterations.")
 
 ```{r}
 simulation_tphi <- function(Z,
-                            sampling = "SRS",
+                            samplingDesign = "SRS",
                             alpha1, alpha2,
                             alphaa = alpha1,
                             beta, 
@@ -1091,6 +1121,7 @@ simulation_tphi <- function(Z,
                             phi = rep(0.5, N), 
                             M = 10000L,
                             n = ceiling(N / 10L),
+                            strata = NULL,
                             seed = 123L,
                             nCores = detectCores() - 1L,
                             calcVariance = TRUE,
@@ -1120,10 +1151,24 @@ simulation_tphi <- function(Z,
   if (sd1 == sd2 && rho == 1.0)
     pa <- expit(Z %*% alphaa) %>% as.numeric()
 
-  if (sampling == "SRS")
+  if (samplingDesign == "SRS")
   {
     pi <- rep(n / N, N)
     pi_mat <- piMat_SRS(n, N)
+  }
+  
+  else if (samplingDesign == "STSRS")
+  {
+    pi <- n[strata]
+    pi_mat <- matrix(0.0, nrow = N, ncol = N)
+    for (stratum in unique(strata))
+    {
+      nStratum <- n[stratum]
+      NStratum <- sum(strata == stratum)
+      pi_mat[which(strata == stratum), 
+             which(strata == stratum), 
+             drop = FALSE] <- piMat_SRS(nStratum, NStratum)
+    }
   }
   
   
@@ -1135,13 +1180,25 @@ simulation_tphi <- function(Z,
 
   monoSim <- function(...)
   {
-    if (sampling == "SRS")
+    if (samplingDesign == "SRS")
     {
       selectedSample <- sample(seq_len(N), size = n, replace = FALSE)
       
       I <- logical(N)
       I[selectedSample] <- TRUE
       rm(selectedSample)
+    }
+    
+    else if (samplingDesign == "STSRS")
+    {
+      I <- logical(N)
+      for (stratum in unique(strata))
+      {
+        selectedSampleStratum <- 
+          sample(which(strata == stratum), size = n[stratum], replace = FALSE)
+        I[selectedSampleStratum] <- TRUE
+      }
+      rm(selectedSampleStratum)
     }
     
     
@@ -1595,11 +1652,16 @@ for (k in seq_len(nrow(parameters)))
   else if (parameters[k, "R²"] == 0.5)
     Y <- Y0.5
   
+  if (parameters[k, "samplingDesign"] == "SRS")
+    n <- parameters[k, "n"]
+  else if (parameters[k, "samplingDesign"] == "STSRS")
+    n <- rep(parameters[k, "n"], length(unique(strata)))
+  
   simFun <- function(calcVariance = TRUE)
   {
     simulation_tphi(M = Msim,
                     Z = Z,
-                    sampling = "SRS",
+                    samplingDesign = parameters[k, "samplingDesign"],
                     alpha1 = alpha1,
                     alpha2 = alpha2,
                     alphaa = alphaa,
@@ -1607,7 +1669,8 @@ for (k in seq_len(nrow(parameters)))
                     phi = phi,
                     sd1 = 0.0, # parameters[k, "sd1"],
                     sd2 = 0.0, # parameters[k, "sd2"],
-                    n = parameters[k, "n"],
+                    n = n,
+                    strata = strata,
                     rho = 1.0, # parameters[k, "rho"],
                     seed = NULL,
                     nCores = 0L,
@@ -1628,7 +1691,7 @@ for (k in seq_len(nrow(parameters)))
   pb$tick()
 }
 
-rm(pb, resTempWithVar, resTempWithoutVar, Y)
+rm(pb, resTempWithVar, resTempWithoutVar, n, Y)
 
 resSimulation <-
   resSimulation %>%
