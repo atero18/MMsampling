@@ -1146,9 +1146,7 @@ simulation_tphi <- function(Z,
   {
     rho <- 1.0
     if (is.null(Y))
-      Yexp <- Z %*% beta
-    else
-      Yexp <- Y
+      Y <- Yexp <- Z %*% beta
   }
   
   # Global logistic model
@@ -1163,7 +1161,6 @@ simulation_tphi <- function(Z,
   
   else if (samplingDesign == "STSRS")
   {
-    pi <- n[strata]
     pi_mat <- matrix(0.0, nrow = N, ncol = N)
     for (stratum in unique(strata))
     {
@@ -1172,6 +1169,8 @@ simulation_tphi <- function(Z,
       pi_mat[which(strata == stratum), 
              which(strata == stratum)] <- piMat_SRS(nStratum, NStratum)
     }
+    
+    pi <- diag(pi_mat)
   }
   
   
@@ -1704,11 +1703,13 @@ rm(pb, resTempWithVar, resTempWithoutVar, n, Y)
 
 resSimulation <-
   resSimulation %>%
-  mutate(phi = case_when(estimand == "t_phiy" ~ as.character(constPhi),
-                         estimand == "t_phiSizey" ~ "sizeSr.",
+  mutate(phi = case_when(estimand == "t_1" ~ "1",
+                         estimand == "t_2" ~ "0",
+                         estimand == "t_phiy" ~ as.character(constPhi),
+                         estimand == "t_phiSizey" ~ "size_Sr.",
                          estimand == "t_nop1y" ~ "p1",
                          TRUE ~ "NaN"),
-         .after = "estimand")  
+         .after = "estimand")
   # arrange(n, sd1, sd2, rho)
 ```
 
