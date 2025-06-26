@@ -97,7 +97,7 @@ ggplot(data) +
 
 data %>% 
   group_by(sex) %>% 
-  summarize(meanAge = mean(age))
+  summarise(meanAge = mean(age))
 rm(data)
 ```
 
@@ -184,6 +184,7 @@ Probability to answer by $m_2$ under to the sequential protocol (i.e. do not ans
 ```{r}
 pRep2 <- (1.0 - p1) * p2
 summary(pRep2)
+rm(pRep2)
 ```
 Probability to answer under the sequential protocol
 ```{r}
@@ -300,6 +301,8 @@ while (it < 50L)
   alphaa <- alphaa - solve(hessian_logit_a(alphaa, Z, p1, p2)) %*% score_logit_a(alphaa, Z, p1, p2)
 }
 
+rm(it)
+
 alphaa <- as.vector(alphaa)
 pa <- gen_selection_probabilities(Z, alphaa)
 ```
@@ -319,7 +322,10 @@ data.frame(pa = c(pRep, pa),
   geom_density(aes(pa, color = mechanism)) +
   ggtitle("Distribution of the probability to answer depending on the mechanism") +
   xlab("Probability to answer if asked by any mode (pa)")
+
+rm(pRep)
 ```
+
 RMSE between mechanisms for the probability to answer
 ```{r}
 glue("RMSE: {sqrt(mean(((pa - (p1 + (1.0 - p1) * p2))^2L)))}")
@@ -357,6 +363,7 @@ varSizeSa <- f * sum(pa * (1.0 - pa)) +
 glue("Expected size of Sa : {expSizeSa}")
 glue("Variance of the size of Sa : {varSizeSa}")
 
+rm(expSizeSa, varSizeSa)
 rm(f, pCov, pi, pi_mat)
 ```
 
@@ -1031,6 +1038,7 @@ strata[orderAge[seq_len(1000L)]] <- 1L
 strata[orderAge[seq(1001L, 3000L)]] <- 2L
 strata[orderAge[seq(3001L, 6000L)]] <- 3L
 strata[orderAge[seq(6001L, 10000L)]] <- 4L
+rm(orderAge)
 ```
 
 ```{r}
@@ -1050,7 +1058,7 @@ We will consider the same number of sample units ($n / 4$) per stratum.
 ## Grid of parameters
 
 ```{r}
-Rsq <- function(Z, beta, epsilon)
+R_Sp <- function(Z, beta, epsilon)
 {
   Y <- Z %*% beta + epsilon
   1.0 - sum(epsilon^2L) / sum((Y - mean(Y))^2L)
@@ -1064,29 +1072,27 @@ set.seed(123L)
 epsilon0.2 <- rnorm(N, mean = 0.0, sd = 6.43)
 Y0.2 <- Z %*% beta + epsilon0.2
 Y0.2 <- Y0.2 - (sum(Y0.2) - N) / N
-Rsq(Z, beta, epsilon0.2)
+R_Sp(Z, beta, epsilon0.2)
 epsilon0.5 <- rnorm(N, mean = 0.0, sd = 3.27)
 Y0.5 <- Z %*% beta + epsilon0.5
 Y0.5 <- Y0.5 - (sum(Y0.5) - N) / N
-Rsq(Z, beta, epsilon0.5)
+R_Sp(Z, beta, epsilon0.5)
 rm(epsilon0.2, epsilon0.5)
 ```
 
 ```{r}
-Rsq(Z, beta, rnorm(N, mean = 0.0, sd = 5.0))
+R_Sp(Z, beta, rnorm(N, mean = 0.0, sd = 5.0))
 ```
 
 ```{r}
 samplingDesign_vec <- c("SRS", "STSRS")
-Rsq_vec <- c(0.2, 0.5)
+R_Sp_vec <- c(0.2, 0.5)
 ratio_n_vec <- c(0.16, 0.25, 0.4)
-ratio_n_ref <- min(ratio_n_vec)
 n_vec <- as.integer(ratio_n_vec * N)
-n_ref <- integer(ratio_n_ref * N)
 
-parameters <- tidyr::expand_grid(samplingDesign = samplingDesign_vec, 
-                                 n = n_vec,
-                                 "R²" = Rsq_vec)
+parameters <- tidyr::expand_grid(R_Sp = R_Sp_vec, 
+                                 samplingDesign = samplingDesign_vec, 
+                                 n = n_vec)
 
 parameters <- as.data.frame(parameters)
 ```
@@ -1551,10 +1557,11 @@ simulation_tphi <- function(Z,
                          "totphiTW", "totphiEW",
                          "totphiSizeTW", "totphiSizeEW",
                          "totNop1TW", "totNop1EW"),
-           sample = rep(c("Sr", "Smr", "Sa", "Sa", "Sa", "Sa"), each = 2L),
-           mechanism = rep(c("sequentialLogit", "sequentialLogit", 
-                             "globalLogit", "sequentialLogit", 
-                             "sequentialLogit", "sequentialLogit"), each = 2L),
+           sample = rep(c("Sr.", "Smr", "Sa", "Sa", "Sa", "Sa"), each = 2L),
+           mechanism = rep(c("sequential_logistic", "sequential_logistic", 
+                             "global_logistic", "sequential_logistic", 
+                             "sequential_logistic", "sequential_logistic"),
+                           each = 2L),
            estimand = rep(c("t_1", "t_2", "t_ay", 
                             "t_phiy", "t_phiSizey", "t_nop1y"), each = 2L),
            estimation = c(tot1TW, tot1EW, 
@@ -1621,7 +1628,7 @@ simulation_tphi <- function(Z,
 ## Simulation
 
 ```{r}
-Msim <- 500L
+Msim <- 2000L
 ```
 
 The different lines of the grid have the same seed. It is useful to run in different orders the evaluations and because the results from different parameters are never mixed there is no independency issue.
@@ -1646,9 +1653,9 @@ phi = rep(constPhi, N)
 
 for (k in seq_len(nrow(parameters)))
 {
-  if (parameters[k, "R²"] == 0.2)
+  if (parameters[k, "R_Sp"] == 0.2)
     Y <- Y0.2
-  else if (parameters[k, "R²"] == 0.5)
+  else if (parameters[k, "R_Sp"] == 0.5)
     Y <- Y0.5
   
   if (parameters[k, "samplingDesign"] == "SRS")
@@ -1658,7 +1665,7 @@ for (k in seq_len(nrow(parameters)))
     if (!parameters[k, "n"] %% nbStrata == 0L)
       warning("Non-integer sample size n_h for STSRS. Ceiled.")
   
-    n <- rep(ceiling(parameters[k, "n"] / nbStrata), nbStrata)
+    n <- rep(ceiling(parameters[k, "n"] / nbStrata), nbStrata) %>% as.integer()
   }
     
   
@@ -1672,11 +1679,11 @@ for (k in seq_len(nrow(parameters)))
                     alphaa = alphaa,
                     beta = NULL,
                     phi = phi,
-                    sd1 = 0.0, # parameters[k, "sd1"],
-                    sd2 = 0.0, # parameters[k, "sd2"],
+                    sd1 = 0.0,
+                    sd2 = 0.0,
                     n = n,
                     strata = strata,
-                    rho = 1.0, # parameters[k, "rho"],
+                    rho = 1.0,
                     seed = NULL,
                     nCores = 40L,
                     calcVariance = calcVariance,
@@ -1719,10 +1726,10 @@ The first subset will be used for the estimations of the expectation of the tota
 ```{r}
 resSimulation %>% 
   filter(subset == 1L) %>% 
-  group_by(mechanism, 
-           samplingDesign, n, 
+  group_by(mechanism, R_Sp,
+           samplingDesign, n,
            estimand, phi, sample, weights) %>% 
-  summarize(M = n(),
+  summarise(M = n(),
             true_expectation = first(expEstimand),
             MC_expectation = mean(estimation, na.rm = TRUE)) %>% 
   # mutate(bias_MC = MC_expectation - true_expectation) %>% 
@@ -1739,9 +1746,9 @@ Here we show average approximate variance and variance of different estimators, 
 temp <- resSimulation %>% 
   mutate(estimation = if_else(subset == 1L, estimation, NA_real_)) %>% 
   filter(weights == "estimated") %>% 
-  group_by(samplingDesign, n, 
+  group_by(mechanism, R_Sp, samplingDesign, n,
            estimand, phi, sample) %>% 
-  summarize(M = n() / 2L,
+  summarise(M = n() / 2L,
             MC_AV = mean(apprVar, na.rm = TRUE),
             MC_var = var(estimation, na.rm = TRUE),
             true_var = first(trueVar),) %>% 
@@ -1760,9 +1767,9 @@ Only for the sequential logistic model. Consider the estimators with true and es
 ```{r}
 resSimulation %>% 
   filter(subset == 2L, mechanism == "sequentialLogit") %>% 
-  group_by(samplingDesign, n, estimand, phi, weights) %>%
-  summarize(MC_var = var(estimation, na.rm = TRUE)) %>% 
-  group_by(samplingDesign, n) %>% 
+  group_by(R_Sp, samplingDesign, n, estimand, phi, weights) %>%
+  summarise(MC_var = var(estimation, na.rm = TRUE)) %>% 
+  group_by(R_Sp, samplingDesign, n) %>% 
   mutate(ratio_MC_var = max(MC_var) / min(MC_var)) %>% 
   slice_min(MC_var) %>% 
   arrange(estimand)
@@ -1773,15 +1780,17 @@ With estimated probabilities only:
 ```{r}
 temp <- resSimulation %>% 
   filter(subset == 2L, mechanism == "sequentialLogit", weights == "estimated") %>% 
-  group_by(samplingDesign, n, estimand, phi) %>%
-  summarize(MC_var = var(estimation, na.rm = TRUE)) %>%
-  group_by(samplingDesign, n) %>% 
+  group_by(R_Sp, samplingDesign, n, estimand, phi) %>%
+  summarise(MC_var = var(estimation, na.rm = TRUE)) %>%
+  group_by(R_Sp, samplingDesign, n) %>% 
   arrange(MC_var, .by_group = TRUE) %>% 
   slice(c(1L, n())) %>% 
   ungroup()
 
+# For the final table we keep only one line for 
+# the worst and the best estimator in each scenario
 compareVar <- temp %>% 
-  select(sd1, ratio_sd, rho) %>% 
+  select(colnames(parameters)) %>% 
   slice(seq(1L, nrow(temp), 2L))
 
 compareVar$bestEstimator <- compareVar$worseEstimator <- NA_character_
