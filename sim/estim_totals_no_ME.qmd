@@ -571,22 +571,21 @@ estim_appr_var_seq_m1_m2 <- function(Yobs,
     # on Sr (y_2k) and Smr (y_2k) by single matching with Z
   else
   {
-    # If Y1 = Y2 on U we can set Y1Est = Y2Est equal
+    # If Y1 = Y2 on U we can set Y1Est = Y2Est on Sa equal
     # to the vector of observed values Yobs
     if (eqPotOut)
-      Y1Est <- Y2Est <- Yobs
+      Y1Est <- Y2Est <- Yobs[maskSa]
     else
     {
       YEst <- estim_counterfactuals(Yobs, modes, Z, ...)
       Y1Est <- YEst[maskSa, "Y1Est"]
       Y2Est <- YEst[maskSa, "Y2Est"]
+      rm(YEst)
     }
     
     
     phiY1SaEst <- phi[maskSa] * Y1Est
     phibarY2SaEst <- phibar[maskSa] * Y2Est
-    
-    rm(YEst)
     
     piSa_mat <- pi_mat[maskSa, maskSa, drop = FALSE]
     covarpSa <- pi2_to_covarInc(piSa_mat)
@@ -833,12 +832,12 @@ estim_appr_var_seq_m2 <- function(Yobs, modes,
 ```
 
 ```{r}
+#' Is assumed that Y1 = Y2
 estim_appr_var_seq_a <- function(Yobs,
                                  responses,
                                  pi_mat,
                                  pa,
                                  sd = NULL,
-                                 eqPotOut = FALSE,
                                  correcEW = TRUE,
                                  I,
                                  Z = matrix(1.0, nrow = length(Yobs), ncol = 1L),
@@ -848,7 +847,6 @@ estim_appr_var_seq_a <- function(Yobs,
   
   estim_appr_var_seq_m1(Yobs, responses,  
                         pi_mat, pa, sd,
-                        eqPotOut,
                         correcEW,
                         I,
                         Z,
@@ -1065,11 +1063,11 @@ Random generation of potential outcomes vectors, considered fixed afeter, in ord
 set.seed(123L)
 epsilon0.2 <- rnorm(N, mean = 0.0, sd = 6.43)
 Y0.2 <- Z %*% beta + epsilon0.2
-Y0.2 <- Y0.2 - mean(Y0.2 - N)
+Y0.2 <- Y0.2 - (sum(Y0.2) - N) / N
 Rsq(Z, beta, epsilon0.2)
 epsilon0.5 <- rnorm(N, mean = 0.0, sd = 3.27)
 Y0.5 <- Z %*% beta + epsilon0.5
-Y0.5 <- Y0.5 - mean(Y0.5 - N)
+Y0.5 <- Y0.5 - (sum(Y0.5) - N) / N
 Rsq(Z, beta, epsilon0.5)
 rm(epsilon0.2, epsilon0.5)
 ```
@@ -1089,47 +1087,7 @@ n_ref <- integer(ratio_n_ref * N)
 parameters <- tidyr::expand_grid(samplingDesign = samplingDesign_vec, 
                                  n = n_vec,
                                  "R²" = Rsq_vec)
-# sd1_vec <- c(1.0, 2.0, 5.0)
-# sd1_ref <- sd1_vec[1L]
-# ratio_sd_vec <- c(0.25, 0.5, 1.0, 2.0, 4.0)
-# rho_vec <- c(0.8, 0.9, 1.0)
-# rho_ref <- rho_vec[1L]
 
-# Variation of the sample fraction n / N and sd1 with sd1 = sd2 
-# and correlation rho between Y1 and Y2 fixed
-# paramVar_n <-
-#   expand.grid(ratio_n = ratio_n_vec,
-#               sd1 = sd1_vec, ratio_sd = 1.0,
-#               rho = rho_ref)
-
-# Variation of sd1 and sd2 with correlation rho between Y1 and Y2 fixed
-# paramVar_sd <- 
-#   expand.grid(ratio_n = ratio_n_ref, 
-#               sd1 = sd1_vec, ratio_sd = ratio_sd_vec,
-#               rho = rho_ref)
-
-# Variation of the variance with sd1 = sd2 and rho = 1
-# paramVar_sdEq <- 
-#   expand.grid(ratio_n = ratio_n_ref, 
-#               sd1 = sd1_vec, ratio_sd = 1.0,
-#               rho = 1.0)
-
-# Variation of the correlation between Y1 and Y2 (rho) with 
-# sd1 = sd2 fixed
-# paramVar_rho <- 
-#   expand.grid(ratio_n = ratio_n_ref, 
-#               sd1 = sd1_ref, ratio_sd = 1.0,
-#               rho = rho_vec)
-
-# parameters <- rbind(paramVar_n, paramVar_sd, paramVar_sdEq, paramVar_rho)
-# parameters <- rbind(paramVar_sd, paramVar_sdEq, paramVar_rho)
-# 
-# parameters <- parameters %>% 
-#   distinct() %>% 
-#   mutate(n = as.integer(ratio_n * N), .after = "ratio_n") %>% 
-#   mutate(sd2 = sd1 * ratio_sd, .after = "ratio_sd")
-# 
-# rm(paramVar_n, paramVar_sd, paramVar_sdEq, paramVar_rho)
 parameters <- as.data.frame(parameters)
 ```
 
@@ -1313,7 +1271,6 @@ simulation_tphi <- function(Z,
                               pi_mat,
                               p1,
                               estimsd1,
-                              eqPotOut,
                               correcEW1 = FALSE)
     }
     else
@@ -1333,7 +1290,6 @@ simulation_tphi <- function(Z,
                               pi_mat,
                               estimp1,
                               estimsd1,
-                              eqPotOut,
                               correcEW1 = TRUE,
                               I,
                               Z)
@@ -1363,7 +1319,6 @@ simulation_tphi <- function(Z,
                               p1,
                               p2,
                               estimsd2,
-                              eqPotOut,
                               correcEW1 = FALSE,
                               correcEW2 = FALSE)
     }
@@ -1384,7 +1339,6 @@ simulation_tphi <- function(Z,
                               estimp1,
                               estimp2,
                               estimsd2,
-                              eqPotOut,
                               correcEW1 = TRUE,
                               correcEW2 = TRUE,
                               I,
@@ -1429,7 +1383,6 @@ simulation_tphi <- function(Z,
                              pi_mat,
                              pa,
                              estimsd,
-                             eqPotOut,
                              correcEW = FALSE)
     }
     else
@@ -1457,7 +1410,6 @@ simulation_tphi <- function(Z,
                              pi_mat,
                              estimpa,
                              estimsd,
-                             eqPotOut,
                              correcEW = TRUE,
                              I,
                              Z)
@@ -1669,7 +1621,7 @@ simulation_tphi <- function(Z,
 ## Simulation
 
 ```{r}
-Msim <- 5000L
+Msim <- 500L
 ```
 
 The different lines of the grid have the same seed. It is useful to run in different orders the evaluations and because the results from different parameters are never mixed there is no independency issue.
@@ -1753,7 +1705,7 @@ resSimulation <-
                          estimand == "t_phiy" ~ as.character(constPhi),
                          estimand == "t_phiSizey" ~ "size_Sr.",
                          estimand == "t_nop1y" ~ "p1",
-                         TRUE ~ "NaN"),
+                         TRUE ~ "/"),
          .after = "estimand")
   # arrange(n, sd1, sd2, rho)
 ```
@@ -1767,8 +1719,7 @@ The first subset will be used for the estimations of the expectation of the tota
 ```{r}
 resSimulation %>% 
   filter(subset == 1L) %>% 
-  group_by(sd1, sd2, rho, 
-           equalOutcomes, mechanism, 
+  group_by(mechanism, 
            samplingDesign, n, 
            estimand, phi, sample, weights) %>% 
   summarize(M = n(),
@@ -1788,9 +1739,7 @@ Here we show average approximate variance and variance of different estimators, 
 temp <- resSimulation %>% 
   mutate(estimation = if_else(subset == 1L, estimation, NA_real_)) %>% 
   filter(weights == "estimated") %>% 
-  group_by(sd1, sd2, rho, 
-           equalOutcomes, mechanism, 
-           samplingDesign, n, 
+  group_by(samplingDesign, n, 
            estimand, phi, sample) %>% 
   summarize(M = n() / 2L,
             MC_AV = mean(apprVar, na.rm = TRUE),
@@ -1802,63 +1751,6 @@ temp <- resSimulation %>%
 temp
 ```
 
-### Impact of the potential outcome variability
-
-The impact is supposed be negligible when the sampling fraction $f := nN^{-1}$ is small.
-
-When $\sigma_1$ varies
-
-```{r}
-resSimulation %>% 
-  filter(subset == 2L) %>% 
-  group_by(sd1, sd2, rho, 
-           equalOutcomes, mechanism,
-           samplingDesign, n, 
-           estimand, weights) %>% 
-  summarize(MC_var = var(estimation, na.rm = TRUE)) %>%
-  group_by(sd2, rho, samplingDesign, n, estimand, weights) %>% 
-  summarise(min_SD1 = min(sd1),
-            max_SD1 = max(sd1),
-            ratio_SD1 = max(sd1) / min(sd1),
-            ratio_MC_var = max(MC_var) / min(MC_var),
-            ratio_MC_var_ratio_SD1 = ratio_MC_var / ratio_SD1) %>% 
-  filter(ratio_SD1 != 1.0)
-```
-
-When $\sigma_2$ varies
-
-```{r}
-resSimulation %>% 
-  filter(subset == 2L) %>% 
-  group_by(sd1, sd2, rho, 
-           equalOutcomes, mechanism,
-           samplingDesign, n, 
-           estimand, weights) %>%  
-  summarize(MC_var = var(estimation, na.rm = TRUE)) %>%
-  group_by(sd1, rho, mechanism, samplingDesign, n, estimand, weights) %>% 
-  summarise(min_SD2 = min(sd2),
-            max_SD2 = max(sd2),
-            ratio_SD2 = max(sd2) / min(sd2),
-            ratio_MC_var = max(MC_var) / min(MC_var),
-            ratio_MC_var_ratio_SD2 = ratio_MC_var / ratio_SD2) %>% 
-  filter(ratio_SD2 != 1.0)
-```
-
-```{r}
-resSimulation %>% 
-  filter(subset == 2L, rho == 0.8, 
-         ratio_sd == 1.0, 
-         estimand %in% c("t_1", "t_2"), 
-         weights == "estimated") %>% 
-  mutate(sd = sd2) %>% 
-  group_by(sd, rho, mechanism, samplingDesign, n, estimand) %>% 
-  summarise(MC_var = var(estimation, na.rm = TRUE),
-            ratio_MC_var = MC_var) %>% 
-  ungroup() %>% 
-  ggplot() + geom_point(aes(x = sd, y = MC_var, color = estimand))
-  
-```
-
 ### Which estimator should we use
 
 Considering the approximate variance, on the last $M$ iterations
@@ -1868,40 +1760,12 @@ Only for the sequential logistic model. Consider the estimators with true and es
 ```{r}
 resSimulation %>% 
   filter(subset == 2L, mechanism == "sequentialLogit") %>% 
-  group_by(sd1, sd2, rho, equalOutcomes, 
-           samplingDesign, n, estimand, phi, sample, weights) %>%
+  group_by(samplingDesign, n, estimand, phi, weights) %>%
   summarize(MC_var = var(estimation, na.rm = TRUE)) %>% 
-  group_by(n, sd1, sd2, rho) %>% 
+  group_by(samplingDesign, n) %>% 
   mutate(ratio_MC_var = max(MC_var) / min(MC_var)) %>% 
   slice_min(MC_var) %>% 
   arrange(estimand)
-```
-
-When $\sigma_1 < \sigma_2$:
-
-```{r}
-resSimulation %>% 
-  filter(subset == 2L, mechanism == "sequentialLogit") %>% 
-  filter(ratio_sd > 1.0) %>% 
-  group_by(sd1, sd2, rho, n, samplingDesign, estimand, phi, weights) %>%
-  summarize(MC_var = var(estimation, na.rm = TRUE)) %>% 
-  group_by(sd1, sd2, rho, samplingDesign,n) %>% 
-  mutate(ratio_MC_var = max(MC_var) / min(MC_var)) %>% 
-  arrange(MC_var, .by_group = TRUE)
-```
-
-
-When $\sigma_1 > \sigma_2$:
-
-```{r}
-resSimulation %>% 
-  filter(subset == 2L, mechanism == "sequentialLogit") %>% 
-  filter(ratio_sd < 1.0) %>% 
-  group_by(sd1, sd2, rho, samplingDesign, n, estimand, phi, weights) %>%
-  summarize(MC_var = var(estimation, na.rm = TRUE)) %>% 
-  group_by(sd1, sd2, rho, samplingDesign, n) %>% 
-  mutate(ratio_MC_var = max(MC_var) / min(MC_var)) %>% 
-  arrange(MC_var, .by_group = TRUE)
 ```
 
 With estimated probabilities only:
@@ -1909,17 +1773,17 @@ With estimated probabilities only:
 ```{r}
 temp <- resSimulation %>% 
   filter(subset == 2L, mechanism == "sequentialLogit", weights == "estimated") %>% 
-  group_by(sd1, ratio_sd, rho, samplingDesign, n, estimand) %>%
+  group_by(samplingDesign, n, estimand, phi) %>%
   summarize(MC_var = var(estimation, na.rm = TRUE)) %>%
-  select(-n) %>% 
-  group_by(sd1, ratio_sd, rho, samplingDesign) %>% 
+  group_by(samplingDesign, n) %>% 
   arrange(MC_var, .by_group = TRUE) %>% 
   slice(c(1L, n())) %>% 
-  arrange(sd1, ratio_sd, rho, .by_group = TRUE) %>% 
-  arrange(MC_var, .by_group = TRUE) %>% 
   ungroup()
 
-compareVar <- temp %>% select(sd1, ratio_sd, rho) %>% slice(seq(1L, nrow(temp), 2L))
+compareVar <- temp %>% 
+  select(sd1, ratio_sd, rho) %>% 
+  slice(seq(1L, nrow(temp), 2L))
+
 compareVar$bestEstimator <- compareVar$worseEstimator <- NA_character_
 compareVar$ratio_MC_var <- NA_real_
 
@@ -1947,6 +1811,7 @@ rm(group)
 
 compareVar
 ```
+
 ```{r}
 rm(temp, compareVar)
 ```
