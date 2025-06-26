@@ -1766,7 +1766,7 @@ Only for the sequential logistic model. Consider the estimators with true and es
 
 ```{r}
 resSimulation %>% 
-  filter(subset == 2L, mechanism == "sequentialLogit") %>% 
+  filter(subset == 2L, mechanism == "sequential_logistic") %>% 
   group_by(R_Sp, samplingDesign, n, estimand, phi, weights) %>%
   summarise(MC_var = var(estimation, na.rm = TRUE)) %>% 
   group_by(R_Sp, samplingDesign, n) %>% 
@@ -1779,7 +1779,9 @@ With estimated probabilities only:
 
 ```{r}
 temp <- resSimulation %>% 
-  filter(subset == 2L, mechanism == "sequentialLogit", weights == "estimated") %>% 
+  filter(subset == 2L, 
+         mechanism == "sequential_logistic", 
+         weights == "estimated") %>% 
   group_by(R_Sp, samplingDesign, n, estimand, phi) %>%
   summarise(MC_var = var(estimation, na.rm = TRUE)) %>%
   group_by(R_Sp, samplingDesign, n) %>% 
