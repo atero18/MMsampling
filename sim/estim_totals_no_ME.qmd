@@ -397,6 +397,8 @@ rm(f, pCov, pi, pi_mat)
 #' (scalar).
 #' @param phi vector containing weights for the total. Must be known on the
 #' set of respondents (numeric vector of [0,1]^N).
+#' @param eqPotOut TRUE if we consider that y_1k = y_2k on the population
+#' (boolean)
 #' @param correcEW1 TRUE if we must apply a correction due to the
 #' use of estimation of `p1` (boolean).
 #' @param correcEW2 TRUE if we must apply a correction due to the
@@ -425,6 +427,7 @@ estim_appr_var_seq_m1_m2 <- function(Yobs,
                                      sd2 = 0.0,
                                      cov12 = sd1 * sd2,
                                      phi = rep(0.5, length(Yobs)),
+                                     eqPotOut = FALSE,
                                      correcEW1 = TRUE,
                                      correcEW2 = TRUE,
                                      I,
@@ -467,7 +470,18 @@ estim_appr_var_seq_m1_m2 <- function(Yobs,
     phibar <- rep(1.0, N)
   }
   else
+  {
     phibar <- 1.0 - phi
+    
+    eqPotOut <- isTRUE(eqPotOut)
+    
+    if (eqPotOut)
+    {
+      sd2 <- sd1
+      cov12 <- sd1^2L
+    }
+  }
+    
   
   piSa <- pi[maskSa]
   p1Sa <- p1[maskSa]
@@ -557,9 +571,17 @@ estim_appr_var_seq_m1_m2 <- function(Yobs,
     # on Sr (y_2k) and Smr (y_2k) by single matching with Z
   else
   {
-    YEst <- estim_counterfactuals(Yobs, modes, Z, ...)
-    Y1Est <- YEst[maskSa, "Y1Est"]
-    Y2Est <- YEst[maskSa, "Y2Est"]
+    # If Y1 = Y2 on U we can set Y1Est = Y2Est equal
+    # to the vector of observed values Yobs
+    if (eqPotOut)
+      Y1Est <- Y2Est <- Yobs
+    else
+    {
+      YEst <- estim_counterfactuals(Yobs, modes, Z, ...)
+      Y1Est <- YEst[maskSa, "Y1Est"]
+      Y2Est <- YEst[maskSa, "Y2Est"]
+    }
+    
     
     phiY1SaEst <- phi[maskSa] * Y1Est
     phibarY2SaEst <- phibar[maskSa] * Y2Est
@@ -772,6 +794,7 @@ estim_appr_var_seq_m1 <- function(Yobs, modes,
                            sd2 = 0.0,
                            cov12 = 0.0,
                            phi = rep(1.0, length(Yobs)),
+                           eqPotOut = NULL,
                            correcEW1,
                            correcEW2 = FALSE,
                            I,
@@ -799,6 +822,7 @@ estim_appr_var_seq_m2 <- function(Yobs, modes,
                            sd2,
                            cov12 = 0.0,
                            phi = numeric(length(Yobs)),
+                           eqPotOut = NULL,
                            correcEW1,
                            correcEW2,
                            I,
@@ -814,6 +838,7 @@ estim_appr_var_seq_a <- function(Yobs,
                                  pi_mat,
                                  pa,
                                  sd = NULL,
+                                 eqPotOut = FALSE,
                                  correcEW = TRUE,
                                  I,
                                  Z = matrix(1.0, nrow = length(Yobs), ncol = 1L),
@@ -822,7 +847,8 @@ estim_appr_var_seq_a <- function(Yobs,
   responses[responses == "r"] <- "m1"
   
   estim_appr_var_seq_m1(Yobs, responses,  
-                        pi_mat, pa, sd, 
+                        pi_mat, pa, sd,
+                        eqPotOut,
                         correcEW,
                         I,
                         Z,
@@ -1155,6 +1181,11 @@ simulation_tphi <- function(Z,
   else
     Yexp <- Z %*% beta
   
+  # Case when Y1 = Y2 (almost surely, conditionally to X): the variance
+  # estimation changes because there is no counterfactual that needs
+  # to be estimated
+  eqPotOut <- sd1 == sd2 && rho == 1.0
+  
   if (samplingDesign == "SRS")
   {
     pi <- rep(n / N, N)
@@ -1282,6 +1313,7 @@ simulation_tphi <- function(Z,
                               pi_mat,
                               p1,
                               estimsd1,
+                              eqPotOut,
                               correcEW1 = FALSE)
     }
     else
@@ -1301,6 +1333,7 @@ simulation_tphi <- function(Z,
                               pi_mat,
                               estimp1,
                               estimsd1,
+                              eqPotOut,
                               correcEW1 = TRUE,
                               I,
                               Z)
@@ -1330,6 +1363,7 @@ simulation_tphi <- function(Z,
                               p1,
                               p2,
                               estimsd2,
+                              eqPotOut,
                               correcEW1 = FALSE,
                               correcEW2 = FALSE)
     }
@@ -1350,6 +1384,7 @@ simulation_tphi <- function(Z,
                               estimp1,
                               estimp2,
                               estimsd2,
+                              eqPotOut,
                               correcEW1 = TRUE,
                               correcEW2 = TRUE,
                               I,
@@ -1394,6 +1429,7 @@ simulation_tphi <- function(Z,
                              pi_mat,
                              pa,
                              estimsd,
+                             eqPotOut,
                              correcEW = FALSE)
     }
     else
@@ -1421,6 +1457,7 @@ simulation_tphi <- function(Z,
                              pi_mat,
                              estimpa,
                              estimsd,
+                             eqPotOut,
                              correcEW = TRUE,
                              I,
                              Z)
@@ -1462,6 +1499,7 @@ simulation_tphi <- function(Z,
                                  estimsd2,
                                  estimcov12,
                                  phi,
+                                 eqPotOut,
                                  correcEW1 = FALSE,
                                  correcEW2 = FALSE)
       
@@ -1475,6 +1513,7 @@ simulation_tphi <- function(Z,
                                  estimsd2,
                                  estimcov12,
                                  phiSize,
+                                 eqPotOut,
                                  correcEW1 = FALSE,
                                  correcEW2 = FALSE)
       
@@ -1488,6 +1527,7 @@ simulation_tphi <- function(Z,
                                  estimsd2,
                                  estimcov12,
                                  phi = p1,
+                                 eqPotOut,
                                  correcEW1 = FALSE,
                                  correcEW2 = FALSE)
     }
@@ -1511,6 +1551,7 @@ simulation_tphi <- function(Z,
                                  estimsd2,
                                  estimcov12,
                                  phi,
+                                 eqPotOut,
                                  correcEW1 = TRUE,
                                  correcEW2 = TRUE,
                                  I,
@@ -1526,6 +1567,7 @@ simulation_tphi <- function(Z,
                                  estimsd2,
                                  estimcov12,
                                  phiSize,
+                                 eqPotOut,
                                  correcEW1 = TRUE,
                                  correcEW2 = TRUE,
                                  I,
@@ -1541,6 +1583,7 @@ simulation_tphi <- function(Z,
                                  estimsd2,
                                  estimcov12,
                                  phi = p1,
+                                 eqPotOut,
                                  correcEW1 = TRUE,
                                  correcEW2 = TRUE,
                                  I,
