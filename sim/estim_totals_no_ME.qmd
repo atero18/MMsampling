@@ -425,7 +425,7 @@ rm(f, pCov, pi, pi_mat)
 #' @param weightSrEstVq1 similar to `weightSrEstVp` but for the m1 selection
 #' variability (scalar in [0,1]).
 #' @param ... arguments for the function `MatchIt::matchit`.
-estim_appr_var_seq_m1_m2 <- function(Yobs,
+estim_AV_seq_m1_m2 <- function(Yobs,
                                      modes,
                                      pi_mat,
                                      p1,
@@ -784,7 +784,7 @@ estim_appr_var_seq_m1_m2 <- function(Yobs,
 #' @param m2Only TRUE if we estimate the variance of t_{pq2} and only with
 #' the m2 respondents (boolean).
 #' @param ... arguments for the function `MatchIt::matchit`.
-estim_appr_var_seq_m1 <- function(Yobs, modes, 
+estim_AV_seq_m1 <- function(Yobs, modes, 
                                   pi_mat, 
                                   p1, sd1,
                                   correcEW1 = TRUE,
@@ -793,7 +793,7 @@ estim_appr_var_seq_m1 <- function(Yobs, modes,
                                              nrow = length(Yobs), ncol = 1L),
                                   ...)
 {
-  estim_appr_var_seq_m1_m2(Yobs, modes, 
+  estim_AV_seq_m1_m2(Yobs, modes, 
                            pi_mat, 
                            p1, p2 = NULL,
                            sd1,
@@ -811,7 +811,7 @@ estim_appr_var_seq_m1 <- function(Yobs, modes,
 ```
 
 ```{r}
-estim_appr_var_seq_m2 <- function(Yobs, modes, 
+estim_AV_seq_m2 <- function(Yobs, modes, 
                                   pi_mat, 
                                   p1, p2, sd2,
                                   correcEW1 = TRUE,
@@ -821,7 +821,7 @@ estim_appr_var_seq_m2 <- function(Yobs, modes,
                                              nrow = length(Yobs), ncol = 1L),
                                   ...)
 {
-  estim_appr_var_seq_m1_m2(Yobs, modes, 
+  estim_AV_seq_m1_m2(Yobs, modes, 
                            pi_mat, 
                            p1, p2,
                            sd1 = 0.0,
@@ -840,7 +840,7 @@ estim_appr_var_seq_m2 <- function(Yobs, modes,
 
 ```{r}
 #' Is assumed that Y1 = Y2
-estim_appr_var_seq_a <- function(Yobs,
+estim_AV_seq_a <- function(Yobs,
                                  responses,
                                  pi_mat,
                                  pa,
@@ -852,7 +852,7 @@ estim_appr_var_seq_a <- function(Yobs,
 {
   responses[responses == "r"] <- "m1"
   
-  estim_appr_var_seq_m1(Yobs, responses,  
+  estim_AV_seq_m1(Yobs, responses,  
                         pi_mat, pa, sd,
                         correcEW,
                         I,
@@ -862,7 +862,7 @@ estim_appr_var_seq_a <- function(Yobs,
 ```
 
 ```{r}
-estim_appr_var_as_eq_no_p1 <- 
+estim_AV_as_eq_no_p1 <- 
 ```
 
 ## Expansion estimators true variance
@@ -1278,7 +1278,7 @@ simulation_tphi <- function(Z,
       # The variance of Y1 is assumed known. The true probabilities are
       # used in the calculation.
       apprVar1TW <-
-        estim_appr_var_seq_m1(Yobs,
+        estim_AV_seq_m1(Yobs,
                               modes,
                               pi_mat,
                               p1,
@@ -1297,7 +1297,7 @@ simulation_tphi <- function(Z,
     {
       # The variance of Y1 is assumed known.
       apprVar1EW <-
-        estim_appr_var_seq_m1(Yobs,
+        estim_AV_seq_m1(Yobs,
                               modes,
                               pi_mat,
                               estimp1,
@@ -1325,7 +1325,7 @@ simulation_tphi <- function(Z,
       # The variance of Y2 is assumed known. The true probabilities are
       # used in the calculation.
       apprVar2TW <-
-        estim_appr_var_seq_m2(Yobs,
+        estim_AV_seq_m2(Yobs,
                               modes,
                               pi_mat,
                               p1,
@@ -1345,7 +1345,7 @@ simulation_tphi <- function(Z,
     {
       # The variance of Y1 is assumed known.
       apprVar2EW <-
-        estim_appr_var_seq_m2(Yobs,
+        estim_AV_seq_m2(Yobs,
                               modes,
                               pi_mat,
                               estimp1,
@@ -1390,7 +1390,7 @@ simulation_tphi <- function(Z,
       # The variance of Y is assumed known. The true probabilities are
       # used in the calculation.
       apprVaraTW <-
-        estim_appr_var_seq_a(YobsEq,
+        estim_AV_seq_a(YobsEq,
                              answers,
                              pi_mat,
                              pa,
@@ -1417,7 +1417,7 @@ simulation_tphi <- function(Z,
       # The variance of Y is assumed known. The true probabilities are
       # used in the calculation.
       apprVaraEW <-
-        estim_appr_var_seq_a(YobsEq,
+        estim_AV_seq_a(YobsEq,
                              answers,
                              pi_mat,
                              estimpa,
@@ -1454,7 +1454,7 @@ simulation_tphi <- function(Z,
     if (calcVariance)
     {
       apprVarPhiTW <- 
-        estim_appr_var_seq_m1_m2(Yobs,
+        estim_AV_seq_m1_m2(Yobs,
                                  modes,
                                  pi_mat,
                                  p1,
@@ -1468,7 +1468,7 @@ simulation_tphi <- function(Z,
                                  correcEW2 = FALSE)
       
       apprVarPhiSizeTW <- 
-        estim_appr_var_seq_m1_m2(Yobs,
+        estim_AV_seq_m1_m2(Yobs,
                                  modes,
                                  pi_mat,
                                  p1,
@@ -1482,7 +1482,7 @@ simulation_tphi <- function(Z,
                                  correcEW2 = FALSE)
       
       apprVarNop1TW <- 
-        estim_appr_var_seq_m1_m2(Yobs,
+        estim_AV_seq_m1_m2(Yobs,
                                  modes,
                                  pi_mat,
                                  p1,
@@ -1506,7 +1506,7 @@ simulation_tphi <- function(Z,
     if (calcVariance)
     {
       apprVarPhiEW <- 
-        estim_appr_var_seq_m1_m2(Yobs,
+        estim_AV_seq_m1_m2(Yobs,
                                  modes,
                                  pi_mat,
                                  estimp1,
@@ -1522,7 +1522,7 @@ simulation_tphi <- function(Z,
                                  Z)
       
       apprVarPhiSizeEW <- 
-        estim_appr_var_seq_m1_m2(Yobs,
+        estim_AV_seq_m1_m2(Yobs,
                                  modes,
                                  pi_mat,
                                  estimp1,
@@ -1538,7 +1538,7 @@ simulation_tphi <- function(Z,
                                  Z)
       
       apprVarNop1EW <- 
-        estim_appr_var_seq_m1_m2(Yobs,
+        estim_AV_seq_m1_m2(Yobs,
                                  modes,
                                  pi_mat,
                                  p1, # True value of p1

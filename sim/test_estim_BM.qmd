@@ -359,7 +359,7 @@ simulation_tphi <- function(Z,
     if (calcVariance)
     {
       apprVarPhi1TW <-
-        MMsampling::estim_appr_var_seq_phi1(Yobs,
+        MMsampling::estim_AV_seq_phi1(Yobs,
                                             modes,
                                             I,
                                             pi_mat,
@@ -379,7 +379,7 @@ simulation_tphi <- function(Z,
     if (calcVariance)
     {
       apprVarPhi1EW <-
-        MMsampling::estim_appr_var_seq_phi1(Yobs,
+        MMsampling::estim_AV_seq_phi1(Yobs,
                                             modes,
                                             I,
                                             pi_mat,
@@ -446,7 +446,7 @@ simulation_tphi <- function(Z,
     if (calcVariance)
     {
       apprVarPhi2TW <-
-        MMsampling::estim_appr_var_seq_phi2(Yobs,
+        MMsampling::estim_AV_seq_phi2(Yobs,
                                             modes,
                                             I,
                                             pi_mat,
@@ -466,7 +466,7 @@ simulation_tphi <- function(Z,
     if (calcVariance)
     {
       apprVarPhi2EW <-
-        MMsampling::estim_appr_var_seq_phi2(Yobs,
+        MMsampling::estim_AV_seq_phi2(Yobs,
                                             modes,
                                             I,
                                             pi_mat,
