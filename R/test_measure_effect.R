@@ -27,10 +27,10 @@ estim_var_mean_phi1 <- function(Yobs,
   # (with or without estimated probabilities)of the variable
   # phi_k (y_1k - average on U of the y_1l) / sum of the phi_k on U
   estim_AV_seq_phi1(errTerms, modes, I, pi_mat,
-                          p1,
-                          sd1 = 0.0,
-                          phi,
-                          correcEstimWeights = correcEstimWeights, Z) /
+                    p1,
+                    sd1 = 0.0,
+                    phi,
+                    correcEstimWeights = correcEstimWeights, Z) /
     sumPhi^2L
 }
 
@@ -62,7 +62,7 @@ estim_var_mean_phi2 <- function(Yobs,
   # (with or without estimated probabilities) of the variable
   # phi_k (y_2k - average on U of the y_2l) / sum of the phi_k on U
   estim_AV_seq_phi2(errTerms, modes, I, pi_mat,
-                          p1, p2, sd2 = 0.0, phi,
-                          correcEstimWeights = correcEstimWeights, Z) /
+                    p1, p2, sd2 = 0.0, phi,
+                    correcEstimWeights = correcEstimWeights, Z) /
     sumPhi^2L
 }
