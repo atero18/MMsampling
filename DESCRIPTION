@@ -41,6 +41,7 @@ Collate:
     'MMSampler.R'
     'MMSample.R'
     'MMsampling-package.R'
+    'arguments.R'
     'estim_measure_effect.R'
     'estim_selection_prob.R'
     'estim_tot_seq.R'

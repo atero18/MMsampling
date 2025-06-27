@@ -1,14 +1,9 @@
 #' Estimation of the counterfactuals of each respondent
 #'
 #' In this version considers only the case with two modes. Could be
-#' generalised.
+#' generalised. Requires the package [MatchIt](https://cran.r-project.org/web/packages/MatchIt/).
 #'
-#' @param Yobs vector of the observed outcomes. For the non-respondents
-#' the value is not considered and therefore can be equal to NA
-#' (numeric vector of size N the size of the population).
-#' @param modes vector of the selected mode of each unit.
-#' The first mode of the protocol is defined as "m1" and the second as "m2"
-#' (character vector or factor of size N).
+#' @inheritParams common_arguments
 #' @param X design matrix. The rows corresponding to the non-respondents
 #' can contain NA (numeric matrix with N rows and p columns).
 #' @param ... arguments for the function `MatchIt::matchit`.
@@ -16,6 +11,7 @@
 #' its outcome or its estimated counterfactual depending on if it answered
 #' by the mode or the other. Equal to NA for the non-respondents
 #' (numeric matrix of dimension (N,2)).
+#' @seealso [MatchIt::matchit()]
 #' @export
 estim_counterfactuals <- function(Yobs,
                                   modes,

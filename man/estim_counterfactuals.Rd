@@ -7,12 +7,11 @@
 estim_counterfactuals(Yobs, modes, X, ...)
 }
 \arguments{
-\item{Yobs}{vector of the observed outcomes. For the non-respondents
-the value is not considered and therefore can be equal to NA
+\item{Yobs}{vector of the observed outcomes.
 (numeric vector of size N the size of the population).}
 
 \item{modes}{vector of the selected mode of each unit.
-The first mode of the protocol is defined as "m1" and the second as "m2"
+The first mode of the protocol is defined as "m1", the second as "m2"
 (character vector or factor of size N).}
 
 \item{X}{design matrix. The rows corresponding to the non-respondents
@@ -28,5 +27,8 @@ by the mode or the other. Equal to NA for the non-respondents
 }
 \description{
 In this version considers only the case with two modes. Could be
-generalised.
+generalised. Requires the package \href{https://cran.r-project.org/web/packages/MatchIt/}{MatchIt}.
+}
+\seealso{
+\code{\link[MatchIt:matchit]{MatchIt::matchit()}}
 }

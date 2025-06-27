@@ -885,7 +885,7 @@ estim_AV_seq_a <- function(Yobs,
 #' the potential outcomes (positive scalar).
 #' @param correcEW2 TRUE if we must apply a correction due to the
 #' use of estimation of `p2` (boolean).
-#' @param I vector containing the indicators I_k equal to TRUE if unit k
+#' @param I vector containing the membership indicators equal to TRUE if unit k
 #' has been selected. Used only if `correcEW2` is true 
 #' (logical vector of size N).
 #' @param Z design matrix. Used only when `correcEW2` is TRUE
