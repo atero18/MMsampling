@@ -871,7 +871,7 @@ estim_AV_as_eq_no_p1 <- function(Yobs,
                                  I,
                                  Z = matrix(1.0, nrow = length(Yobs), ncol = 1L),
                                  ...)
-  
+{
   N <- length(pi)
   
   maskSr <- modes == "m1"
@@ -894,7 +894,26 @@ estim_AV_as_eq_no_p1 <- function(Yobs,
     t(weightedYSmr) %*% (covarpSmr / piSmr_mat) %*% weightedYSmr +
     sum((1.0 - piSmr) * weightedYSmr^2L * (p2Smr - 1.0))
   
+  # m2 selection variability (q2, R2)
+  if (correcEW2)
+  {
+    estVs2 <- -crossprod(ZSmr, (1.0 - p2Smr) * weightedYSmr)
+
+    maskSm <- I & !maskSr
+    
+    estbs2 <- 
+      solve(Fisher_Information_Matrix(p2, Z, maskSm)) %*% estVs2
+    
+    weightedYSmr <- weightedYSmr + Z[maskSmr, , drop = FALSE] %*% estbs2
+  }
   
+  varq2Est <- sum((1.0 - p2Smr) * correctedY2Smrq2^2L)
+
+  # Potential outcomes variability
+  varYEst <- N * sd^2L
+  
+  varpEst + varq2Est + varphiYEst
+}
 ```
 
 ## Expansion estimators true variance
