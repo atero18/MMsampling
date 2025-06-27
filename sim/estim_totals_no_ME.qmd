@@ -861,6 +861,9 @@ estim_appr_var_seq_a <- function(Yobs,
 }
 ```
 
+```{r}
+estim_appr_var_as_eq_no_p1 <- 
+```
 
 ## Expansion estimators true variance
 
