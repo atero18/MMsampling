@@ -16,14 +16,10 @@ estim_response_prob_global <- function(I, modes, Z,
   modes <- as.factor(modes)
   M <- levels(modes)
   N <- length(modes)
-  I <- set_I(I, N)
 
-  assertX(Z, N = N)
+  if (is.null(RGH))
+    RGH <- rep(1L, N)
 
-  assertFlag(constRGH)
-  assertFlag(chosenOnly)
-
-  RGH <- set_RGH(RGH, N)
   RGHNames <- unique(RGH)
 
   data <- cbind(mode = modes, Z) %>% as.data.frame()
@@ -79,14 +75,9 @@ estim_response_prob_sequential <- function(I, Z, modes, orderModes,
   modes <- as.factor(modes)
   M <- levels(modes)
   N <- length(modes)
-  I <- set_I(I, N)
 
-  assertX(Z, N = N)
-
-  assertFlag(constRGH)
-  assertFlag(chosenOnly)
-
-  RGH <- set_RGH(RGH, N)
+  if (is.null(RGH))
+    RGH <- rep(1L, N)
 
   RGHNames <- unique(RGH)
 
@@ -97,14 +88,6 @@ estim_response_prob_sequential <- function(I, Z, modes, orderModes,
 
 
   orderModes <- orderModes[tolower(orderModes) != "nr"]
-
-
-  assertVector(orderModes,
-               any.missing = FALSE, all.missing  = FALSE,
-               min.len = 1L, unique = TRUE)
-
-  assertSubset(orderModes, M)
-
 
 
   # Will contain the conditional probs for each mode

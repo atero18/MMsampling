@@ -69,7 +69,7 @@ estim_tot_0_no_p1 <- function(Yobs, modes, pi, p2)
 {
   p1 <- phi <- rep(1.0, length(Yobs))
 
-  estim_tot_m1_m2(Yobs, modes, pi, p1, p2, phi)
+  estim_tot_phi_y(Yobs, modes, pi, p1, p2, phi)
 }
 
 
