@@ -209,6 +209,9 @@ piMat_SRS <- function(n, N)
 
   pi_mat
 }
+
+# Results are stored in memory
+piMat_SRS <- memoise::memoise(piMat_SRS)
 ```
 
 
@@ -869,8 +872,7 @@ estim_AV_as_eq_no_p1 <- function(Yobs,
                                  sd = NULL,
                                  correcEW2 = TRUE,
                                  I,
-                                 Z = matrix(1.0, nrow = length(Yobs), ncol = 1L),
-                                 ...)
+                                 Z = matrix(1.0, nrow = length(Yobs), ncol = 1L))
 {
   N <- length(pi)
   
@@ -897,6 +899,7 @@ estim_AV_as_eq_no_p1 <- function(Yobs,
   # m2 selection variability (q2, R2)
   if (correcEW2)
   {
+    ZSmr <- Z[maskSmr, , drop = FALSE]
     estVs2 <- -crossprod(ZSmr, (1.0 - p2Smr) * weightedYSmr)
 
     maskSm <- I & !maskSr
@@ -904,15 +907,15 @@ estim_AV_as_eq_no_p1 <- function(Yobs,
     estbs2 <- 
       solve(Fisher_Information_Matrix(p2, Z, maskSm)) %*% estVs2
     
-    weightedYSmr <- weightedYSmr + Z[maskSmr, , drop = FALSE] %*% estbs2
+    weightedYSmr <- weightedYSmr + ZSmr %*% estbs2
   }
   
-  varq2Est <- sum((1.0 - p2Smr) * correctedY2Smrq2^2L)
+  varq2Est <- sum((1.0 - p2Smr) * weightedYSmr^2L)
 
   # Potential outcomes variability
   varYEst <- N * sd^2L
   
-  varpEst + varq2Est + varphiYEst
+  varpEst + varq2Est + varYEst
 }
 ```
 
@@ -1109,6 +1112,31 @@ Z %>%
 
 We will consider the same number of sample units ($n / 4$) per stratum.
 
+```{r}
+# Generates the second order inclusion probabilities matrix of a
+# STratified Simple Random Sampling (STSRS) design
+piMat_STSRS <- function(n_vec, strata)
+{
+  Nstrata <- table(strata)
+  pi <- n_vec[strata] / Nstrata[strata]
+  pi_mat <- outer(pi, pi)
+  
+  for (stratum in seq_along(n))
+  {
+    nStratum <- n_vec[stratum]
+    NStratum <- sum(strata == stratum)
+    pi_mat[which(strata == stratum), 
+           which(strata == stratum)] <- piMat_SRS(nStratum, NStratum)
+  }
+  
+  pi_mat
+}
+
+# Results are stored in memory
+piMat_STSRS <- memoise::memoise(piMat_STSRS)
+```
+
+
 ## Grid of parameters
 
 ```{r}
@@ -1212,18 +1240,7 @@ simulation_tphi <- function(Z,
   
   else if (samplingDesign == "STSRS")
   {
-    
-    pi <- n[strata] / table(strata)
-    pi_mat <- outer(pi, pi)
-    
-    for (stratum in unique(strata))
-    {
-      nStratum <- n[stratum]
-      NStratum <- sum(strata == stratum)
-      pi_mat[which(strata == stratum), 
-             which(strata == stratum)] <- piMat_SRS(nStratum, NStratum)
-    }
-    
+    pi_mat <- piMat_STSRS(n, strata)
     pi <- diag(pi_mat)
   }
   
@@ -1248,7 +1265,7 @@ simulation_tphi <- function(Z,
     else if (samplingDesign == "STSRS")
     {
       I <- logical(N)
-      for (stratum in unique(strata))
+      for (stratum in seq_along(n))
       {
         selectedSampleStratum <- 
           sample(which(strata == stratum), size = n[stratum], replace = FALSE)
@@ -1533,18 +1550,25 @@ simulation_tphi <- function(Z,
                            correcEW2 = FALSE)
       
       apprVarNop1TW <- 
-        estim_AV_seq_m1_m2(Yobs,
-                           modes,
-                           pi_mat,
-                           p1,
-                           p2,
-                           estimsd1,
-                           estimsd2,
-                           estimcov12,
-                           phi = p1,
-                           eqPotOut,
-                           correcEW1 = FALSE,
-                           correcEW2 = FALSE)
+        estim_AV_as_eq_no_p1(Yobs,
+                             modes,
+                             pi_mat,
+                             p2,
+                             sd1, # Variance estimated with sd1 only
+                             correcEW2 = FALSE)
+      # apprVarNop1TW <- 
+      #   estim_AV_seq_m1_m2(Yobs,
+      #                      modes,
+      #                      pi_mat,
+      #                      p1,
+      #                      p2,
+      #                      estimsd1,
+      #                      estimsd2,
+      #                      estimcov12,
+      #                      phi = p1,
+      #                      eqPotOut,
+      #                      correcEW1 = FALSE,
+      #                      correcEW2 = FALSE)
     }
     else
       apprVarPhiTW <- apprVarPhiSizeTW <- apprVarNop1TW <- NA_real_
@@ -1589,20 +1613,29 @@ simulation_tphi <- function(Z,
                            Z)
       
       apprVarNop1EW <- 
-        estim_AV_seq_m1_m2(Yobs,
-                           modes,
-                           pi_mat,
-                           p1, # True value of p1
-                           estimp2,
-                           estimsd1,
-                           estimsd2,
-                           estimcov12,
-                           phi = p1,
-                           eqPotOut,
-                           correcEW1 = TRUE,
-                           correcEW2 = TRUE,
-                           I,
-                           Z)
+        estim_AV_as_eq_no_p1(Yobs,
+                             modes,
+                             pi_mat,
+                             p2,
+                             sd1, # Variance estimated with sd1 only
+                             correcEW2 = TRUE,
+                             I,
+                             Z)
+      # apprVarNop1EW <- 
+      #   estim_AV_seq_m1_m2(Yobs,
+      #                      modes,
+      #                      pi_mat,
+      #                      p1, # True value of p1
+      #                      estimp2,
+      #                      estimsd1,
+      #                      estimsd2,
+      #                      estimcov12,
+      #                      phi = p1,
+      #                      eqPotOut,
+      #                      correcEW1 = TRUE,
+      #                      correcEW2 = TRUE,
+      #                      I,
+      #                      Z)
     }
     else
       apprVarPhiEW <- apprVarPhiSizeEW <- apprVarNop1EW <- NA_real_
@@ -1685,7 +1718,7 @@ simulation_tphi <- function(Z,
 ## Simulation
 
 ```{r}
-Msim <- 2000L
+Msim <- 10L
 ```
 
 The different lines of the grid have the same seed. It is useful to run in different orders the evaluations and because the results from different parameters are never mixed there is no independency issue.
@@ -1742,7 +1775,7 @@ for (k in seq_len(nrow(parameters)))
                     strata = strata,
                     rho = 1.0,
                     seed = NULL,
-                    nCores = 40L,
+                    nCores = 0L,
                     calcVariance = calcVariance,
                     Y = Y)
   }
