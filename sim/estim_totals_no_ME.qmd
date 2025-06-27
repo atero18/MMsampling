@@ -1158,7 +1158,10 @@ simulation_tphi <- function(Z,
   
   else if (samplingDesign == "STSRS")
   {
-    pi_mat <- matrix(0.0, nrow = N, ncol = N)
+    
+    pi <- n[strata] / table(strata)
+    pi_mat <- outer(pi, pi)
+    
     for (stratum in unique(strata))
     {
       nStratum <- n[stratum]
