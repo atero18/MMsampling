@@ -391,20 +391,18 @@ rm(f, pCov, pi, pi_mat)
 #' (symmetric numeric matrix of order N).
 #' @param p1 vector containing the true or estimated probabilities p_1k.
 #' Can be equal to NA for the non-respondents or the units that didn't answer 
-#' by m1 is `m1Only` = TRUE (numeric vector of size N).
+#' by m1 if `m1Only` = TRUE (numeric vector of size N).
 #' @param p2 vector containing the true or estimated probabilities p_2k.
 #' Used if `m1Only` = FALSE. Can be equal to NA for the non-respondents 
-#' or the units that didn't answer by m2 is `m2Only` = TRUE (numeric vector of size N).
-#' @param sd1 true or estimated value (from a consistent estimator if possible)
-#' of the standard deviation of the m1 potential outcomes.
+#' or the units that didn't answer by m2 if `m2Only` = TRUE (numeric vector of size N).
+#' @param sd1 true or estimated value of the standard deviation of the m1 potential outcomes.
 #' Used when `m2Only` = FALSE and `phi` != 0 (positive scalar).
-#' @param sd2 true or estimated value (from a consistent estimator if possible)
-#' of the standard deviation of the m1 potential outcomes. 
-#' Used when `m1Only` = FALSE and `phi` != 1 (positive scalar).
+#' @param sd2 true or estimated value of the standard deviation of the
+#' m2 potential outcomes.  Used when `m1Only` = FALSE and `phi` != 1 
+#' (positive scalar).
 #' @param cov12 the true or estimated covariance between the m1 and m2
-#' potential outcomes (from a consistent estimator if possible).
-#' Default to `sd1` * `sd2` (i.e. Y1 and Y2 are conditionally col linear)
-#' (scalar).
+#' potential outcomes. Default to `sd1` * `sd2` ; i.e. Y1 and Y2 are 
+#' conditionally collinear (scalar).
 #' @param phi vector containing weights for the total. Must be known on the
 #' set of respondents (numeric vector of [0,1]^N).
 #' @param eqPotOut TRUE if we consider that y_1k = y_2k on the population
@@ -416,7 +414,7 @@ rm(f, pCov, pi, pi_mat)
 #' @param I vector containing the indicators I_k equal to TRUE if unit k
 #' has been selected. Used only if `correcEW1` or `correcEW2` is true
 #' (logical vector of size N).
-#' @param Z design matrix. Used only when `correcEW1` or `correcEW1` are TRUE
+#' @param Z design matrix. Used only when `correcEW1` or `correcEW2` is TRUE
 #' (numeric matrix with N rows and q columns).
 #' @param m1Only TRUE if we estimate the variance (resp. approximate variance)
 #' of t_{e1} (resp. t_{pq1}) and only with the m1 respondents (boolean).
@@ -865,6 +863,33 @@ estim_AV_seq_a <- function(Yobs,
 ```
 
 ```{r}
+#' Estimation of the variance of t_0s,e and the approximate variance 
+#' of t_0s when Y1 = Y2
+#' 
+#' 
+#' HOMOSCEDASTICITY, INDEPENDENCE
+#' @param Yobs vector of the observed outcomes. For the non-respondents
+#' the value is not considered and therefore can be equal to NA
+#' (numeric vector of size N the size of the population).
+#' @param modes vector of the selected mode of each unit.
+#' The first mode of the protocol is defined as "m1" and the second as "m2"
+#' (character vector or factor of size N).
+#' @param pi_mat matrix containing the second order inclusion probabilities
+#' pi_kl. The values must be known on Sr^2 (except if `m2Only` = TRUE) and
+#' Smr^2 (except if `m1Only` = TRUE) and can be equal to NA otherwise
+#' (symmetric numeric matrix of order N).
+#' @param p2 vector containing the true or estimated probabilities p_2k.
+#' Can be equal to NA for the units that didn't answer by m2
+#' (numeric vector of size N).
+#' @param sd true or estimated value of the standard deviation of 
+#' the potential outcomes (positive scalar).
+#' @param correcEW2 TRUE if we must apply a correction due to the
+#' use of estimation of `p2` (boolean).
+#' @param I vector containing the indicators I_k equal to TRUE if unit k
+#' has been selected. Used only if `correcEW2` is true 
+#' (logical vector of size N).
+#' @param Z design matrix. Used only when `correcEW2` is TRUE
+#' (numeric matrix with N rows and q columns).
 estim_AV_as_eq_no_p1 <- function(Yobs,
                                  modes,
                                  pi_mat,
@@ -872,7 +897,9 @@ estim_AV_as_eq_no_p1 <- function(Yobs,
                                  sd = NULL,
                                  correcEW2 = TRUE,
                                  I,
-                                 Z = matrix(1.0, nrow = length(Yobs), ncol = 1L))
+                                 Z = matrix(1.0,
+                                            nrow = length(Yobs), 
+                                            ncol = 1L))
 {
   N <- length(pi)
   
