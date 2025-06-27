@@ -45,7 +45,7 @@ Collate:
     'arguments.R'
     'estim_measure_effect.R'
     'estim_selection_prob.R'
-    'estim_tot_multimode.R'
+    'estim_tot_sequential.R'
     'imputation.R'
     'multimode.R'
     'probability.R'
