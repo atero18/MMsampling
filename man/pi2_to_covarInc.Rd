@@ -8,7 +8,7 @@ second order inclusion probabilities.}
 pi2_to_covarInc(pi_mat)
 }
 \arguments{
-\item{pi_mat}{matrix containing the second order inclusion
+\item{pi_mat}{matrix containing the second-order inclusion
 probabilities pi_kl (symmetric numeric matrix of order N).}
 }
 \value{

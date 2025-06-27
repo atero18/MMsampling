@@ -49,4 +49,4 @@ Collate:
     'probability.R'
     'test_measure_effect.R'
     'variance_pot_outcomes.R'
-    'variance_tot_seq.R'
+    'variance_tot_estim_seq.R'

@@ -44,7 +44,7 @@ cor2cov <- function(cor, sigmas)
 #' Calculation of the inclusion covariance matrix using the
 #' second order inclusion probabilities.
 #'
-#' @param pi_mat matrix containing the second order inclusion
+#' @param pi_mat matrix containing the second-order inclusion
 #' probabilities pi_kl (symmetric numeric matrix of order N).
 #' @return the corresponding covariance matrix
 #' (symmetric numeric matrix of order N).

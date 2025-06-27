@@ -385,7 +385,7 @@ rm(f, pCov, pi, pi_mat)
 #' @param modes vector of the selected mode of each unit.
 #' The first mode of the protocol is defined as "m1" and the second as "m2"
 #' (character vector or factor of size N).
-#' @param pi_mat matrix containing the second order inclusion probabilities
+#' @param pi_mat matrix containing the second-order inclusion probabilities
 #' pi_kl. The values must be known on Sr^2 (except if `m2Only` = TRUE) and
 #' Smr^2 (except if `m1Only` = TRUE) and can be equal to NA otherwise
 #' (symmetric numeric matrix of order N).
@@ -765,7 +765,7 @@ estim_AV_seq_m1_m2 <- function(Yobs,
 #' the value is not considered and therefore can be equal to NA
 #' (numeric vector of size N the size of the population).
 #' @param modes 
-#' @param pi_mat matrix containing the second order inclusion probabilities
+#' @param pi_mat matrix containing the second-order inclusion probabilities
 #' pi_kl. The values must be known on Sr^2 and can be equal to NA otherwise
 #' (symmetric numeric matrix of order N).
 #' @param p1 vector containing the true or estimated probabilities p_1k.
@@ -874,7 +874,7 @@ estim_AV_seq_a <- function(Yobs,
 #' @param modes vector of the selected mode of each unit.
 #' The first mode of the protocol is defined as "m1" and the second as "m2"
 #' (character vector or factor of size N).
-#' @param pi_mat matrix containing the second order inclusion probabilities
+#' @param pi_mat matrix containing the second-order inclusion probabilities
 #' pi_kl. The values must be known on Sr^2 (except if `m2Only` = TRUE) and
 #' Smr^2 (except if `m1Only` = TRUE) and can be equal to NA otherwise
 #' (symmetric numeric matrix of order N).
@@ -1537,14 +1537,14 @@ simulation_tphi <- function(Z,
     }
     
       # With true probabilities
-    totPhiTW <- estim_tot_m1_m2(Yobs, modes, pi, p1, p2, phi)
+    totPhiTW <- estim_tot_phi_y(Yobs, modes, pi, p1, p2, phi)
     # Case phi = #S_r. / #S_a
     phiSize <- rep(sum(maskSr) / (sum(maskSr) + sum(maskSmr)), N)
-    totPhiSizeTW <- estim_tot_m1_m2(Yobs, modes, pi, p1, p2, phiSize)
+    totPhiSizeTW <- estim_tot_phi_y(Yobs, modes, pi, p1, p2, phiSize)
     # Case phi = p1, which gives the estimator 
     # t^ = \sum_{k \in \Sr} y_{1k} / pi_k 
     #  + \sum_{k \in \Sr} y_{2k} / (pi_k p_2k)
-    totNop1TW <- estim_tot_as_eq_no_p1(Yobs, modes, pi, p2)
+    totNop1TW <- estim_tot_0_no_p1(Yobs, modes, pi, p2)
     
     if (calcVariance)
     {
@@ -1601,10 +1601,10 @@ simulation_tphi <- function(Z,
       apprVarPhiTW <- apprVarPhiSizeTW <- apprVarNop1TW <- NA_real_
     
       # With estimated probabilities
-    totPhiEW <- estim_tot_m1_m2(Yobs, modes, pi, estimp1, estimp2, phi)
-    totPhiSizeEW <- estim_tot_m1_m2(Yobs, modes, pi, estimp1, estimp2, phiSize)
+    totPhiEW <- estim_tot_phi_y(Yobs, modes, pi, estimp1, estimp2, phi)
+    totPhiSizeEW <- estim_tot_phi_y(Yobs, modes, pi, estimp1, estimp2, phiSize)
     # For phi = p1, we do not estimate the probabilities p1k
-    totNop1EW <- estim_tot_as_eq_no_p1(Yobs, modes, pi, estimp2)
+    totNop1EW <- estim_tot_0_no_p1(Yobs, modes, pi, estimp2)
     if (calcVariance)
     {
       apprVarPhiEW <- 
