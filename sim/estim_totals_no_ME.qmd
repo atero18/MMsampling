@@ -425,6 +425,8 @@ rm(f, pCov, pi, pi_mat)
 #' only when `m1Only` and `m2Only` are FALSE (scalar in [0,1]).
 #' @param weightSrEstVq1 similar to `weightSrEstVp` but for the m1 selection
 #' variability (scalar in [0,1]).
+#' @param covarp covariance matrix of the sampling design. If equal to `NULL`,
+#' it is calculated with `pi_mat` (symmetric numeric matrix of order N).
 #' @param ... arguments for the function `MatchIt::matchit`.
 estim_AV_seq_m1_m2 <- function(Yobs,
                                modes,
@@ -444,6 +446,7 @@ estim_AV_seq_m1_m2 <- function(Yobs,
                                m2Only = FALSE,
                                weightSrEstVp = 0.5,
                                weightSrEstVq1 = weightSrEstVp,
+                               covarp = NULL,
                                ...)
 {
   
@@ -506,7 +509,11 @@ estim_AV_seq_m1_m2 <- function(Yobs,
     p1Sr <- p1[maskSr]
     
     piSr_mat <- pi_mat[maskSr, maskSr, drop = FALSE]
-    covarpSr <- pi2_to_covarInc(piSr_mat)
+    
+    if (is.null(covarp))
+      covarpSr <- pi2_to_covarInc(piSr_mat)
+    else
+      covarpSr <- covarp[maskSr, maskSr, drop = FALSE]
   }
   else
     sd1 <- 0.0
@@ -526,7 +533,11 @@ estim_AV_seq_m1_m2 <- function(Yobs,
     p2Sa <- p2[maskSa]
     
     piSmr_mat <- pi_mat[maskSmr, maskSmr, drop = FALSE]
-    covarpSmr <- pi2_to_covarInc(piSmr_mat)
+    
+    if (is.null(covarp))
+      covarpSmr <- pi2_to_covarInc(piSmr_mat)
+    else
+      covarpSmr <- covarp[maskSmr, maskSmr, drop = FALSE]
   }
   else
   {
@@ -1263,11 +1274,13 @@ simulation_tphi <- function(Z,
   {
     pi <- rep(n / N, N)
     pi_mat <- piMat_SRS(n, N)
+    covarp <- pi2_to_covarInc(pi_mat)
   }
   
   else if (samplingDesign == "STSRS")
   {
     pi_mat <- piMat_STSRS(n, strata)
+    covarp <- pi2_to_covarInc(pi_mat)
     pi <- diag(pi_mat)
   }
   
