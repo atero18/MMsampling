@@ -1872,15 +1872,15 @@ for (chunk in seq_len(10000 / 500))
   
   seedEndChunk <- .Random.seed
   aws.s3::s3write_using(
-    resSimulation,
-    FUN = seedEndChunk,
-    object = glue("2025_06_30_{Msim}_seed_end_{chunk}.rds"),
+    seedEndChunk,
+    FUN = write,
+    object = glue("2025_06_30_{Msim}_seed_end_{chunk}.txt"),
     bucket = "ttassin/multimode/article_no_ME",
     opts = list("region" = "")
   )
 }
 
-rm(pb, resTempWithVar, resTempWithoutVar, n, Y, seed)
+rm(pb, resTempWithVar, resTempWithoutVar, n, Y, seedEndChunk)
 
 resSimulation <-
   resSimulation %>%
