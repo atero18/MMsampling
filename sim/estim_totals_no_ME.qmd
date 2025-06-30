@@ -425,8 +425,6 @@ rm(f, pCov, pi, pi_mat)
 #' only when `m1Only` and `m2Only` are FALSE (scalar in [0,1]).
 #' @param weightSrEstVq1 similar to `weightSrEstVp` but for the m1 selection
 #' variability (scalar in [0,1]).
-#' @param covarp covariance matrix of the sampling design. If equal to `NULL`,
-#' it is calculated with `pi_mat` (symmetric numeric matrix of order N).
 #' @param ... arguments for the function `MatchIt::matchit`.
 estim_AV_seq_m1_m2 <- function(Yobs,
                                modes,
@@ -803,6 +801,7 @@ estim_AV_seq_m1 <- function(Yobs, modes,
                             I,
                             Z = matrix(1.0, 
                                        nrow = length(Yobs), ncol = 1L),
+                            covarp = NULL,
                             ...)
 {
   estim_AV_seq_m1_m2(Yobs, modes, 
@@ -818,6 +817,7 @@ estim_AV_seq_m1 <- function(Yobs, modes,
                      I,
                      Z,
                      m1Only = TRUE,
+                     covarp = covarp,
                      ...)
 }
 ```
@@ -831,6 +831,7 @@ estim_AV_seq_m2 <- function(Yobs, modes,
                             I,
                             Z = matrix(1.0, 
                                        nrow = length(Yobs), ncol = 1L),
+                            covarp = NULL,
                             ...)
 {
   estim_AV_seq_m1_m2(Yobs, modes, 
@@ -846,6 +847,7 @@ estim_AV_seq_m2 <- function(Yobs, modes,
                      I,
                      Z,
                      m2Only = TRUE,
+                     covarp = covarp,
                      ...)
 }
 ```
@@ -860,6 +862,7 @@ estim_AV_seq_a <- function(Yobs,
                            correcEW = TRUE,
                            I,
                            Z = matrix(1.0, nrow = length(Yobs), ncol = 1L),
+                           covarp = NULL,
                            ...)
 {
   responses[responses == "r"] <- "m1"
@@ -869,6 +872,7 @@ estim_AV_seq_a <- function(Yobs,
                   correcEW,
                   I,
                   Z,
+                  covarp = covarp,
                   ...)
 }
 ```
@@ -910,7 +914,8 @@ estim_AV_as_eq_no_p1 <- function(Yobs,
                                  I,
                                  Z = matrix(1.0,
                                             nrow = length(Yobs), 
-                                            ncol = 1L))
+                                            ncol = 1L),
+                                 covarp = NULL)
 {
   N <- length(pi)
   
@@ -920,13 +925,24 @@ estim_AV_as_eq_no_p1 <- function(Yobs,
   # Sampling design variability (p, S)
   # There is no correction needed for probabilities estimation
   piSr_mat <- pi_mat[maskSr, maskSr, drop = FALSE]
-  covarpSr <- pi2_to_covarInc(piSr_mat)
+  
   weightedYSr <- Yobs[maskSr] / diag(piSr_mat)
   
   piSmr_mat <- pi_mat[maskSmr, maskSmr, drop = FALSE]
   piSmr <- diag(piSmr_mat)
-  covarpSmr <- pi2_to_covarInc(piSmr_mat)
+  
   weightedYSmr <- Yobs[maskSmr] / (piSmr * p2[maskSmr])
+  
+  if (is.null(covarp))
+  {
+    covarpSr <- pi2_to_covarInc(piSr_mat)
+    covarpSmr <- pi2_to_covarInc(piSmr_mat)
+  }
+  else
+  {
+    covarpSr <- covarp[maskSr, maskSr, drop = FALSE]
+    covarpSmr <- covarp[maskSmr, maskSmr, drop = FALSE]
+  }
   
   p2Smr <- p2[maskSmr]
   
@@ -1391,7 +1407,8 @@ simulation_tphi <- function(Z,
                         pi_mat,
                         p1,
                         estimsd1,
-                        correcEW1 = FALSE)
+                        correcEW1 = FALSE,
+                        covarp = covarp)
     }
     else
       apprVar1TW <- NA_real_
@@ -1412,7 +1429,8 @@ simulation_tphi <- function(Z,
                         estimsd1,
                         correcEW1 = TRUE,
                         I,
-                        Z)
+                        Z,
+                        covarp = covarp)
     }
     else
       apprVar1EW <- NA_real_
@@ -1440,7 +1458,8 @@ simulation_tphi <- function(Z,
                         p2,
                         estimsd2,
                         correcEW1 = FALSE,
-                        correcEW2 = FALSE)
+                        correcEW2 = FALSE,
+                        covarp = covarp)
     }
     else
       apprVar2TW <- NA_real_
@@ -1462,7 +1481,8 @@ simulation_tphi <- function(Z,
                         correcEW1 = TRUE,
                         correcEW2 = TRUE,
                         I,
-                        Z)
+                        Z,
+                        covarp = covarp)
     }
     else
       apprVar2EW <- NA_real_
@@ -1503,7 +1523,8 @@ simulation_tphi <- function(Z,
                        pi_mat,
                        pa,
                        estimsd,
-                       correcEW = FALSE)
+                       correcEW = FALSE,
+                       covarp = covarp)
     }
     else
       apprVaraTW <- NA_real_
@@ -1532,7 +1553,8 @@ simulation_tphi <- function(Z,
                        estimsd,
                        correcEW = TRUE,
                        I,
-                       Z)
+                       Z,
+                       covarp = covarp)
     }
     else
       apprVaraEW <- NA_real_
@@ -1573,7 +1595,8 @@ simulation_tphi <- function(Z,
                            phi,
                            eqPotOut,
                            correcEW1 = FALSE,
-                           correcEW2 = FALSE)
+                           correcEW2 = FALSE,
+                           covarp = covarp)
       
       apprVarPhiSizeTW <- 
         estim_AV_seq_m1_m2(Yobs,
@@ -1587,7 +1610,8 @@ simulation_tphi <- function(Z,
                            phiSize,
                            eqPotOut,
                            correcEW1 = FALSE,
-                           correcEW2 = FALSE)
+                           correcEW2 = FALSE,
+                           covarp = covarp)
       
       apprVarNop1TW <- 
         estim_AV_as_eq_no_p1(Yobs,
@@ -1595,7 +1619,8 @@ simulation_tphi <- function(Z,
                              pi_mat,
                              p2,
                              sd1, # Variance estimated with sd1 only
-                             correcEW2 = FALSE)
+                             correcEW2 = FALSE,
+                             covarp = covarp)
       # apprVarNop1TW <- 
       #   estim_AV_seq_m1_m2(Yobs,
       #                      modes,
@@ -1758,7 +1783,7 @@ simulation_tphi <- function(Z,
 ## Simulation
 
 ```{r}
-Msim <- 10L
+Msim <- 100L
 ```
 
 The different lines of the grid have the same seed. It is useful to run in different orders the evaluations and because the results from different parameters are never mixed there is no independency issue.
@@ -1772,8 +1797,9 @@ We define the case $\sigma_1 = \sigma_2$ and $\rho = 1$ as $Y_1 = Y_2$.
 resSimulation <- NULL
 set.seed(200L)
 
+nbChunks <- ceiling(10^4L / Msim)
 pb <- progress::progress_bar$new(format = "[:bar] :percent eta: :eta",
-                                 total = nrow(parameters),
+                                 total = nbChunks,
                                  clear = TRUE)
 
 pb$tick(0L)
@@ -1781,7 +1807,9 @@ pb$tick(0L)
 constPhi <- 0.5
 phi = rep(constPhi, N)
 
-for (k in seq_len(nrow(parameters)))
+for (chunk in seq_len(10000 / 500))
+{
+  for (k in seq_len(nrow(parameters)))
 {
   if (parameters[k, "R_Sp"] == 0.2)
     Y <- Y0.2
@@ -1830,10 +1858,29 @@ for (k in seq_len(nrow(parameters)))
     rbind(resSimulation)
     
 
+  
+}
   pb$tick()
+  
+  aws.s3::s3write_using(
+    resSimulation,
+    FUN = saveRDS,
+    object = glue("2025_06_30_{Msim}_1_to_{chunk}.rds"),
+    bucket = "ttassin/multimode/article_no_ME",
+    opts = list("region" = "")
+  )
+  
+  seedEndChunk <- .Random.seed
+  aws.s3::s3write_using(
+    resSimulation,
+    FUN = seedEndChunk,
+    object = glue("2025_06_30_{Msim}_seed_end_{chunk}.rds"),
+    bucket = "ttassin/multimode/article_no_ME",
+    opts = list("region" = "")
+  )
 }
 
-rm(pb, resTempWithVar, resTempWithoutVar, n, Y)
+rm(pb, resTempWithVar, resTempWithoutVar, n, Y, seed)
 
 resSimulation <-
   resSimulation %>%
@@ -1844,6 +1891,15 @@ resSimulation <-
                          estimand == "t_nop1y" ~ "p1",
                          TRUE ~ "/"),
          .after = "estimand")
+
+aws.s3::s3write_using(
+    resSimulation,
+    FUN = saveRDS,
+    object = glue("2025_06_30_10000.rds"),
+    bucket = "ttassin/multimode/article_no_ME",
+    opts = list("region" = "")
+  )
+
   # arrange(n, sd1, sd2, rho)
 ```
 
