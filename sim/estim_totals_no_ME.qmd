@@ -445,6 +445,7 @@ estim_AV_seq_m1_m2 <- function(Yobs,
                                weightSrEstVp = 0.5,
                                weightSrEstVq1 = weightSrEstVp,
                                covarp = NULL,
+                               n = 1L,
                                ...)
 {
   
@@ -508,10 +509,10 @@ estim_AV_seq_m1_m2 <- function(Yobs,
     
     piSr_mat <- pi_mat[maskSr, maskSr, drop = FALSE]
     
-    if (is.null(covarp))
-      covarpSr <- pi2_to_covarInc(piSr_mat)
-    else
-      covarpSr <- covarp[maskSr, maskSr, drop = FALSE]
+    # if (is.null(covarp))
+    #   covarpSr <- pi2_to_covarInc(piSr_mat)
+    # else
+    #   covarpSr <- covarp[maskSr, maskSr, drop = FALSE]
   }
   else
     sd1 <- 0.0
@@ -530,12 +531,12 @@ estim_AV_seq_m1_m2 <- function(Yobs,
     p2Smr <- p2[maskSmr]
     p2Sa <- p2[maskSa]
     
-    piSmr_mat <- pi_mat[maskSmr, maskSmr, drop = FALSE]
+    # piSmr_mat <- pi_mat[maskSmr, maskSmr, drop = FALSE]
     
-    if (is.null(covarp))
-      covarpSmr <- pi2_to_covarInc(piSmr_mat)
-    else
-      covarpSmr <- covarp[maskSmr, maskSmr, drop = FALSE]
+    # if (is.null(covarp))
+    #   covarpSmr <- pi2_to_covarInc(piSmr_mat)
+    # else
+    #   covarpSmr <- covarp[maskSmr, maskSmr, drop = FALSE]
   }
   else
   {
@@ -547,23 +548,37 @@ estim_AV_seq_m1_m2 <- function(Yobs,
   # There is no correction needed for probabilities estimation
     # If we use only the m1 outcomes
     # (we do not weight by phi)
+  ## SRS CASE
+  pikl <- pi_mat[1L, 2L]
+  samplingFraction <- n / N
+  covpkl <- -samplingFraction * (1.0 - samplingFraction) / (N - 1L) 
   if (m1Only)
   {
     correctedY1Srp <- (piSr * p1Sr)^-1L * Y1Sr
+    # varpEst <-
+    #   t(correctedY1Srp) %*%
+    #   (covarpSr / piSr_mat) %*%
+    #   correctedY1Srp %>%
+    #   as.numeric()
+    # varpEst <- varpEst +
+    #   sum((1.0 - piSr) * piSr^-2L * p1Sr^-1L * (1.0 - p1Sr^-1L) *
+    #         Y1Sr^2L)
+    
+    # SRS
     varpEst <-
-      t(correctedY1Srp) %*%
-      (covarpSr / piSr_mat) %*%
-      correctedY1Srp %>%
-      as.numeric()
+      (covpkl / pikl) * 
+      correctedY1Srp %*%
+      t(correctedY1Srp) %>%
+      sum()
     varpEst <- varpEst +
-      sum((1.0 - piSr) * piSr^-2L * p1Sr^-1L * (1.0 - p1Sr^-1L) *
+      sum(((1.0 - f) / (f^2L * p1Sr) - covpkl / (f^3L * p1Sr^2L)) *
             Y1Sr^2L)
     
     # Second order inclusion and covariance matrices are
     # directly deleted due to their important size (#Sr^2).
     # Due to the conditional independence within the selection mechanisms
     # they are not used after.
-    rm(piSr_mat, covarpSr)
+    # rm(piSr_mat, covarpSr)
   }
     # If we use only the m2 outcomes
     # (we do not weight by 1 - phi)
@@ -571,17 +586,27 @@ estim_AV_seq_m1_m2 <- function(Yobs,
   {
     Y2Smr <- Yobs[maskSmr]
     correctedY2Smrp <- (piSmr * p1barSmr * p2Smr)^-1L * Y2Smr
+    # varpEst <-
+    #   t(correctedY2Smrp) %*%
+    #   (covarpSmr / piSmr_mat) %*%
+    #   correctedY2Smrp %>%
+    #   as.numeric()
+    # varpEst <- varpEst +
+    #   sum((1.0 - piSmr) * piSmr^-2L * (p1barSmr * p2Smr)^-1L *
+    #         (1.0 - (p1barSmr * p2Smr)^-1L) * Y2Smr^2L)
+    
+    # SRS
     varpEst <-
-      t(correctedY2Smrp) %*%
-      (covarpSmr / piSmr_mat) %*%
-      correctedY2Smrp %>%
-      as.numeric()
+      (covpkl / pikl) *
+      correctedY2Smrp %*%
+      t(correctedY2Smrp) %>%
+      sum()
     varpEst <- varpEst +
       sum((1.0 - piSmr) * piSmr^-2L * (p1barSmr * p2Smr)^-1L *
             (1.0 - (p1barSmr * p2Smr)^-1L) * Y2Smr^2L)
     
     # Unused matrices of size #Smr^2 deleted
-    rm(piSmr_mat, covarpSmr)
+    # rm(piSmr_mat, covarpSmr)
   }
     # If we use the m1 and m2 outcomes
     # We will need here have to estimate the counterfactuals
@@ -604,8 +629,8 @@ estim_AV_seq_m1_m2 <- function(Yobs,
     phiY1SaEst <- phi[maskSa] * Y1Est
     phibarY2SaEst <- phibar[maskSa] * Y2Est
     
-    piSa_mat <- pi_mat[maskSa, maskSa, drop = FALSE]
-    covarpSa <- pi2_to_covarInc(piSa_mat)
+    # piSa_mat <- pi_mat[maskSa, maskSa, drop = FALSE]
+    # covarpSa <- pi2_to_covarInc(piSa_mat)
     
     
     # The variance estimator is the weighted average of 
@@ -615,11 +640,21 @@ estim_AV_seq_m1_m2 <- function(Yobs,
     correctedPhiYSrp <- 
       (piSr * p1Sr)^-1L * PhiYSr
     
+    # varpSrEst <-
+    #   t(correctedPhiYSrp) %*%
+    #   (covarpSr / piSr_mat) %*%
+    #   correctedPhiYSrp %>%
+    #   as.numeric()
+    # varpSrEst <- varpSrEst + 
+    #   sum((1.0 - piSr) * piSr^-2L * p1Sr^-1L * (1.0 - p1Sr^-1L) *
+    #         PhiYSr^2L)
+    
+    # SRS
     varpSrEst <-
-      t(correctedPhiYSrp) %*%
-      (covarpSr / piSr_mat) %*%
-      correctedPhiYSrp %>%
-      as.numeric()
+      (covpkl / pikl) * 
+      correctedPhiYSrp %*%
+      t(correctedPhiYSrp) %>%
+      sum()
     varpSrEst <- varpSrEst + 
       sum((1.0 - piSr) * piSr^-2L * p1Sr^-1L * (1.0 - p1Sr^-1L) *
             PhiYSr^2L)
@@ -629,10 +664,20 @@ estim_AV_seq_m1_m2 <- function(Yobs,
     correctedPhiYSmrp <- 
       (piSmr * p1barSmr * p2Smr)^-1L * PhiYSmr
     
+    # varpSmrEst <-
+    #   t(correctedPhiYSmrp) %*%
+    #   (covarpSmr / piSmr_mat) %*%
+    #   correctedPhiYSmrp %>%
+    #   as.numeric()
+    # varpSmrEst <- varpSmrEst +
+    #   sum((1.0 - piSmr) * piSmr^-2L * (p1barSmr * p2Smr)^-1L *
+    #         (1.0 - (p1barSmr * p2Smr)^-1L) * PhiYSmr^2L)
+    
+    # SRS
     varpSmrEst <-
-      t(correctedPhiYSmrp) %*%
-      (covarpSmr / piSmr_mat) %*%
-      correctedPhiYSmrp %>%
+      (covpkl / pikl)
+      correctedPhiYSmrp %*%
+      t(correctedPhiYSmrp) %>%
       as.numeric()
     varpSmrEst <- varpSmrEst +
       sum((1.0 - piSmr) * piSmr^-2L * (p1barSmr * p2Smr)^-1L *
@@ -640,7 +685,7 @@ estim_AV_seq_m1_m2 <- function(Yobs,
     
     varpEst <- weightSrEstVp * varpSrEst + (1.0 - weightSrEstVp) * varpSmrEst
     
-    rm(piSr_mat, covarpSr, piSmr_mat, covarpSmr)
+    # rm(piSr_mat, covarpSr, piSmr_mat, covarpSmr)
   }
   
   
@@ -802,6 +847,7 @@ estim_AV_seq_m1 <- function(Yobs, modes,
                             Z = matrix(1.0, 
                                        nrow = length(Yobs), ncol = 1L),
                             covarp = NULL,
+                            n = 1L,
                             ...)
 {
   estim_AV_seq_m1_m2(Yobs, modes, 
@@ -818,6 +864,7 @@ estim_AV_seq_m1 <- function(Yobs, modes,
                      Z,
                      m1Only = TRUE,
                      covarp = covarp,
+                     n = n,
                      ...)
 }
 ```
@@ -832,6 +879,7 @@ estim_AV_seq_m2 <- function(Yobs, modes,
                             Z = matrix(1.0, 
                                        nrow = length(Yobs), ncol = 1L),
                             covarp = NULL,
+                            n = 1L,
                             ...)
 {
   estim_AV_seq_m1_m2(Yobs, modes, 
@@ -848,6 +896,7 @@ estim_AV_seq_m2 <- function(Yobs, modes,
                      Z,
                      m2Only = TRUE,
                      covarp = covarp,
+                     n = n,
                      ...)
 }
 ```
@@ -863,6 +912,7 @@ estim_AV_seq_a <- function(Yobs,
                            I,
                            Z = matrix(1.0, nrow = length(Yobs), ncol = 1L),
                            covarp = NULL,
+                           n = 1L,
                            ...)
 {
   responses[responses == "r"] <- "m1"
@@ -873,6 +923,7 @@ estim_AV_seq_a <- function(Yobs,
                   I,
                   Z,
                   covarp = covarp,
+                  n = n,
                   ...)
 }
 ```
@@ -1194,7 +1245,7 @@ piMat_STSRS <- memoise::memoise(piMat_STSRS)
 ## Grid of parameters
 
 ```{r}
-R_Sp <- function(Z, beta, epsilon)
+R_Pe <- function(Z, beta, epsilon)
 {
   Y <- Z %*% beta + epsilon
   1.0 - sum(epsilon^2L) / sum((Y - mean(Y))^2L)
@@ -1208,16 +1259,16 @@ set.seed(123L)
 epsilon0.2 <- rnorm(N, mean = 0.0, sd = 6.43)
 Y0.2 <- Z %*% beta + epsilon0.2
 Y0.2 <- Y0.2 - (sum(Y0.2) - N) / N
-R_Sp(Z, beta, epsilon0.2)
+R_Pe(Z, beta, epsilon0.2)
 epsilon0.5 <- rnorm(N, mean = 0.0, sd = 3.27)
 Y0.5 <- Z %*% beta + epsilon0.5
 Y0.5 <- Y0.5 - (sum(Y0.5) - N) / N
-R_Sp(Z, beta, epsilon0.5)
+R_Pe(Z, beta, epsilon0.5)
 rm(epsilon0.2, epsilon0.5)
 ```
 
 ```{r}
-R_Sp(Z, beta, rnorm(N, mean = 0.0, sd = 5.0))
+R_Pe(Z, beta, rnorm(N, mean = 0.0, sd = 5.0))
 ```
 
 ```{r}
@@ -1226,7 +1277,7 @@ R_Sp_vec <- c(0.2, 0.5)
 ratio_n_vec <- c(0.16, 0.25, 0.4)
 n_vec <- as.integer(ratio_n_vec * N)
 
-parameters <- tidyr::expand_grid(R_Sp = R_Sp_vec, 
+parameters <- tidyr::expand_grid(R_Pe = R_Sp_vec, 
                                  samplingDesign = samplingDesign_vec, 
                                  n = n_vec)
 
@@ -1290,13 +1341,13 @@ simulation_tphi <- function(Z,
   {
     pi <- rep(n / N, N)
     pi_mat <- piMat_SRS(n, N)
-    covarp <- pi2_to_covarInc(pi_mat)
+    # covarp <- pi2_to_covarInc(pi_mat)
   }
   
   else if (samplingDesign == "STSRS")
   {
     pi_mat <- piMat_STSRS(n, strata)
-    covarp <- pi2_to_covarInc(pi_mat)
+    # covarp <- pi2_to_covarInc(pi_mat)
     pi <- diag(pi_mat)
   }
   
@@ -1408,7 +1459,8 @@ simulation_tphi <- function(Z,
                         p1,
                         estimsd1,
                         correcEW1 = FALSE,
-                        covarp = covarp)
+                        covarp = NULL,
+                        n = n)
     }
     else
       apprVar1TW <- NA_real_
@@ -1430,7 +1482,8 @@ simulation_tphi <- function(Z,
                         correcEW1 = TRUE,
                         I,
                         Z,
-                        covarp = covarp)
+                        covarp = NULL,
+                        n = n)
     }
     else
       apprVar1EW <- NA_real_
@@ -1459,7 +1512,8 @@ simulation_tphi <- function(Z,
                         estimsd2,
                         correcEW1 = FALSE,
                         correcEW2 = FALSE,
-                        covarp = covarp)
+                        covarp = NULL,
+                        n = n)
     }
     else
       apprVar2TW <- NA_real_
@@ -1482,7 +1536,8 @@ simulation_tphi <- function(Z,
                         correcEW2 = TRUE,
                         I,
                         Z,
-                        covarp = covarp)
+                        covarp = NULL,
+                        n = n)
     }
     else
       apprVar2EW <- NA_real_
@@ -1524,7 +1579,8 @@ simulation_tphi <- function(Z,
                        pa,
                        estimsd,
                        correcEW = FALSE,
-                       covarp = covarp)
+                       covarp = NULL,
+                      n = n)
     }
     else
       apprVaraTW <- NA_real_
@@ -1554,7 +1610,8 @@ simulation_tphi <- function(Z,
                        correcEW = TRUE,
                        I,
                        Z,
-                       covarp = covarp)
+                       covarp = NULL,
+                       n = n)
     }
     else
       apprVaraEW <- NA_real_
@@ -1596,7 +1653,8 @@ simulation_tphi <- function(Z,
                            eqPotOut,
                            correcEW1 = FALSE,
                            correcEW2 = FALSE,
-                           covarp = covarp)
+                           covarp = NULL,
+                           n = n)
       
       apprVarPhiSizeTW <- 
         estim_AV_seq_m1_m2(Yobs,
@@ -1611,7 +1669,8 @@ simulation_tphi <- function(Z,
                            eqPotOut,
                            correcEW1 = FALSE,
                            correcEW2 = FALSE,
-                           covarp = covarp)
+                           covarp = NULL,
+                           n = n)
       
       apprVarNop1TW <- 
         estim_AV_as_eq_no_p1(Yobs,
@@ -1620,7 +1679,7 @@ simulation_tphi <- function(Z,
                              p2,
                              sd1, # Variance estimated with sd1 only
                              correcEW2 = FALSE,
-                             covarp = covarp)
+                             covarp = NULL)
       # apprVarNop1TW <- 
       #   estim_AV_seq_m1_m2(Yobs,
       #                      modes,
@@ -1659,7 +1718,9 @@ simulation_tphi <- function(Z,
                            correcEW1 = TRUE,
                            correcEW2 = TRUE,
                            I,
-                           Z)
+                           Z,
+                           covarp = NULL,
+                           n = n)
       
       apprVarPhiSizeEW <- 
         estim_AV_seq_m1_m2(Yobs,
@@ -1675,7 +1736,9 @@ simulation_tphi <- function(Z,
                            correcEW1 = TRUE,
                            correcEW2 = TRUE,
                            I,
-                           Z)
+                           Z,
+                           covarp = NULL,
+                           n = n)
       
       apprVarNop1EW <- 
         estim_AV_as_eq_no_p1(Yobs,
@@ -1685,7 +1748,8 @@ simulation_tphi <- function(Z,
                              sd1, # Variance estimated with sd1 only
                              correcEW2 = TRUE,
                              I,
-                             Z)
+                             Z,
+                             covarp = NULL)
       # apprVarNop1EW <- 
       #   estim_AV_seq_m1_m2(Yobs,
       #                      modes,
@@ -1704,7 +1768,6 @@ simulation_tphi <- function(Z,
     }
     else
       apprVarPhiEW <- apprVarPhiSizeEW <- apprVarNop1EW <- NA_real_
-    
     
     tibble(estimator = c("tot1TW", "tot1EW", 
                          "tot2TW", "tot2EW", 
@@ -1810,62 +1873,59 @@ phi = rep(constPhi, N)
 for (chunk in seq_len(10000 / 500))
 {
   for (k in seq_len(nrow(parameters)))
-{
-  if (parameters[k, "R_Sp"] == 0.2)
-    Y <- Y0.2
-  else if (parameters[k, "R_Sp"] == 0.5)
-    Y <- Y0.5
-  
-  if (parameters[k, "samplingDesign"] == "SRS")
-    n <- parameters[k, "n"]
-  else if (parameters[k, "samplingDesign"] == "STSRS")
   {
-    if (!parameters[k, "n"] %% nbStrata == 0L)
-      warning("Non-integer sample size n_h for STSRS. Ceiled.")
-  
-    n <- rep(ceiling(parameters[k, "n"] / nbStrata), nbStrata) %>% as.integer()
-  }
+    if (parameters[k, "R_Pe"] == 0.2)
+      Y <- Y0.2
+    else if (parameters[k, "R_Pe"] == 0.5)
+      Y <- Y0.5
     
-  
-  simFun <- function(calcVariance = TRUE)
-  {
-    simulation_tphi(M = Msim,
-                    Z = Z,
-                    samplingDesign = parameters[k, "samplingDesign"],
-                    alpha1 = alpha1,
-                    alpha2 = alpha2,
-                    alphaa = alphaa,
-                    beta = NULL,
-                    phi = phi,
-                    sd1 = 0.0,
-                    sd2 = 0.0,
-                    n = n,
-                    strata = strata,
-                    rho = 1.0,
-                    seed = NULL,
-                    nCores = 0L,
-                    calcVariance = calcVariance,
-                    Y = Y)
-  }
-  
-  resTempWithVar <- simFun(calcVariance = TRUE) %>% mutate(subset = 1L)
-  resTempWithoutVar <- simFun(calcVariance = FALSE) %>% mutate(subset = 2L)
-  
-  resSimulation <-
-    cbind(parameters[k, ], 
-          rbind(resTempWithVar, resTempWithoutVar), 
-          row.names = NULL) %>% 
-    rbind(resSimulation)
+    if (parameters[k, "samplingDesign"] == "SRS")
+      n <- parameters[k, "n"]
+    else if (parameters[k, "samplingDesign"] == "STSRS")
+    {
+      if (!parameters[k, "n"] %% nbStrata == 0L)
+        warning("Non-integer sample size n_h for STSRS. Ceiled.")
     
-
-  
-}
+      n <- rep(ceiling(parameters[k, "n"] / nbStrata), nbStrata) %>% as.integer()
+    }
+      
+    
+    simFun <- function(calcVariance = TRUE)
+    {
+      simulation_tphi(M = Msim,
+                      Z = Z,
+                      samplingDesign = parameters[k, "samplingDesign"],
+                      alpha1 = alpha1,
+                      alpha2 = alpha2,
+                      alphaa = alphaa,
+                      beta = NULL,
+                      phi = phi,
+                      sd1 = 0.0,
+                      sd2 = 0.0,
+                      n = n,
+                      strata = strata,
+                      rho = 1.0,
+                      seed = NULL,
+                      nCores = 40L,
+                      calcVariance = calcVariance,
+                      Y = Y)
+    }
+    
+    resTempWithVar <- simFun(calcVariance = TRUE) %>% mutate(subset = 1L)
+    resTempWithoutVar <- simFun(calcVariance = FALSE) %>% mutate(subset = 2L)
+    
+    resSimulation <-
+      cbind(parameters[k, ], 
+            rbind(resTempWithVar, resTempWithoutVar), 
+            row.names = NULL) %>% 
+      rbind(resSimulation)
+  }
   pb$tick()
   
   aws.s3::s3write_using(
     resSimulation,
     FUN = saveRDS,
-    object = glue("2025_06_30_{Msim}_1_to_{chunk}.rds"),
+    object = glue("2025_07_01_{Msim}_1_to_{chunk}.rds"),
     bucket = "ttassin/multimode/article_no_ME",
     opts = list("region" = "")
   )
@@ -1874,7 +1934,7 @@ for (chunk in seq_len(10000 / 500))
   aws.s3::s3write_using(
     seedEndChunk,
     FUN = write,
-    object = glue("2025_06_30_{Msim}_seed_end_{chunk}.txt"),
+    object = glue("2025_07_01_{Msim}_seed_end_{chunk}.txt"),
     bucket = "ttassin/multimode/article_no_ME",
     opts = list("region" = "")
   )
@@ -1895,7 +1955,7 @@ resSimulation <-
 aws.s3::s3write_using(
     resSimulation,
     FUN = saveRDS,
-    object = glue("2025_06_30_10000.rds"),
+    object = glue("2025_07_01_10000.rds"),
     bucket = "ttassin/multimode/article_no_ME",
     opts = list("region" = "")
   )
@@ -1912,7 +1972,7 @@ The first subset will be used for the estimations of the expectation of the tota
 ```{r}
 resSimulation %>% 
   filter(subset == 1L) %>% 
-  group_by(mechanism, R_Sp,
+  group_by(mechanism, R_Pe,
            samplingDesign, n,
            estimand, phi, sample, weights) %>% 
   summarise(M = n(),
@@ -1932,7 +1992,7 @@ Here we show average approximate variance and variance of different estimators, 
 temp <- resSimulation %>% 
   mutate(estimation = if_else(subset == 1L, estimation, NA_real_)) %>% 
   filter(weights == "estimated") %>% 
-  group_by(mechanism, R_Sp, samplingDesign, n,
+  group_by(mechanism, R_Pe, samplingDesign, n,
            estimand, phi, sample) %>% 
   summarise(M = n() / 2L,
             MC_AV = mean(apprVar, na.rm = TRUE),
@@ -1953,9 +2013,9 @@ Only for the sequential logistic model. Consider the estimators with true and es
 ```{r}
 resSimulation %>% 
   filter(subset == 2L, mechanism == "sequential_logistic") %>% 
-  group_by(R_Sp, samplingDesign, n, estimand, phi, weights) %>%
+  group_by(R_Pe, samplingDesign, n, estimand, phi, weights) %>%
   summarise(MC_var = var(estimation, na.rm = TRUE)) %>% 
-  group_by(R_Sp, samplingDesign, n) %>% 
+  group_by(R_Pe, samplingDesign, n) %>% 
   mutate(ratio_MC_var = max(MC_var) / min(MC_var)) %>% 
   slice_min(MC_var) %>% 
   arrange(estimand)
@@ -1968,9 +2028,9 @@ temp <- resSimulation %>%
   filter(subset == 2L, 
          mechanism == "sequential_logistic", 
          weights == "estimated") %>% 
-  group_by(R_Sp, samplingDesign, n, estimand, phi) %>%
+  group_by(R_Pe, samplingDesign, n, estimand, phi) %>%
   summarise(MC_var = var(estimation, na.rm = TRUE)) %>%
-  group_by(R_Sp, samplingDesign, n) %>% 
+  group_by(R_Pe, samplingDesign, n) %>% 
   arrange(MC_var, .by_group = TRUE) %>% 
   slice(c(1L, n())) %>% 
   ungroup()
