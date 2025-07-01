@@ -571,7 +571,8 @@ estim_AV_seq_m1_m2 <- function(Yobs,
       t(correctedY1Srp) %>%
       sum()
     varpEst <- varpEst +
-      sum(((1.0 - f) / (f^2L * p1Sr) - covpkl / (f^3L * p1Sr^2L)) *
+      sum(((1.0 - samplingFraction) / (samplingFraction^2L * p1Sr) - 
+             covpkl / (pikl * samplingFraction^2L * p1Sr^2L)) *
             Y1Sr^2L)
     
     # Second order inclusion and covariance matrices are
@@ -602,8 +603,10 @@ estim_AV_seq_m1_m2 <- function(Yobs,
       t(correctedY2Smrp) %>%
       sum()
     varpEst <- varpEst +
-      sum((1.0 - piSmr) * piSmr^-2L * (p1barSmr * p2Smr)^-1L *
-            (1.0 - (p1barSmr * p2Smr)^-1L) * Y2Smr^2L)
+      sum(((1.0 - samplingFraction) / 
+             (samplingFraction^2L * p1barSmr * p2Smr) -
+             covpkl / (samplingFraction^2L * pikl * p1barSmr^2L * p2Smr^2L)) *
+            Y2Smr^2L)
     
     # Unused matrices of size #Smr^2 deleted
     # rm(piSmr_mat, covarpSmr)
@@ -656,9 +659,10 @@ estim_AV_seq_m1_m2 <- function(Yobs,
       t(correctedPhiYSrp) %>%
       sum()
     varpSrEst <- varpSrEst + 
-      sum((1.0 - piSr) * piSr^-2L * p1Sr^-1L * (1.0 - p1Sr^-1L) *
+      sum(((1.0 - samplingFraction) / (samplingFraction^2L * p1Sr) - 
+             covpkl / (pikl * samplingFraction^2L * p1Sr^2L)) *
             PhiYSr^2L)
-    
+
       # Smr
     PhiYSmr <- phiY1SaEst[!maskm1Sa] + phibarY2SaEst[!maskm1Sa]
     correctedPhiYSmrp <- 
@@ -678,10 +682,12 @@ estim_AV_seq_m1_m2 <- function(Yobs,
       (covpkl / pikl)
       correctedPhiYSmrp %*%
       t(correctedPhiYSmrp) %>%
-      as.numeric()
+      sum()
     varpSmrEst <- varpSmrEst +
-      sum((1.0 - piSmr) * piSmr^-2L * (p1barSmr * p2Smr)^-1L *
-            (1.0 - (p1barSmr * p2Smr)^-1L) * PhiYSmr^2L)
+      sum(((1.0 - samplingFraction) / 
+             (samplingFraction^2L * p1barSmr * p2Smr) -
+             covpkl / (samplingFraction^2L * pikl * p1barSmr^2L * p2Smr^2L)) *
+            PhiYSmr^2L)
     
     varpEst <- weightSrEstVp * varpSrEst + (1.0 - weightSrEstVp) * varpSmrEst
     
@@ -975,31 +981,38 @@ estim_AV_as_eq_no_p1 <- function(Yobs,
   
   # Sampling design variability (p, S)
   # There is no correction needed for probabilities estimation
-  piSr_mat <- pi_mat[maskSr, maskSr, drop = FALSE]
+  pi <- diag(pi_mat)
+
+  weightedYSr <- Yobs[maskSr] / pi[maskSr]
+
+  weightedYSmr <- Yobs[maskSmr] / (pi[maskSmr] * p2[maskSmr])
   
-  weightedYSr <- Yobs[maskSr] / diag(piSr_mat)
+  # if (is.null(covarp))
+  # {
+  #   covarpSr <- pi2_to_covarInc(piSr_mat)
+  #   covarpSmr <- pi2_to_covarInc(piSmr_mat)
+  # }
+  # else
+  # {
+  #   covarpSr <- covarp[maskSr, maskSr, drop = FALSE]
+  #   covarpSmr <- covarp[maskSmr, maskSmr, drop = FALSE]
+  # }
   
-  piSmr_mat <- pi_mat[maskSmr, maskSmr, drop = FALSE]
-  piSmr <- diag(piSmr_mat)
-  
-  weightedYSmr <- Yobs[maskSmr] / (piSmr * p2[maskSmr])
-  
-  if (is.null(covarp))
-  {
-    covarpSr <- pi2_to_covarInc(piSr_mat)
-    covarpSmr <- pi2_to_covarInc(piSmr_mat)
-  }
-  else
-  {
-    covarpSr <- covarp[maskSr, maskSr, drop = FALSE]
-    covarpSmr <- covarp[maskSmr, maskSmr, drop = FALSE]
-  }
+  pikl <- pi_mat[1L, 2L]
+  samplingFraction <- n / N
+  covpkl <- -samplingFraction * (1.0 - samplingFraction) / (N - 1L) 
   
   p2Smr <- p2[maskSmr]
   
-  varpEst <- t(weightedYSr) %*% (covarpSr / piSr_mat) %*% weightedYSr + 
-    t(weightedYSmr) %*% (covarpSmr / piSmr_mat) %*% weightedYSmr +
-    sum((1.0 - piSmr) * weightedYSmr^2L * (p2Smr - 1.0))
+  # varpEst <- t(weightedYSr) %*% (covarpSr / piSr_mat) %*% weightedYSr + 
+  #   t(weightedYSmr) %*% (covarpSmr / piSmr_mat) %*% weightedYSmr +
+  #   sum((1.0 - piSmr) * weightedYSmr^2L * (p2Smr - 1.0))
+  
+  # SRS
+  varpEst <- (covpkl / pikl) * sum(weightedYSr %*% t(weightedYSr)) + 
+    (covpkl / pikl) * sum(weightedYSmr %*% t(weightedYSmr)) +
+    sum(((1.0 - samplingFraction) - (covpkl / pikl)) * weightedYSr^2L) +
+    sum(((1.0 - samplingFraction) * p2Smr - (covpkl / pikl)) * weightedYSmr^2L)
   
   # m2 selection variability (q2, R2)
   if (correcEW2)
@@ -1846,7 +1859,7 @@ simulation_tphi <- function(Z,
 ## Simulation
 
 ```{r}
-Msim <- 100L
+Msim <- 10L
 ```
 
 The different lines of the grid have the same seed. It is useful to run in different orders the evaluations and because the results from different parameters are never mixed there is no independency issue.
@@ -1906,7 +1919,7 @@ for (chunk in seq_len(10000 / 500))
                       strata = strata,
                       rho = 1.0,
                       seed = NULL,
-                      nCores = 40L,
+                      nCores = 0L,
                       calcVariance = calcVariance,
                       Y = Y)
     }
