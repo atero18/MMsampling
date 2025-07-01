@@ -1862,7 +1862,8 @@ simulation_tphi <- function(Z,
 ## Simulation
 
 ```{r}
-Msim <- 10L
+Mchunk <- 500L
+Mtotal <- 500L
 ```
 
 The different lines of the grid have the same seed. It is useful to run in different orders the evaluations and because the results from different parameters are never mixed there is no independency issue.
@@ -1876,7 +1877,7 @@ We define the case $\sigma_1 = \sigma_2$ and $\rho = 1$ as $Y_1 = Y_2$.
 resSimulation <- NULL
 set.seed(200L)
 
-nbChunks <- ceiling(10^4L / Msim)
+nbChunks <- ceiling(10^4L / Mchunk)
 pb <- progress::progress_bar$new(format = "[:bar] :percent eta: :eta",
                                  total = nbChunks,
                                  clear = TRUE)
@@ -1886,7 +1887,7 @@ pb$tick(0L)
 constPhi <- 0.5
 phi = rep(constPhi, N)
 
-for (chunk in seq_len(10000 / 500))
+for (chunk in seq_len(Mtotal / Mchunk))
 {
   for (k in seq_len(nrow(parameters)))
   {
@@ -1908,7 +1909,7 @@ for (chunk in seq_len(10000 / 500))
     
     simFun <- function(calcVariance = TRUE)
     {
-      simulation_tphi(M = Msim,
+      simulation_tphi(M = Mchunk,
                       Z = Z,
                       samplingDesign = parameters[k, "samplingDesign"],
                       alpha1 = alpha1,
@@ -1941,7 +1942,7 @@ for (chunk in seq_len(10000 / 500))
   aws.s3::s3write_using(
     resSimulation,
     FUN = saveRDS,
-    object = glue("2025_07_01_{Msim}_1_to_{chunk}.rds"),
+    object = glue("2025_07_01_{Mchunk}_1_to_{chunk}.rds"),
     bucket = "ttassin/multimode/article_no_ME",
     opts = list("region" = "")
   )
@@ -1950,7 +1951,7 @@ for (chunk in seq_len(10000 / 500))
   aws.s3::s3write_using(
     seedEndChunk,
     FUN = write,
-    object = glue("2025_07_01_{Msim}_seed_end_{chunk}.txt"),
+    object = glue("2025_07_01_{Mchunk}_seed_end_{chunk}.txt"),
     bucket = "ttassin/multimode/article_no_ME",
     opts = list("region" = "")
   )
