@@ -1877,7 +1877,7 @@ We define the case $\sigma_1 = \sigma_2$ and $\rho = 1$ as $Y_1 = Y_2$.
 resSimulation <- NULL
 set.seed(200L)
 
-nbChunks <- ceiling(10^4L / Mchunk)
+nbChunks <- ceiling(Mtotal / Mchunk)
 pb <- progress::progress_bar$new(format = "[:bar] :percent eta: :eta",
                                  total = nbChunks,
                                  clear = TRUE)
@@ -1923,7 +1923,7 @@ for (chunk in seq_len(Mtotal / Mchunk))
                       strata = strata,
                       rho = 1.0,
                       seed = NULL,
-                      nCores = 0L,
+                      nCores = 40L,
                       calcVariance = calcVariance,
                       Y = Y)
     }
@@ -2014,7 +2014,7 @@ temp <- resSimulation %>%
   summarise(M = n() / 2L,
             MC_AV = mean(apprVar, na.rm = TRUE),
             MC_var = var(estimation, na.rm = TRUE),
-            true_var = first(trueVar),) %>% 
+            true_var = first(trueVar)) %>% 
   mutate(MC_AV_by_var = MC_AV / MC_var, MC_sd = sqrt(MC_var)) %>% 
   ungroup()
 
