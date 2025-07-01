@@ -566,7 +566,8 @@ estim_AV_seq_m1_m2 <- function(Yobs,
     
     # SRS
     varpEst <-
-      (covpkl / pikl) * 
+      
+      (covpkl / pikl) * # sum(tcrossprod(correctedY1Srp))
       correctedY1Srp %*%
       t(correctedY1Srp) %>%
       sum()
@@ -598,7 +599,7 @@ estim_AV_seq_m1_m2 <- function(Yobs,
     
     # SRS
     varpEst <-
-      (covpkl / pikl) *
+      (covpkl / pikl) * # sum(tcrossprod(correctedY2Smrp))
       correctedY2Smrp %*%
       t(correctedY2Smrp) %>%
       sum()
@@ -654,7 +655,7 @@ estim_AV_seq_m1_m2 <- function(Yobs,
     
     # SRS
     varpSrEst <-
-      (covpkl / pikl) * 
+      (covpkl / pikl) * # sum(tcrossprod(correctedPhiYSrp))
       correctedPhiYSrp %*%
       t(correctedPhiYSrp) %>%
       sum()
@@ -679,7 +680,7 @@ estim_AV_seq_m1_m2 <- function(Yobs,
     
     # SRS
     varpSmrEst <-
-      (covpkl / pikl)
+      (covpkl / pikl) * # sum(tcrossprod(correctedPhiYSmrp))
       correctedPhiYSmrp %*%
       t(correctedPhiYSmrp) %>%
       sum()
@@ -1009,8 +1010,10 @@ estim_AV_as_eq_no_p1 <- function(Yobs,
   #   sum((1.0 - piSmr) * weightedYSmr^2L * (p2Smr - 1.0))
   
   # SRS
-  varpEst <- (covpkl / pikl) * sum(weightedYSr %*% t(weightedYSr)) + 
-    (covpkl / pikl) * sum(weightedYSmr %*% t(weightedYSmr)) +
+  varpEst <- (covpkl / pikl) * # sum(tcrossprod(weightedYSr)) +
+    sum(weightedYSr %*% t(weightedYSr)) + 
+    # (covpkl / pikl) * sum(tcrossprod(weightedYSmr)) + 
+    sum(weightedYSmr %*% t(weightedYSmr)) +
     sum(((1.0 - samplingFraction) - (covpkl / pikl)) * weightedYSr^2L) +
     sum(((1.0 - samplingFraction) * p2Smr - (covpkl / pikl)) * weightedYSmr^2L)
   
