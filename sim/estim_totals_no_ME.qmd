@@ -1310,8 +1310,7 @@ glue("Size of the grid: {nrow(parameters)} iterations.")
 ```{r}
 simulation_tphi <- function(Z,
                             samplingDesign = "SRS",
-                            alpha1, alpha2,
-                            alphaa = alpha1,
+                            p1, p2, pa,
                             beta, 
                             sd1 = 1.0, sd2 = sd1, 
                             rho = 0.8,
@@ -1328,14 +1327,6 @@ simulation_tphi <- function(Z,
   
   N <- nrow(Z)
   q <- ncol(Z)
-  
-  expit <- function(x) 1.0 / (1.0 + exp(-x))
-
-  # Sequential logistic model
-  p1 <- expit(Z %*% alpha1) %>% as.numeric()
-  p2 <- expit(Z %*% alpha2) %>% as.numeric()
-  # Global logistic model
-  pa <- expit(Z %*% alphaa) %>% as.numeric()
   
   if (sd1 == 0.0 && sd2 == 0.0)
   {
@@ -1912,9 +1903,9 @@ for (chunk in seq_len(Mtotal / Mchunk))
       simulation_tphi(M = Mchunk,
                       Z = Z,
                       samplingDesign = parameters[k, "samplingDesign"],
-                      alpha1 = alpha1,
-                      alpha2 = alpha2,
-                      alphaa = alphaa,
+                      p1 = p1,
+                      p2 = p2,
+                      pa = pa,
                       beta = NULL,
                       phi = phi,
                       sd1 = 0.0,
