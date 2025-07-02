@@ -373,6 +373,8 @@ rm(f, pCov, pi, pi_mat)
 # Total estimation
 ## Approximate variance estimators
 
+Notes 02/07/2025: Y %*% Y^T seems to be faster than tcrossprod(Y) (3-5 seconds for 10 iterations in sequential).
+
 ```{r}
 #' Estimation of the variance of t_ephiy and the approximate variance 
 #' of t_pqphiy
@@ -1310,8 +1312,7 @@ glue("Size of the grid: {nrow(parameters)} iterations.")
 ```{r}
 simulation_tphi <- function(Z,
                             samplingDesign = "SRS",
-                            alpha1, alpha2,
-                            alphaa = alpha1,
+                            p1, p2, pa,
                             beta, 
                             sd1 = 1.0, sd2 = sd1, 
                             rho = 0.8,
@@ -1328,14 +1329,6 @@ simulation_tphi <- function(Z,
   
   N <- nrow(Z)
   q <- ncol(Z)
-  
-  expit <- function(x) 1.0 / (1.0 + exp(-x))
-
-  # Sequential logistic model
-  p1 <- expit(Z %*% alpha1) %>% as.numeric()
-  p2 <- expit(Z %*% alpha2) %>% as.numeric()
-  # Global logistic model
-  pa <- expit(Z %*% alphaa) %>% as.numeric()
   
   if (sd1 == 0.0 && sd2 == 0.0)
   {
@@ -1819,35 +1812,42 @@ simulation_tphi <- function(Z,
     res <- lapply(seq_len(M), FUN = monoSim)
   else
     res <- mclapply(seq_len(M), FUN = monoSim, mc.cores = nCores)
-    
   
   res <- do.call("rbind", res)
   
-  trueVar1TW <- var_expansion_m1(Yexp, pi_mat, p1, sd1)
+  # trueVar1TW <- var_expansion_m1(Yexp, pi_mat, p1, sd1)
+  # 
+  # trueVar2TW <- var_expansion_m2(Yexp, pi_mat, p1, p2, sd2)
+  # 
+  # if (sd1 == sd2 && rho == 1.0)
+  #   trueVaraTW <- var_expansion_a(Yexp, pi_mat, pa, sd1)
+  # else
+  #   trueVaraTW <- NA_real_
+  # 
+  # trueVarPhi <- var_expansion_m1_m2(Yexp, Yexp, 
+  #                                   pi_mat, 
+  #                                   p1, p2, 
+  #                                   sd1, sd2, rho * sd1 * sd2, phi)
+  # 
+  # trueVarNop1 <- var_expansion_m1_m2(Yexp, Yexp, 
+  #                                    pi_mat, 
+  #                                    p1, p2, 
+  #                                    sd1, sd2, rho * sd1 * sd2, p1)
+  # 
+  # trueVar <- rep.int(c(trueVar1TW, NA_real_, 
+  #                      trueVar2TW, NA_real_,
+  #                      trueVaraTW, NA_real_,
+  #                      trueVarPhi, NA_real_,
+  #                      NA_real_, NA_real_,
+  #                      trueVarNop1, NA_real_),
+  #                    times = M)
   
-  trueVar2TW <- var_expansion_m2(Yexp, pi_mat, p1, p2, sd2)
-  
-  if (sd1 == sd2 && rho == 1.0)
-    trueVaraTW <- var_expansion_a(Yexp, pi_mat, pa, sd1)
-  else
-    trueVaraTW <- NA_real_
-  
-  trueVarPhi <- var_expansion_m1_m2(Yexp, Yexp, 
-                                    pi_mat, 
-                                    p1, p2, 
-                                    sd1, sd2, rho * sd1 * sd2, phi)
-  
-  trueVarNop1 <- var_expansion_m1_m2(Yexp, Yexp, 
-                                     pi_mat, 
-                                     p1, p2, 
-                                     sd1, sd2, rho * sd1 * sd2, p1)
-  
-  trueVar <- rep.int(c(trueVar1TW, NA_real_, 
-                       trueVar2TW, NA_real_,
-                       trueVaraTW, NA_real_,
-                       trueVarPhi, NA_real_,
+  trueVar <- rep.int(c(NA_real_, NA_real_, 
                        NA_real_, NA_real_,
-                       trueVarNop1, NA_real_),
+                       NA_real_, NA_real_,
+                       NA_real_, NA_real_,
+                       NA_real_, NA_real_,
+                       NA_real_, NA_real_),
                      times = M)
   
   res <- res %>% 
@@ -1862,8 +1862,8 @@ simulation_tphi <- function(Z,
 ## Simulation
 
 ```{r}
-Mchunk <- 500L
-Mtotal <- 500L
+Mchunk <- 10L
+Mtotal <- 10L
 ```
 
 The different lines of the grid have the same seed. It is useful to run in different orders the evaluations and because the results from different parameters are never mixed there is no independency issue.
@@ -1912,9 +1912,9 @@ for (chunk in seq_len(Mtotal / Mchunk))
       simulation_tphi(M = Mchunk,
                       Z = Z,
                       samplingDesign = parameters[k, "samplingDesign"],
-                      alpha1 = alpha1,
-                      alpha2 = alpha2,
-                      alphaa = alphaa,
+                      p1 = p1,
+                      p2 = p2,
+                      pa = pa,
                       beta = NULL,
                       phi = phi,
                       sd1 = 0.0,
@@ -1923,7 +1923,7 @@ for (chunk in seq_len(Mtotal / Mchunk))
                       strata = strata,
                       rho = 1.0,
                       seed = NULL,
-                      nCores = 40L,
+                      nCores = 0L,
                       calcVariance = calcVariance,
                       Y = Y)
     }
