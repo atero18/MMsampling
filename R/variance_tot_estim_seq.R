@@ -461,3 +461,116 @@ estim_AV_seq_m2 <- function(Yobs, modes,
                      m2Only = TRUE,
                      ...)
 }
+
+#' Is assumed that Y1 = Y2
+estim_AV_seq_a <- function(Yobs,
+                           responses,
+                           pi_mat,
+                           pa,
+                           sd = NULL,
+                           correcEW = TRUE,
+                           I,
+                           Z = matrix(1.0, nrow = length(Yobs), ncol = 1L),
+                           covarp = NULL,
+                           n = 1L,
+                           ...)
+{
+  responses[responses == "r"] <- "m1"
+
+  estim_AV_seq_m1(Yobs, responses,
+                  pi_mat, pa, sd,
+                  correcEW,
+                  I,
+                  Z,
+                  covarp = covarp,
+                  n = n,
+                  ...)
+}
+
+var_expansion_m1_m2 <- function(Y1exp, Y2exp,
+                                pi_mat,
+                                p1, p2,
+                                sd1 = 0.0, sd2 = 0.0, cov12 = sd1 * sd2,
+                                phi = rep(0.5, length(Y1exp)))
+{
+  pi <- diag(pi_mat)
+
+  p1bar <- 1.0 - p1
+
+  phibar <- 1.0 - phi
+
+  covarPi <- pi2_to_covarInc(pi_mat)
+
+
+  # Sampling design variability (p, S)
+  correctedYp <- pi^-1L * (phi * Y1exp + phibar * Y2exp)
+  varp <- as.numeric(t(correctedYp) %*% covarPi %*% correctedYp) +
+    sum(pi^-1L * (1.0 - pi) *
+          (phi^2L * sd1^2L + phibar^2L * sd2^2L +
+             2.0 * phi * phibar * cov12))
+
+  # m1 selection variability (q1, R1)
+  # with the independence between p and q1
+  # Variance of the term phik y1k / p1k - phikbar y2k / p1kbar
+  varCorrectedDifference <-
+    (p1^-2L * phi^2L * sd1^2L +
+       p1bar^-2L * phibar^2L * sd2^2L -
+       2.0 * (p1 * p1bar)^-1L * phi * phibar * cov12)
+  varq1 <-
+    sum(pi^-1L * p1 * p1bar *
+          (varCorrectedDifference +
+             (p1^-1L * phi * Y1exp - p1bar^-1L * phibar^2L * Y2exp)^2L))
+
+
+  # m2 selection variability (q2, R2)
+  # with the conditional independence between p and q1 ; and q1 and q2
+  if (any(phibar > 0.0))
+  {
+    varPhibarY2 <- phibar^2L * (sd2^2L + Y2exp^2L) # Variance of each phikbar y_2k
+    varq2 <- sum((pi * p1bar * p2)^-1L * (1.0 - p2) * varPhibarY2)
+  }
+  else
+    varq2 <- 0.0
+
+  # potential outcomes variability
+  varPhiY <-
+    sum(phi^2L) * sd1^2L +
+    2.0 * sum(phi * phibar) * cov12 +
+    sum(phibar^2L) * sd2^2L
+
+  varp + varq1 + varq2 + varPhiY
+}
+
+var_expansion_m1 <- function(Y1exp,
+                             pi_mat,
+                             p1,
+                             sd1 = 0.0,
+                             phi = rep(1.0, length(Y1exp)))
+{
+  var_expansion_m1_m2(Y1exp, Y2exp = numeric(length(Y1exp)),
+                      pi_mat,
+                      p1, p2 = NULL,
+                      sd1, sd2 = 0.0, cov12 = 0.0,
+                      phi)
+}
+
+var_expansion_m2 <- function(Y2exp,
+                             pi_mat,
+                             p1, p2,
+                             sd2 = 0.0,
+                             phi = rep(1.0, length(Y2exp)))
+{
+  var_expansion_m1_m2(Y1exp = numeric(length(Y2exp)), Y2exp,
+                      pi_mat,
+                      p1, p2,
+                      sd1 = 0.0, sd2, cov12 = 0.0,
+                      1.0 - phi)
+}
+
+var_expansion_a <- function(Yexp,
+                            pi_mat,
+                            pa,
+                            sd = 0.0)
+{
+  var_expansion_m1(Yexp, pi_mat, pa, sd)
+}

@@ -447,7 +447,6 @@ estim_AV_seq_m1_m2 <- function(Yobs,
                                weightSrEstVp = 0.5,
                                weightSrEstVq1 = weightSrEstVp,
                                covarp = NULL,
-                               n = 1L,
                                ...)
 {
   
@@ -552,7 +551,7 @@ estim_AV_seq_m1_m2 <- function(Yobs,
     # (we do not weight by phi)
   ## SRS CASE
   pikl <- pi_mat[1L, 2L]
-  samplingFraction <- n / N
+  samplingFraction <- pi[1L]
   covpkl <- -samplingFraction * (1.0 - samplingFraction) / (N - 1L) 
   if (m1Only)
   {
@@ -856,7 +855,6 @@ estim_AV_seq_m1 <- function(Yobs, modes,
                             Z = matrix(1.0, 
                                        nrow = length(Yobs), ncol = 1L),
                             covarp = NULL,
-                            n = 1L,
                             ...)
 {
   estim_AV_seq_m1_m2(Yobs, modes, 
@@ -873,7 +871,6 @@ estim_AV_seq_m1 <- function(Yobs, modes,
                      Z,
                      m1Only = TRUE,
                      covarp = covarp,
-                     n = n,
                      ...)
 }
 ```
@@ -888,7 +885,6 @@ estim_AV_seq_m2 <- function(Yobs, modes,
                             Z = matrix(1.0, 
                                        nrow = length(Yobs), ncol = 1L),
                             covarp = NULL,
-                            n = 1L,
                             ...)
 {
   estim_AV_seq_m1_m2(Yobs, modes, 
@@ -905,7 +901,6 @@ estim_AV_seq_m2 <- function(Yobs, modes,
                      Z,
                      m2Only = TRUE,
                      covarp = covarp,
-                     n = n,
                      ...)
 }
 ```
@@ -921,7 +916,6 @@ estim_AV_seq_a <- function(Yobs,
                            I,
                            Z = matrix(1.0, nrow = length(Yobs), ncol = 1L),
                            covarp = NULL,
-                           n = 1L,
                            ...)
 {
   responses[responses == "r"] <- "m1"
@@ -932,7 +926,6 @@ estim_AV_seq_a <- function(Yobs,
                   I,
                   Z,
                   covarp = covarp,
-                  n = n,
                   ...)
 }
 ```
@@ -1002,7 +995,7 @@ estim_AV_as_eq_no_p1 <- function(Yobs,
   # }
   
   pikl <- pi_mat[1L, 2L]
-  samplingFraction <- n / N
+  samplingFraction <- pi[1L]
   covpkl <- -samplingFraction * (1.0 - samplingFraction) / (N - 1L) 
   
   p2Smr <- p2[maskSmr]
@@ -1059,15 +1052,19 @@ var_expansion_m1_m2 <- function(Y1exp, Y2exp,
   
   phibar <- 1.0 - phi
   
-  covarPi <- pi2_to_covarInc(pi_mat)
-  
-  
   # Sampling design variability (p, S)
-  correctedY1p <- pi^-1L * (phi * Y1exp + phibar * Y2exp)
-  varp <- as.numeric(t(correctedY1p) %*% covarPi %*% correctedY1p) +
-    sum(pi^-1L * (1.0 - pi) * 
-          (phi^2L * sd1^2L + phibar^2L * sd2^2L +
-             2.0 * phi * phibar * cov12))
+  correctedYp <- pi^-1L * (phi * Y1exp + phibar * Y2exp)
+  # varp <- as.numeric(t(correctedYp) %*% covarPi %*% correctedYp) +
+  #   sum(pi^-1L * (1.0 - pi) *
+  #         (phi^2L * sd1^2L + phibar^2L * sd2^2L +
+  #            2.0 * phi * phibar * cov12))
+  
+  ## SRS CASE
+  pikl <- pi_mat[1L, 2L]
+  samplingFraction <- pi[1L]
+  covpkl <- -samplingFraction * (1.0 - samplingFraction) / (N - 1L)
+  varp <- covpkl * sum(correctedYp %*% t(correctedYp)) +
+    sum(samplingFraction^-2L * (samplingFraction * (1.0 - samplingFraction) - covpkl))
   
   # m1 selection variability (q1, R1)
   # with the independence between p and q1
@@ -1199,6 +1196,26 @@ var_expansion_a <- function(Yexp,
                             sd = 0.0)
 {
   var_expansion_m1(Yexp, pi_mat, pa, sd)
+}
+```
+
+```{r}
+var_expansion_as_eq_no_p1 <- function(Yexp, 
+                                      pi_mat, 
+                                      p1, p2, 
+                                      sd = 0.0)
+{
+  pi <- diag(pi_mat)
+
+  # Sampling design variability (p, S)
+  correctedYp <- Yexp / pi
+  
+  ## SRS CASE
+  pikl <- pi_mat[1L, 2L]
+  samplingFraction <- pi[1L]
+  covpkl <- -samplingFraction * (1.0 - samplingFraction) / (N - 1L)
+  varp <- covpkl * sum(correctedYp %*% t(correctedYp)) +
+    sum(samplingFraction^-2L * (samplingFraction * (1.0 - samplingFraction) - covpkl))
 }
 ```
 
@@ -1468,8 +1485,7 @@ simulation_tphi <- function(Z,
                         p1,
                         estimsd1,
                         correcEW1 = FALSE,
-                        covarp = NULL,
-                        n = n)
+                        covarp = NULL)
     }
     else
       apprVar1TW <- NA_real_
@@ -1491,8 +1507,7 @@ simulation_tphi <- function(Z,
                         correcEW1 = TRUE,
                         I,
                         Z,
-                        covarp = NULL,
-                        n = n)
+                        covarp = NULL)
     }
     else
       apprVar1EW <- NA_real_
@@ -1521,8 +1536,7 @@ simulation_tphi <- function(Z,
                         estimsd2,
                         correcEW1 = FALSE,
                         correcEW2 = FALSE,
-                        covarp = NULL,
-                        n = n)
+                        covarp = NULL)
     }
     else
       apprVar2TW <- NA_real_
@@ -1545,8 +1559,7 @@ simulation_tphi <- function(Z,
                         correcEW2 = TRUE,
                         I,
                         Z,
-                        covarp = NULL,
-                        n = n)
+                        covarp = NULL)
     }
     else
       apprVar2EW <- NA_real_
@@ -1588,8 +1601,7 @@ simulation_tphi <- function(Z,
                        pa,
                        estimsd,
                        correcEW = FALSE,
-                       covarp = NULL,
-                      n = n)
+                       covarp = NULL)
     }
     else
       apprVaraTW <- NA_real_
@@ -1619,8 +1631,7 @@ simulation_tphi <- function(Z,
                        correcEW = TRUE,
                        I,
                        Z,
-                       covarp = NULL,
-                       n = n)
+                       covarp = NULL)
     }
     else
       apprVaraEW <- NA_real_
@@ -1662,8 +1673,7 @@ simulation_tphi <- function(Z,
                            eqPotOut,
                            correcEW1 = FALSE,
                            correcEW2 = FALSE,
-                           covarp = NULL,
-                           n = n)
+                           covarp = NULL)
       
       apprVarPhiSizeTW <- 
         estim_AV_seq_m1_m2(Yobs,
@@ -1678,8 +1688,7 @@ simulation_tphi <- function(Z,
                            eqPotOut,
                            correcEW1 = FALSE,
                            correcEW2 = FALSE,
-                           covarp = NULL,
-                           n = n)
+                           covarp = NULL)
       
       apprVarNop1TW <- 
         estim_AV_as_eq_no_p1(Yobs,
@@ -1728,8 +1737,7 @@ simulation_tphi <- function(Z,
                            correcEW2 = TRUE,
                            I,
                            Z,
-                           covarp = NULL,
-                           n = n)
+                           covarp = NULL)
       
       apprVarPhiSizeEW <- 
         estim_AV_seq_m1_m2(Yobs,
@@ -1746,8 +1754,7 @@ simulation_tphi <- function(Z,
                            correcEW2 = TRUE,
                            I,
                            Z,
-                           covarp = NULL,
-                           n = n)
+                           covarp = NULL)
       
       apprVarNop1EW <- 
         estim_AV_as_eq_no_p1(Yobs,
