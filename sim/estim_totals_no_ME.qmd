@@ -447,6 +447,7 @@ estim_AV_seq_m1_m2 <- function(Yobs,
                                weightSrEstVp = 0.5,
                                weightSrEstVq1 = weightSrEstVp,
                                covarp = NULL,
+                               strata = rep(1L, length(Yobs)),
                                ...)
 {
   
@@ -549,77 +550,14 @@ estim_AV_seq_m1_m2 <- function(Yobs,
   # There is no correction needed for probabilities estimation
     # If we use only the m1 outcomes
     # (we do not weight by phi)
-  ## SRS CASE
-  pikl <- pi_mat[1L, 2L]
-  samplingFraction <- pi[1L]
-  covpkl <- -samplingFraction * (1.0 - samplingFraction) / (N - 1L) 
-  if (m1Only)
+  # The variance will be calculated stratum by stratum.
+  varpEst <- 0.0
+  # The estimation of the counterfactuals (if needed) is made on the
+  # entire population
+  # If Y1 = Y2 on U we can set Y1Est = Y2Est on Sa equal
+  # to the vector of observed values Yobs
+  if (!m1Only && !m2Only)
   {
-    correctedY1Srp <- (piSr * p1Sr)^-1L * Y1Sr
-    # varpEst <-
-    #   t(correctedY1Srp) %*%
-    #   (covarpSr / piSr_mat) %*%
-    #   correctedY1Srp %>%
-    #   as.numeric()
-    # varpEst <- varpEst +
-    #   sum((1.0 - piSr) * piSr^-2L * p1Sr^-1L * (1.0 - p1Sr^-1L) *
-    #         Y1Sr^2L)
-    
-    # SRS
-    varpEst <-
-      
-      (covpkl / pikl) * # sum(tcrossprod(correctedY1Srp))
-      correctedY1Srp %*%
-      t(correctedY1Srp) %>%
-      sum()
-    varpEst <- varpEst +
-      sum(((1.0 - samplingFraction) / (samplingFraction^2L * p1Sr) - 
-             covpkl / (pikl * samplingFraction^2L * p1Sr^2L)) *
-            Y1Sr^2L)
-    
-    # Second order inclusion and covariance matrices are
-    # directly deleted due to their important size (#Sr^2).
-    # Due to the conditional independence within the selection mechanisms
-    # they are not used after.
-    # rm(piSr_mat, covarpSr)
-  }
-    # If we use only the m2 outcomes
-    # (we do not weight by 1 - phi)
-  else if (m2Only)
-  {
-    Y2Smr <- Yobs[maskSmr]
-    correctedY2Smrp <- (piSmr * p1barSmr * p2Smr)^-1L * Y2Smr
-    # varpEst <-
-    #   t(correctedY2Smrp) %*%
-    #   (covarpSmr / piSmr_mat) %*%
-    #   correctedY2Smrp %>%
-    #   as.numeric()
-    # varpEst <- varpEst +
-    #   sum((1.0 - piSmr) * piSmr^-2L * (p1barSmr * p2Smr)^-1L *
-    #         (1.0 - (p1barSmr * p2Smr)^-1L) * Y2Smr^2L)
-    
-    # SRS
-    varpEst <-
-      (covpkl / pikl) * # sum(tcrossprod(correctedY2Smrp))
-      correctedY2Smrp %*%
-      t(correctedY2Smrp) %>%
-      sum()
-    varpEst <- varpEst +
-      sum(((1.0 - samplingFraction) / 
-             (samplingFraction^2L * p1barSmr * p2Smr) -
-             covpkl / (samplingFraction^2L * pikl * p1barSmr^2L * p2Smr^2L)) *
-            Y2Smr^2L)
-    
-    # Unused matrices of size #Smr^2 deleted
-    # rm(piSmr_mat, covarpSmr)
-  }
-    # If we use the m1 and m2 outcomes
-    # We will need here have to estimate the counterfactuals
-    # on Sr (y_2k) and Smr (y_2k) by single matching with Z
-  else
-  {
-    # If Y1 = Y2 on U we can set Y1Est = Y2Est on Sa equal
-    # to the vector of observed values Yobs
     if (eqPotOut)
       Y1Est <- Y2Est <- Yobs[maskSa]
     else
@@ -629,73 +567,167 @@ estim_AV_seq_m1_m2 <- function(Yobs,
       Y2Est <- YEst[maskSa, "Y2Est"]
       rm(YEst)
     }
-    
-    
-    phiY1SaEst <- phi[maskSa] * Y1Est
-    phibarY2SaEst <- phibar[maskSa] * Y2Est
-    
-    # piSa_mat <- pi_mat[maskSa, maskSa, drop = FALSE]
-    # covarpSa <- pi2_to_covarInc(piSa_mat)
-    
-    
-    # The variance estimator is the weighted average of 
-    # the variance estimator based on Sr and the one based on Smr
-      # Sr
-    PhiYSr <- phiY1SaEst[maskm1Sa] + phibarY2SaEst[maskm1Sa]
-    correctedPhiYSrp <- 
-      (piSr * p1Sr)^-1L * PhiYSr
-    
-    # varpSrEst <-
-    #   t(correctedPhiYSrp) %*%
-    #   (covarpSr / piSr_mat) %*%
-    #   correctedPhiYSrp %>%
-    #   as.numeric()
-    # varpSrEst <- varpSrEst + 
-    #   sum((1.0 - piSr) * piSr^-2L * p1Sr^-1L * (1.0 - p1Sr^-1L) *
-    #         PhiYSr^2L)
-    
-    # SRS
-    varpSrEst <-
-      (covpkl / pikl) * # sum(tcrossprod(correctedPhiYSrp))
-      correctedPhiYSrp %*%
-      t(correctedPhiYSrp) %>%
-      sum()
-    varpSrEst <- varpSrEst + 
-      sum(((1.0 - samplingFraction) / (samplingFraction^2L * p1Sr) - 
-             covpkl / (pikl * samplingFraction^2L * p1Sr^2L)) *
-            PhiYSr^2L)
-
-      # Smr
-    PhiYSmr <- phiY1SaEst[!maskm1Sa] + phibarY2SaEst[!maskm1Sa]
-    correctedPhiYSmrp <- 
-      (piSmr * p1barSmr * p2Smr)^-1L * PhiYSmr
-    
-    # varpSmrEst <-
-    #   t(correctedPhiYSmrp) %*%
-    #   (covarpSmr / piSmr_mat) %*%
-    #   correctedPhiYSmrp %>%
-    #   as.numeric()
-    # varpSmrEst <- varpSmrEst +
-    #   sum((1.0 - piSmr) * piSmr^-2L * (p1barSmr * p2Smr)^-1L *
-    #         (1.0 - (p1barSmr * p2Smr)^-1L) * PhiYSmr^2L)
-    
-    # SRS
-    varpSmrEst <-
-      (covpkl / pikl) * # sum(tcrossprod(correctedPhiYSmrp))
-      correctedPhiYSmrp %*%
-      t(correctedPhiYSmrp) %>%
-      sum()
-    varpSmrEst <- varpSmrEst +
-      sum(((1.0 - samplingFraction) / 
-             (samplingFraction^2L * p1barSmr * p2Smr) -
-             covpkl / (samplingFraction^2L * pikl * p1barSmr^2L * p2Smr^2L)) *
-            PhiYSmr^2L)
-    
-    varpEst <- weightSrEstVp * varpSrEst + (1.0 - weightSrEstVp) * varpSmrEst
-    
-    # rm(piSr_mat, covarpSr, piSmr_mat, covarpSmr)
   }
+  for (stratum in unique(strata))
+  {
+    NStr <- sum(strata == stratum)
+    maskSampledStratum <- strata == stratum & I
+    nStr <- sum(maskSampledStratum)
+    
+    piklStr <- (nStr * (nStr - 1L)) / (NStr * (NStr - 1L))
+    samplingFractionStr <- nStratum / Nstratum
+    
+    covpklStr <- -samplingFractionStr * (1.0 - samplingFractionStr) /
+      (NStr - 1L)
+    
+    maskResp1Str <- strata == stratum & modes == "m1" 
+    maskResp2Str <- strata == stratum & modes == "m2"
+    
+    Y1Str <- Yobs[maskSampledStratum]
+    Y2Str <- Yobs[maskSampledStratum]
+    if (m1Only)
+    {
+      correctedY1Strp <- (samplingFractionStr * p1[maskResp1Str])^-1L * Y1Str
+      # varpEst <-
+      #   t(correctedY1Strp) %*%
+      #   (covarpSr / piSr_mat) %*%
+      #   correctedY1Strp %>%
+      #   as.numeric()
+      # varpEst <- varpEst +
+      #   sum((1.0 - piSr) * piSr^-2L * p1Sr^-1L * (1.0 - p1Sr^-1L) *
+      #         Y1Sr^2L)
+      
+      # SRS
+      # varpEst <-
+      #   (covpkl / piklStr) * # sum(tcrossprod(correctedY1Strp))
+      #   correctedY1Strp %*%
+      #   t(correctedY1Strp) %>%
+      #   sum()
+      # varpEst <- varpEst +
+      #   sum(((1.0 - samplingFraction) / (samplingFraction^2L * p1Sr) - 
+      #          covpkl / (piklStr * samplingFraction^2L * p1Sr^2L)) *
+      #         Y1Sr^2L)
+      
+      # (ST)SRS
+      varpEst <- varpEst + (covpklStr / piklStr) * # sum(tcrossprod(correctedY1Strp))
+        correctedY1Strp %*%
+        t(correctedY1Strp) %>%
+        sum()
+      varpEst <- varpEst +
+        sum(((1.0 - samplingFractionStr) / (samplingFractionStr^2L * p1[maskResp1Str]) - 
+               covpklStr / (piklStr * samplingFractionStr^2L * p1[maskResp1Str]^2L)) *
+              Y1Str^2L)
+      
+      # Second order inclusion and covariance matrices are
+      # directly deleted due to their important size (#Sr^2).
+      # Due to the conditional independence within the selection mechanisms
+      # they are not used after.
+      # rm(piSr_mat, covarpSr)
+    }
+    
+    
+      # If we use only the m2 outcomes
+      # (we do not weight by 1 - phi)
+    else if (m2Only)
+    {
+      
+      correctedY2Strp <- 
+        (pi[maskResp2Str] * (1.0 - p1[maskResp2Str]) * p2[maskResp2Str])^-1L * Y2Smr
+      # varpEst <-
+      #   t(correctedY2Strp) %*%
+      #   (covarpSmr / piSmr_mat) %*%
+      #   correctedY2Strp %>%
+      #   as.numeric()
+      # varpEst <- varpEst +
+      #   sum((1.0 - piSmr) * piSmr^-2L * (p1barSmr * p2Smr)^-1L *
+      #         (1.0 - (p1barSmr * p2Smr)^-1L) * Y2Smr^2L)
+      
+      # SRS
+      varpEst <- varpEst +
+        (covpklStr / piklStr) * # sum(tcrossprod(correctedY2Strp))
+        correctedY2Strp %*%
+        t(correctedY2Strp) %>%
+        sum()
+      varpEst <- varpEst +
+        sum(((1.0 - samplingFraction) / 
+               (samplingFraction^2L * (1.0 - p1[maskResp2Str]) * p2[maskResp2Str]) -
+               covpklStr / (samplingFraction^2L * piklStr * (1.0 - p1[maskResp2Str])^2L * p2[maskResp2Str]^2L)) *
+              Y2Str^2L)
+      
+      # Unused matrices of size #Smr^2 deleted
+      # rm(piSmr_mat, covarpSmr)
+    }
+      # If we use the m1 and m2 outcomes
+      # We will need here have to estimate the counterfactuals
+      # on Sr (y_2k) and Smr (y_2k) by single matching with Z
+    else
+    {
+      phiY1SaEst <- phi[maskSa] * Y1Est
+      phibarY2SaEst <- phibar[maskSa] * Y2Est
+      
+      # piSa_mat <- pi_mat[maskSa, maskSa, drop = FALSE]
+      # covarpSa <- pi2_to_covarInc(piSa_mat)
+      
+      
+      # The variance estimator is the weighted average of 
+      # the variance estimator based on Sr and the one based on Smr
+        # Sr
+      PhiYSr <- phiY1SaEst[maskm1Sa] + phibarY2SaEst[maskm1Sa]
+      correctedPhiYSrp <- 
+        (piSr * p1Sr)^-1L * PhiYSr
+      
+      # varpSrEst <-
+      #   t(correctedPhiYSrp) %*%
+      #   (covarpSr / piSr_mat) %*%
+      #   correctedPhiYSrp %>%
+      #   as.numeric()
+      # varpSrEst <- varpSrEst + 
+      #   sum((1.0 - piSr) * piSr^-2L * p1Sr^-1L * (1.0 - p1Sr^-1L) *
+      #         PhiYSr^2L)
+      
+      # SRS
+      varpSrEst <- 
+        (covpklStr / piklStr) * # sum(tcrossprod(correctedPhiYSrp))
+        correctedPhiYSrp %*%
+        t(correctedPhiYSrp) %>%
+        sum()
+      varpSrEst <- varpSrEst + 
+        sum(((1.0 - samplingFraction) / (samplingFraction^2L * p1Sr) - 
+               covpklStr / (piklStr * samplingFraction^2L * p1Sr^2L)) *
+              PhiYSr^2L)
   
+        # Smr
+      PhiYSmr <- phiY1SaEst[!maskm1Sa] + phibarY2SaEst[!maskm1Sa]
+      correctedPhiYSmrp <- 
+        (piSmr * p1barSmr * p2Smr)^-1L * PhiYSmr
+      
+      # varpSmrEst <-
+      #   t(correctedPhiYSmrp) %*%
+      #   (covarpSmr / piSmr_mat) %*%
+      #   correctedPhiYSmrp %>%
+      #   as.numeric()
+      # varpSmrEst <- varpSmrEst +
+      #   sum((1.0 - piSmr) * piSmr^-2L * (p1barSmr * p2Smr)^-1L *
+      #         (1.0 - (p1barSmr * p2Smr)^-1L) * PhiYSmr^2L)
+      
+      # SRS
+      varpSmrEst <-
+        (covpklStr / piklStr) * # sum(tcrossprod(correctedPhiYSmrp))
+        correctedPhiYSmrp %*%
+        t(correctedPhiYSmrp) %>%
+        sum()
+      varpSmrEst <- varpSmrEst +
+        sum(((1.0 - samplingFraction) / 
+               (samplingFraction^2L * p1barSmr * p2[maskResp2Str]) -
+               covpklStr / (samplingFraction^2L * piklStr * (1.0 - p1[maskResp2Str])^2L * p2[maskResp2Str]^2L)) *
+              PhiYSmr^2L)
+      
+      varpEst <- varpEst + 
+        weightSrEstVp * varpSrEst + (1.0 - weightSrEstVp) * varpSmrEst
+      
+      # rm(piSr_mat, covarpSr, piSmr_mat, covarpSmr)
+    }
+  }
   
   # m1 selection variability (q1, R1)
   if  (correcEW1)
@@ -733,7 +765,7 @@ estim_AV_seq_m1_m2 <- function(Yobs,
   if (m1Only)
   {
     
-    correctedY1Srq1 <- correctedY1Srp
+    correctedY1Srq1 <- correctedY1Strp
     
     if (correcEW1)
       correctedY1Srq1 <- correctedY1Srq1 + ZSr %*% estLinCoefq1
@@ -855,6 +887,7 @@ estim_AV_seq_m1 <- function(Yobs, modes,
                             Z = matrix(1.0, 
                                        nrow = length(Yobs), ncol = 1L),
                             covarp = NULL,
+                            strata = rep(1L, length(Yobs)),
                             ...)
 {
   estim_AV_seq_m1_m2(Yobs, modes, 
@@ -871,6 +904,7 @@ estim_AV_seq_m1 <- function(Yobs, modes,
                      Z,
                      m1Only = TRUE,
                      covarp = covarp,
+                     strata = strata,
                      ...)
 }
 ```
@@ -885,6 +919,7 @@ estim_AV_seq_m2 <- function(Yobs, modes,
                             Z = matrix(1.0, 
                                        nrow = length(Yobs), ncol = 1L),
                             covarp = NULL,
+                            strata = rep(1L, length(Yobs)),
                             ...)
 {
   estim_AV_seq_m1_m2(Yobs, modes, 
@@ -901,6 +936,7 @@ estim_AV_seq_m2 <- function(Yobs, modes,
                      Z,
                      m2Only = TRUE,
                      covarp = covarp,
+                     strata = strata),
                      ...)
 }
 ```
@@ -916,6 +952,7 @@ estim_AV_seq_a <- function(Yobs,
                            I,
                            Z = matrix(1.0, nrow = length(Yobs), ncol = 1L),
                            covarp = NULL,
+                           strata = rep(1L, length(Yobs)),
                            ...)
 {
   responses[responses == "r"] <- "m1"
@@ -926,6 +963,7 @@ estim_AV_seq_a <- function(Yobs,
                   I,
                   Z,
                   covarp = covarp,
+                  strata = strata,
                   ...)
 }
 ```
@@ -968,7 +1006,8 @@ estim_AV_as_eq_no_p1 <- function(Yobs,
                                  Z = matrix(1.0,
                                             nrow = length(Yobs), 
                                             ncol = 1L),
-                                 covarp = NULL)
+                                 covarp = NULL,
+                                 strata = rep(1L, length(Yobs)))
 {
   N <- length(pi)
   
@@ -994,9 +1033,9 @@ estim_AV_as_eq_no_p1 <- function(Yobs,
   #   covarpSmr <- covarp[maskSmr, maskSmr, drop = FALSE]
   # }
   
-  pikl <- pi_mat[1L, 2L]
+  piklStr <- pi_mat[1L, 2L]
   samplingFraction <- pi[1L]
-  covpkl <- -samplingFraction * (1.0 - samplingFraction) / (N - 1L) 
+  covpklStr <- -samplingFraction * (1.0 - samplingFraction) / (N - 1L) 
   
   p2Smr <- p2[maskSmr]
   
@@ -1005,12 +1044,12 @@ estim_AV_as_eq_no_p1 <- function(Yobs,
   #   sum((1.0 - piSmr) * weightedYSmr^2L * (p2Smr - 1.0))
   
   # SRS
-  varpEst <- (covpkl / pikl) * # sum(tcrossprod(weightedYSr)) +
+  varpEst <- (covpklStr / piklStr) * # sum(tcrossprod(weightedYSr)) +
     sum(weightedYSr %*% t(weightedYSr)) + 
-    # (covpkl / pikl) * sum(tcrossprod(weightedYSmr)) + 
+    # (covpklStr / piklStr) * sum(tcrossprod(weightedYSmr)) + 
     sum(weightedYSmr %*% t(weightedYSmr)) +
-    sum(((1.0 - samplingFraction) - (covpkl / pikl)) * weightedYSr^2L) +
-    sum(((1.0 - samplingFraction) * p2Smr - (covpkl / pikl)) * weightedYSmr^2L)
+    sum(((1.0 - samplingFraction) - (covpklStr / piklStr)) * weightedYSr^2L) +
+    sum(((1.0 - samplingFraction) * p2Smr - (covpklStr / piklStr)) * weightedYSmr^2L)
   
   # m2 selection variability (q2, R2)
   if (correcEW2)
@@ -1060,11 +1099,11 @@ var_expansion_m1_m2 <- function(Y1exp, Y2exp,
   #            2.0 * phi * phibar * cov12))
   
   ## SRS CASE
-  pikl <- pi_mat[1L, 2L]
+  piklStr <- pi_mat[1L, 2L]
   samplingFraction <- pi[1L]
-  covpkl <- -samplingFraction * (1.0 - samplingFraction) / (N - 1L)
-  varp <- covpkl * sum(correctedYp %*% t(correctedYp)) +
-    sum(samplingFraction^-2L * (samplingFraction * (1.0 - samplingFraction) - covpkl))
+  covpklStr <- -samplingFraction * (1.0 - samplingFraction) / (N - 1L)
+  varp <- covpklStr * sum(correctedYp %*% t(correctedYp)) +
+    sum(samplingFraction^-2L * (samplingFraction * (1.0 - samplingFraction) - covpklStr))
   
   # m1 selection variability (q1, R1)
   # with the independence between p and q1
@@ -1152,9 +1191,9 @@ var_expansion_as_eq_no_p1 <- function(Yexp,
   # Sampling design variability (p, S)
 
   ## SRS CASE
-  pikl <- pi_mat[1L, 2L]
+  piklStr <- pi_mat[1L, 2L]
   samplingFraction <- pi[1L]
-  covpkl <- -samplingFraction * (1.0 - samplingFraction) / (N - 1L)
+  covpklStr <- -samplingFraction * (1.0 - samplingFraction) / (N - 1L)
   varp <- covpkl * samplingFraction^-2L * sum(Yexp %*% t(Yexp)) +
     samplingFraction^-1L * sum((Yexp^2L + sd^2L)) -
     samplingFraction^-2L * sum(Yexp^2L)
