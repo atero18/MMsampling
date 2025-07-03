@@ -1079,45 +1079,41 @@ estim_AV_as_eq_no_p1 <- function(Yobs,
 CONDITIONS INDEPENDANCE HOMOSCEDASTICITE
 
 ```{r}
-var_expansion_m1_m2 <- function(Y1exp, Y2exp, 
-                                pi_mat, 
-                                p1, p2, 
-                                sd1 = 0.0, sd2 = 0.0, cov12 = sd1 * sd2, 
+var_expansion_m1_m2 <- function(Y1exp, Y2exp,
+                                pi_mat,
+                                p1, p2,
+                                sd1 = 0.0, sd2 = 0.0, cov12 = sd1 * sd2,
                                 phi = rep(0.5, length(Y1exp)))
 {
   pi <- diag(pi_mat)
-  
+
   p1bar <- 1.0 - p1
-  
+
   phibar <- 1.0 - phi
-  
+
+  covarPi <- pi2_to_covarInc(pi_mat)
+
+
   # Sampling design variability (p, S)
   correctedYp <- pi^-1L * (phi * Y1exp + phibar * Y2exp)
-  # varp <- as.numeric(t(correctedYp) %*% covarPi %*% correctedYp) +
-  #   sum(pi^-1L * (1.0 - pi) *
-  #         (phi^2L * sd1^2L + phibar^2L * sd2^2L +
-  #            2.0 * phi * phibar * cov12))
-  
-  ## SRS CASE
-  piklStr <- pi_mat[1L, 2L]
-  samplingFraction <- pi[1L]
-  covpklStr <- -samplingFraction * (1.0 - samplingFraction) / (N - 1L)
-  varp <- covpklStr * sum(correctedYp %*% t(correctedYp)) +
-    sum(samplingFraction^-2L * (samplingFraction * (1.0 - samplingFraction) - covpklStr))
-  
+  varp <- as.numeric(t(correctedYp) %*% covarPi %*% correctedYp) +
+    sum(pi^-1L * (1.0 - pi) *
+          (phi^2L * sd1^2L + phibar^2L * sd2^2L +
+             2.0 * phi * phibar * cov12))
+
   # m1 selection variability (q1, R1)
   # with the independence between p and q1
   # Variance of the term phik y1k / p1k - phikbar y2k / p1kbar
-  varCorrectedDifference <- 
-    (p1^-2L * phi^2L * sd1^2L + 
+  varCorrectedDifference <-
+    (p1^-2L * phi^2L * sd1^2L +
        p1bar^-2L * phibar^2L * sd2^2L -
        2.0 * (p1 * p1bar)^-1L * phi * phibar * cov12)
-  varq1 <- 
-    sum(pi^-1L * p1 * p1bar * 
-    (varCorrectedDifference + 
-       (p1^-1L * phi * Y1exp - p1bar^-1L * phibar^2L * Y2exp)^2L))
-     
-    
+  varq1 <-
+    sum(pi^-1L * p1 * p1bar *
+          (varCorrectedDifference +
+             (p1^-1L * phi * Y1exp - p1bar^-1L * phibar^2L * Y2exp)^2L))
+
+
   # m2 selection variability (q2, R2)
   # with the conditional independence between p and q1 ; and q1 and q2
   if (any(phibar > 0.0))
@@ -1127,44 +1123,44 @@ var_expansion_m1_m2 <- function(Y1exp, Y2exp,
   }
   else
     varq2 <- 0.0
-  
+
   # potential outcomes variability
-  varPhiY <- 
+  varPhiY <-
     sum(phi^2L) * sd1^2L +
     2.0 * sum(phi * phibar) * cov12 +
     sum(phibar^2L) * sd2^2L
-  
+
   varp + varq1 + varq2 + varPhiY
 }
 ```
 
 ```{r}
-var_expansion_m1 <- function(Y1exp, 
-                             pi_mat, 
-                             p1, 
+var_expansion_m1 <- function(Y1exp,
+                             pi_mat,
+                             p1,
                              sd1 = 0.0,
                              phi = rep(1.0, length(Y1exp)))
 {
-  var_expansion_m1_m2(Y1exp, Y2exp = numeric(length(Y1exp)), 
+  var_expansion_m1_m2(Y1exp, Y2exp = numeric(length(Y1exp)),
                       pi_mat,
-                      p1, p2 = NULL, 
-                      sd1, sd2 = 0.0, cov12 = 0.0, 
+                      p1, p2 = NULL,
+                      sd1, sd2 = 0.0, cov12 = 0.0,
                       phi)
 }
 ```
 
 
 ```{r}
-var_expansion_m2 <- function(Y2exp, 
-                             pi_mat, 
-                             p1, p2, 
-                             sd2 = 0.0, 
+var_expansion_m2 <- function(Y2exp,
+                             pi_mat,
+                             p1, p2,
+                             sd2 = 0.0,
                              phi = rep(1.0, length(Y2exp)))
 {
-  var_expansion_m1_m2(Y1exp = numeric(length(Y2exp)), Y2exp, 
-                      pi_mat, 
-                      p1, p2, 
-                      sd1 = 0.0, sd2, cov12 = 0.0, 
+  var_expansion_m1_m2(Y1exp = numeric(length(Y2exp)), Y2exp,
+                      pi_mat,
+                      p1, p2,
+                      sd1 = 0.0, sd2, cov12 = 0.0,
                       1.0 - phi)
 }
 ```
@@ -1187,16 +1183,20 @@ var_expansion_as_eq_no_p1 <- function(Yexp,
                                       sd = 0.0)
 {
   pi <- diag(pi_mat)
-
+    
   # Sampling design variability (p, S)
-
+  weightedYexp <- Yexp / pi
+  covarp <- pi2_to_covarInc(pi_mat)
+  varp <- t(weightedYexp) %*% covarp %*% weightedYexp +
+    sum(pi^-1L * (1.0 - pi)) * sd^2L
+  
   ## SRS CASE
-  piklStr <- pi_mat[1L, 2L]
-  samplingFraction <- pi[1L]
-  covpklStr <- -samplingFraction * (1.0 - samplingFraction) / (N - 1L)
-  varp <- covpkl * samplingFraction^-2L * sum(Yexp %*% t(Yexp)) +
-    samplingFraction^-1L * sum((Yexp^2L + sd^2L)) -
-    samplingFraction^-2L * sum(Yexp^2L)
+  # piklStr <- pi_mat[1L, 2L]
+  # samplingFraction <- pi[1L]
+  # covpklStr <- -samplingFraction * (1.0 - samplingFraction) / (N - 1L)
+  # varp <- covpkl * samplingFraction^-2L * sum(Yexp %*% t(Yexp)) +
+  #   samplingFraction^-1L * sum((Yexp^2L + sd^2L)) -
+  #   samplingFraction^-2L * sum(Yexp^2L)
   
   # m2 selection variability (q2, R2)
   varq2 <- sum((pi * p2)^-1L * p1 * (1.0 - p2) * (Yexp^2L + sd^2L))
@@ -1352,6 +1352,10 @@ simulation_tphi <- function(Z,
   # to be estimated
   eqPotOut <- sd1 == sd2 && rho == 1.0
   
+  # If no strata are given, we consider one unique stratum
+  if (is.null(strata))
+    strata <- rep(1L, N)
+  
   if (samplingDesign == "SRS")
   {
     pi <- rep(n / N, N)
@@ -1474,7 +1478,8 @@ simulation_tphi <- function(Z,
                         p1,
                         estimsd1,
                         correcEW1 = FALSE,
-                        covarp = NULL)
+                        covarp = NULL,
+                        strata = strata)
     }
     else
       apprVar1TW <- NA_real_
@@ -1496,7 +1501,8 @@ simulation_tphi <- function(Z,
                         correcEW1 = TRUE,
                         I,
                         Z,
-                        covarp = NULL)
+                        covarp = NULL,
+                        strata = strata)
     }
     else
       apprVar1EW <- NA_real_
@@ -1525,7 +1531,8 @@ simulation_tphi <- function(Z,
                         estimsd2,
                         correcEW1 = FALSE,
                         correcEW2 = FALSE,
-                        covarp = NULL)
+                        covarp = NULL,
+                        strata = strata)
     }
     else
       apprVar2TW <- NA_real_
@@ -1548,7 +1555,8 @@ simulation_tphi <- function(Z,
                         correcEW2 = TRUE,
                         I,
                         Z,
-                        covarp = NULL)
+                        covarp = NULL,
+                        strata = strata)
     }
     else
       apprVar2EW <- NA_real_
@@ -1590,7 +1598,8 @@ simulation_tphi <- function(Z,
                        pa,
                        estimsd,
                        correcEW = FALSE,
-                       covarp = NULL)
+                       covarp = NULL,
+                        strata = strata)
     }
     else
       apprVaraTW <- NA_real_
@@ -1620,7 +1629,8 @@ simulation_tphi <- function(Z,
                        correcEW = TRUE,
                        I,
                        Z,
-                       covarp = NULL)
+                       covarp = NULL,
+                        strata = strata)
     }
     else
       apprVaraEW <- NA_real_
@@ -1662,7 +1672,8 @@ simulation_tphi <- function(Z,
                            eqPotOut,
                            correcEW1 = FALSE,
                            correcEW2 = FALSE,
-                           covarp = NULL)
+                           covarp = NULL,
+                           strata = strata)
       
       apprVarPhiSizeTW <- 
         estim_AV_seq_m1_m2(Yobs,
@@ -1677,7 +1688,8 @@ simulation_tphi <- function(Z,
                            eqPotOut,
                            correcEW1 = FALSE,
                            correcEW2 = FALSE,
-                           covarp = NULL)
+                           covarp = NULL,
+                           strata = strata)
       
       apprVarNop1TW <- 
         estim_AV_as_eq_no_p1(Yobs,
@@ -1686,7 +1698,8 @@ simulation_tphi <- function(Z,
                              p2,
                              sd1, # Variance estimated with sd1 only
                              correcEW2 = FALSE,
-                             covarp = NULL)
+                             covarp = NULL,
+                             strata = strata)
       # apprVarNop1TW <- 
       #   estim_AV_seq_m1_m2(Yobs,
       #                      modes,
@@ -1726,7 +1739,8 @@ simulation_tphi <- function(Z,
                            correcEW2 = TRUE,
                            I,
                            Z,
-                           covarp = NULL)
+                           covarp = NULL,
+                           strata = strata)
       
       apprVarPhiSizeEW <- 
         estim_AV_seq_m1_m2(Yobs,
@@ -1743,7 +1757,8 @@ simulation_tphi <- function(Z,
                            correcEW2 = TRUE,
                            I,
                            Z,
-                           covarp = NULL)
+                           covarp = NULL,
+                           strata = strata)
       
       apprVarNop1EW <- 
         estim_AV_as_eq_no_p1(Yobs,
@@ -1754,22 +1769,8 @@ simulation_tphi <- function(Z,
                              correcEW2 = TRUE,
                              I,
                              Z,
-                             covarp = NULL)
-      # apprVarNop1EW <- 
-      #   estim_AV_seq_m1_m2(Yobs,
-      #                      modes,
-      #                      pi_mat,
-      #                      p1, # True value of p1
-      #                      estimp2,
-      #                      estimsd1,
-      #                      estimsd2,
-      #                      estimcov12,
-      #                      phi = p1,
-      #                      eqPotOut,
-      #                      correcEW1 = TRUE,
-      #                      correcEW2 = TRUE,
-      #                      I,
-      #                      Z)
+                             covarp = NULL,
+                             strata = strata)
     }
     else
       apprVarPhiEW <- apprVarPhiSizeEW <- apprVarNop1EW <- NA_real_
