@@ -568,6 +568,7 @@ estim_AV_seq_m1_m2 <- function(Yobs,
       rm(YEst)
     }
   }
+  
   for (stratum in unique(strata))
   {
     NStr <- sum(strata == stratum)
@@ -584,11 +585,9 @@ estim_AV_seq_m1_m2 <- function(Yobs,
     maskResp2Str <- strata == stratum & modes == "m2"
     maskRespStr <- maskResp1Str | maskResp2Str
     
-    Y1Str <- Yobs[maskSampledStratum]
-    Y2Str <- Yobs[maskSampledStratum]
     if (m1Only)
     {
-      correctedY1Strp <- (samplingFractionStr * p1[maskResp1Str])^-1L * Y1Str
+      correctedY1Strp <- (samplingFractionStr * p1[maskResp1Str])^-1L * Yobs[maskResp1Str]
       # varpEst <-
       #   t(correctedY1Strp) %*%
       #   (covarpSr / piSr_mat) %*%
@@ -617,7 +616,7 @@ estim_AV_seq_m1_m2 <- function(Yobs,
       varpEst <- varpEst +
         sum(((1.0 - samplingFractionStr) / (samplingFractionStr^2L * p1[maskResp1Str]) - 
                covpklStr / (piklStr * samplingFractionStr^2L * p1[maskResp1Str]^2L)) *
-              Y1Str^2L)
+              Yobs[maskResp1Str]^2L)
       
       # Second order inclusion and covariance matrices are
       # directly deleted due to their important size (#Sr^2).
@@ -633,7 +632,7 @@ estim_AV_seq_m1_m2 <- function(Yobs,
     {
       
       correctedY2Strp <- 
-        (pi[maskResp2Str] * (1.0 - p1[maskResp2Str]) * p2[maskResp2Str])^-1L * Y2Str
+        (pi[maskResp2Str] * (1.0 - p1[maskResp2Str]) * p2[maskResp2Str])^-1L * Yobs[maskResp2Str]
       # varpEst <-
       #   t(correctedY2Strp) %*%
       #   (covarpSmr / piSmr_mat) %*%
@@ -653,7 +652,7 @@ estim_AV_seq_m1_m2 <- function(Yobs,
         sum(((1.0 - samplingFractionStr) / 
                (samplingFractionStr^2L * (1.0 - p1[maskResp2Str]) * p2[maskResp2Str]) -
                covpklStr / (samplingFractionStr^2L * piklStr * (1.0 - p1[maskResp2Str])^2L * p2[maskResp2Str]^2L)) *
-              Y2Str^2L)
+              Yobs[maskResp2Str]^2L)
       
       # Unused matrices of size #Smr^2 deleted
       # rm(piSmr_mat, covarpSmr)
@@ -736,7 +735,7 @@ estim_AV_seq_m1_m2 <- function(Yobs,
   # m1 selection variability (q1, R1)
   if  (correcEW1)
   {
-    Zm1Str <- Z[maskSr, , drop = FALSE]
+    ZSr <- Z[maskSr, , drop = FALSE]
     estLinCoefq1 <- 0.0
     if (!m2Only)
     {
@@ -828,10 +827,10 @@ estim_AV_seq_m1_m2 <- function(Yobs,
       estbPhibar22 <- 
         solve(Fisher_Information_Matrix(p2, Z, maskSm)) %*% estVPhibar22
       
-      correctedY2Smrq2 <- correctedY2Smrq2 + ZSmr %*% estbPhibar22
+      correctedPhiYStrq2 <- correctedPhiYStrq2 + ZSmr %*% estbPhibar22
     }
     
-    varq2Est <- sum((1.0 - p2Smr) * correctedY2Smrq2^2L)
+    varq2Est <- sum((1.0 - p2Smr) * correctedPhiYStrq2^2L)
   }
   else
     varq2Est <- 0.0
@@ -1888,6 +1887,8 @@ If the number of parallel cores changes, the results might be different.
 We define the case $\sigma_1 = \sigma_2$ and $\rho = 1$ as $Y_1 = Y_2$.
 
 ```{r}
+parameters <- parameters[1L,]
+
 resSimulation <- NULL
 set.seed(200L)
 
@@ -1911,13 +1912,17 @@ for (chunk in seq_len(Mtotal / Mchunk))
       Y <- Y0.5
     
     if (parameters[k, "samplingDesign"] == "SRS")
+    {
       n <- parameters[k, "n"]
+      strats <- NULL
+    }
     else if (parameters[k, "samplingDesign"] == "STSRS")
     {
       if (!parameters[k, "n"] %% nbStrata == 0L)
         warning("Non-integer sample size n_h for STSRS. Ceiled.")
     
       n <- rep(ceiling(parameters[k, "n"] / nbStrata), nbStrata) %>% as.integer()
+      strats <- strata
     }
       
     
@@ -1934,7 +1939,7 @@ for (chunk in seq_len(Mtotal / Mchunk))
                       sd1 = 0.0,
                       sd2 = 0.0,
                       n = n,
-                      strata = strata,
+                      strata = strats,
                       rho = 1.0,
                       seed = NULL,
                       nCores = 0L,
