@@ -632,7 +632,7 @@ estim_AV_seq_m1_m2 <- function(Yobs,
     {
       
       correctedY2Strp <- 
-        (pi[maskResp2Str] * (1.0 - p1[maskResp2Str]) * p2[maskResp2Str])^-1L * Yobs[maskResp2Str]
+        (samplingFractionStr * (1.0 - p1[maskResp2Str]) * p2[maskResp2Str])^-1L * Yobs[maskResp2Str]
       # varpEst <-
       #   t(correctedY2Strp) %*%
       #   (covarpSmr / piSmr_mat) %*%
@@ -767,8 +767,7 @@ estim_AV_seq_m1_m2 <- function(Yobs,
     # (we do not weight by phi)
   if (m1Only)
   {
-    
-    correctedY1Srq1 <- correctedY1Strp
+    correctedY1Srq1 <- (piSr * p1Sr)^-1L * Y1Sr
     
     if (correcEW1)
       correctedY1Srq1 <- correctedY1Srq1 + ZSr %*% estLinCoefq1
