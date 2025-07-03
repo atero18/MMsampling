@@ -1131,64 +1131,6 @@ var_expansion_m2 <- function(Y2exp,
 ```
 
 
-
-```{r}
-# var_expansion_m1 <- function(Y1exp,
-#                              pi_mat,
-#                              p1,
-#                              sd1 = 0.0,
-#                              phi = rep(1.0, length(Y1exp)))
-# {
-#   pi <- diag(pi_mat)
-#   
-# 
-#   # Sampling design variability (p, S)
-#   covarPi <- pi2_to_covarInc(pi_mat)
-#   correctedY1p <- pi^-1L * phi * Y1exp
-#   varp <- as.numeric(t(correctedY1p) %*% covarPi %*% correctedY1p) +
-#     sum(pi^-1L * (1.0 - pi) * phi^2L) * sd1^2L
-# 
-#   # m1 selection variability (q1, R1)
-#   # with the independence between p and q1
-#   varq1 <- sum((pi * p1)^-1L * (1.0 - p1) * phi^2L * (sd1^2L + Y1exp^2L))
-# 
-#   # Y1 variability
-#   varY1 <- sum(phi^2L) * sd1^2L
-# 
-#   varp + varq1 + varY1
-# }
-```
-
-```{r}
-# var_expansion_m2 <- function(Y2exp,
-#                              pi_mat,
-#                              p1, p2,
-#                              sd2 = 0.0,
-#                              phi = rep(1.0, length(Y2exp)))
-# {
-#   pi <- diag(pi_mat)
-#   p1bar <- 1.0 - p1
-# 
-#   # Sampling design variability (p, S)
-#   covarPi <- pi2_to_covarInc(pi_mat)
-#   correctedY2p <- pi^-1L * phi * Y2exp
-#   varp <- as.numeric(t(correctedY2p) %*% covarPi %*% correctedY2p) +
-#     sum(pi^-1L * (1.0 - pi) * phi^2L) * sd2^2L
-# 
-#   # m1 selection variability (q1, R1)
-#   varPhiY2 <- phi^2L * (sd2^2L + Y2exp^2L) # Variance of each phi_k y_2k
-#   varq1 <- sum((pi * p1bar)^-1L * p1 * varPhiY2)
-# 
-#   # m2 selection variability (q2, R2)
-#   varq2 <- sum((pi * p1bar * p2)^-1L * (1.0 - p2) * varPhiY2)
-# 
-#   # Y2 variability
-#   varY2 <- sum(phi^2L) * sd2^2L
-# 
-#   varp + varq1 + varq2 + varY2
-# }
-```
-
 ```{r}
 var_expansion_a <- function(Yexp,
                             pi_mat,
@@ -1208,14 +1150,22 @@ var_expansion_as_eq_no_p1 <- function(Yexp,
   pi <- diag(pi_mat)
 
   # Sampling design variability (p, S)
-  correctedYp <- Yexp / pi
-  
+
   ## SRS CASE
   pikl <- pi_mat[1L, 2L]
   samplingFraction <- pi[1L]
   covpkl <- -samplingFraction * (1.0 - samplingFraction) / (N - 1L)
-  varp <- covpkl * sum(correctedYp %*% t(correctedYp)) +
-    sum(samplingFraction^-2L * (samplingFraction * (1.0 - samplingFraction) - covpkl))
+  varp <- covpkl * samplingFraction^-2L * sum(Yexp %*% t(Yexp)) +
+    samplingFraction^-1L * sum((Yexp^2L + sd^2L)) -
+    samplingFraction^-2L * sum(Yexp^2L)
+  
+  # m2 selection variability (q2, R2)
+  varq2 <- sum((pi * p2)^-1L * p1 * (1.0 - p2) * (Yexp^2L + sd^2L))
+  
+  # potential outcomes variability
+  varY <- N * sd^2L
+  
+  varp + varq2 + varY
 }
 ```
 
