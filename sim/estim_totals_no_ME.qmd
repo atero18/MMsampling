@@ -1875,7 +1875,7 @@ simulation_tphi <- function(Z,
 
 ```{r}
 Mchunk <- 2500L
-Mtotal <- 7500L
+Mtotal <- 5000L
 ```
 
 The different lines of the grid have the same seed. It is useful to run in different orders the evaluations and because the results from different parameters are never mixed there is no independency issue.
@@ -1886,7 +1886,7 @@ If the number of parallel cores changes, the results might be different.
 We define the case $\sigma_1 = \sigma_2$ and $\rho = 1$ as $Y_1 = Y_2$.
 
 ```{r}
-# parameters <- parameters[4L,]
+parameters <- parameters[1L,]
 
 resSimulation <- NULL
 set.seed(200L)
@@ -1941,7 +1941,7 @@ for (chunk in seq_len(Mtotal / Mchunk))
                       strata = strats,
                       rho = 1.0,
                       seed = NULL,
-                      nCores = 40L,
+                      nCores = 0L,
                       calcVariance = calcVariance,
                       Y = Y)
     }
