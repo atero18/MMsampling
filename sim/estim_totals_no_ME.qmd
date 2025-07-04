@@ -1874,8 +1874,8 @@ simulation_tphi <- function(Z,
 ## Simulation
 
 ```{r}
-Mchunk <- 10L
-Mtotal <- 10L
+Mchunk <- 2500L
+Mtotal <- 7500L
 ```
 
 The different lines of the grid have the same seed. It is useful to run in different orders the evaluations and because the results from different parameters are never mixed there is no independency issue.
@@ -1960,7 +1960,7 @@ for (chunk in seq_len(Mtotal / Mchunk))
   aws.s3::s3write_using(
     resSimulation,
     FUN = saveRDS,
-    object = glue("2025_07_01_{Mchunk}_1_to_{chunk}.rds"),
+    object = glue("2025_07_04_{Mchunk}_1_to_{chunk}.rds"),
     bucket = "ttassin/multimode/article_no_ME",
     opts = list("region" = "")
   )
@@ -1969,7 +1969,7 @@ for (chunk in seq_len(Mtotal / Mchunk))
   aws.s3::s3write_using(
     seedEndChunk,
     FUN = write,
-    object = glue("2025_07_01_{Mchunk}_seed_end_{chunk}.txt"),
+    object = glue("2025_07_04_{Mchunk}_seed_end_{chunk}.txt"),
     bucket = "ttassin/multimode/article_no_ME",
     opts = list("region" = "")
   )
@@ -1990,7 +1990,7 @@ resSimulation <-
 aws.s3::s3write_using(
     resSimulation,
     FUN = saveRDS,
-    object = glue("2025_07_01_10000.rds"),
+    object = glue("2025_07_04_{Mtotal}.rds"),
     bucket = "ttassin/multimode/article_no_ME",
     opts = list("region" = "")
   )
