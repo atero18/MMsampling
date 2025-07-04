@@ -791,21 +791,21 @@ estim_AV_seq_m1_m2 <- function(Yobs,
     # the variance estimator based on Sr and the one based on Smr
   else
   {
-     correctedPhiYStrq1 <- piSa^-1L * 
-       (p1Sa^-1L * phi[maskRespStr] * Y1Est[maskRespStr] - 
-          p1barSa^-1L * phibar[maskRespStr] * Y2Est[maskRespStr])
+     correctedPhiYq1 <- piSa^-1L * 
+       (p1Sa^-1L * phi[maskSa] * Y1Est[maskSa] - 
+          p1barSa^-1L * phibar[maskSa] * Y2Est[maskSa])
      
      if (correcEW1)
      {
-       correctedPhiYStrq1 <- 
-         correctedPhiYStrq1 + Z[maskRespStr, , drop = FALSE] %*% estLinCoefq1
+       correctedPhiYq1 <- 
+         correctedPhiYq1 + Z[maskSa, , drop = FALSE] %*% estLinCoefq1
      }
     
       weightsq1 <- numeric(na)
       weightsq1[maskm1Sa] <- weightSrEstVq1 * (1.0 - p1Sr)
       weightsq1[!maskm1Sa] <- (1.0 - weightSrEstVq1) * (p1Smr * p2Smr^-1L)
       
-      varq1Est <- sum(weightsq1 * correctedPhiYStrq1^2L)
+      varq1Est <- sum(weightsq1 * correctedPhiYq1^2L)
   }
   
   
@@ -814,7 +814,7 @@ estim_AV_seq_m1_m2 <- function(Yobs,
   # to use counterfactuals estimators
   if (!m1Only)
   {
-    correctedPhiYStrq2 <- (piSmr * p1barSmr * p2Smr)^-1L * phibarY2Smr
+    correctedPhiY2 <- (piSmr * p1barSmr * p2Smr)^-1L * phibarY2Smr
     if (correcEW2)
     {
       estVPhibar22 <- -crossprod(ZSmr,
@@ -826,10 +826,10 @@ estim_AV_seq_m1_m2 <- function(Yobs,
       estbPhibar22 <- 
         solve(Fisher_Information_Matrix(p2, Z, maskSm)) %*% estVPhibar22
       
-      correctedPhiYStrq2 <- correctedPhiYStrq2 + ZSmr %*% estbPhibar22
+      correctedPhiY2 <- correctedPhiY2 + ZSmr %*% estbPhibar22
     }
     
-    varq2Est <- sum((1.0 - p2Smr) * correctedPhiYStrq2^2L)
+    varq2Est <- sum((1.0 - p2Smr) * correctedPhiY2^2L)
   }
   else
     varq2Est <- 0.0
@@ -1886,7 +1886,7 @@ If the number of parallel cores changes, the results might be different.
 We define the case $\sigma_1 = \sigma_2$ and $\rho = 1$ as $Y_1 = Y_2$.
 
 ```{r}
-parameters <- parameters[1L,]
+parameters <- parameters[4L,]
 
 resSimulation <- NULL
 set.seed(200L)
