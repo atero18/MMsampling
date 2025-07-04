@@ -1827,40 +1827,40 @@ simulation_tphi <- function(Z,
   
   res <- do.call("rbind", res)
   
-  # trueVar1TW <- var_expansion_m1(Yexp, pi_mat, p1, sd1)
-  # 
-  # trueVar2TW <- var_expansion_m2(Yexp, pi_mat, p1, p2, sd2)
-  # 
-  # if (sd1 == sd2 && rho == 1.0)
-  #   trueVaraTW <- var_expansion_a(Yexp, pi_mat, pa, sd1)
-  # else
-  #   trueVaraTW <- NA_real_
-  # 
-  # trueVarPhi <- var_expansion_m1_m2(Yexp, Yexp, 
-  #                                   pi_mat, 
-  #                                   p1, p2, 
-  #                                   sd1, sd2, rho * sd1 * sd2, phi)
-  # 
-  # trueVarNop1 <- var_expansion_m1_m2(Yexp, Yexp, 
-  #                                    pi_mat, 
-  #                                    p1, p2, 
-  #                                    sd1, sd2, rho * sd1 * sd2, p1)
-  # 
-  # trueVar <- rep.int(c(trueVar1TW, NA_real_, 
-  #                      trueVar2TW, NA_real_,
-  #                      trueVaraTW, NA_real_,
-  #                      trueVarPhi, NA_real_,
-  #                      NA_real_, NA_real_,
-  #                      trueVarNop1, NA_real_),
-  #                    times = M)
-  
-  trueVar <- rep.int(c(NA_real_, NA_real_, 
+  trueVar1TW <- var_expansion_m1(Yexp, pi_mat, p1, sd1)
+
+  trueVar2TW <- var_expansion_m2(Yexp, pi_mat, p1, p2, sd2)
+
+  if (sd1 == sd2 && rho == 1.0)
+    trueVaraTW <- var_expansion_a(Yexp, pi_mat, pa, sd1)
+  else
+    trueVaraTW <- NA_real_
+
+  trueVarPhi <- var_expansion_m1_m2(Yexp, Yexp,
+                                    pi_mat,
+                                    p1, p2,
+                                    sd1, sd2, rho * sd1 * sd2, phi)
+
+  trueVarNop1 <- var_expansion_m1_m2(Yexp, Yexp,
+                                     pi_mat,
+                                     p1, p2,
+                                     sd1, sd2, rho * sd1 * sd2, p1)
+
+  trueVar <- rep.int(c(trueVar1TW, NA_real_,
+                       trueVar2TW, NA_real_,
+                       trueVaraTW, NA_real_,
+                       trueVarPhi, NA_real_,
                        NA_real_, NA_real_,
-                       NA_real_, NA_real_,
-                       NA_real_, NA_real_,
-                       NA_real_, NA_real_,
-                       NA_real_, NA_real_),
+                       trueVarNop1, NA_real_),
                      times = M)
+  
+  # trueVar <- rep.int(c(NA_real_, NA_real_, 
+  #                      NA_real_, NA_real_,
+  #                      NA_real_, NA_real_,
+  #                      NA_real_, NA_real_,
+  #                      NA_real_, NA_real_,
+  #                      NA_real_, NA_real_),
+  #                    times = M)
   
   res <- res %>% 
     mutate(expEstimand = sum(Yexp), .after = "estimand") %>% 
@@ -1886,7 +1886,7 @@ If the number of parallel cores changes, the results might be different.
 We define the case $\sigma_1 = \sigma_2$ and $\rho = 1$ as $Y_1 = Y_2$.
 
 ```{r}
-parameters <- parameters[4L,]
+# parameters <- parameters[4L,]
 
 resSimulation <- NULL
 set.seed(200L)
@@ -1941,7 +1941,7 @@ for (chunk in seq_len(Mtotal / Mchunk))
                       strata = strats,
                       rho = 1.0,
                       seed = NULL,
-                      nCores = 0L,
+                      nCores = 40L,
                       calcVariance = calcVariance,
                       Y = Y)
     }
