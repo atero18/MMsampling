@@ -1017,12 +1017,11 @@ estim_AV_as_eq_no_p1 <- function(Yobs,
   maskSr <- modes == "m1"
   maskSmr <- modes == "m2"
   
+  pi <- diag(pi_mat)
+  p2Smr <- p2[maskSmr]
+  
   # Sampling design variability (p, S)
   # There is no correction needed for probabilities estimation
-  pi <- diag(pi_mat)
-
-  weightedYSr <- Yobs[maskSr] / pi[maskSr]
-  weightedYSmr <- Yobs[maskSmr] / (pi[maskSmr] * p2[maskSmr])
   
   # if (is.null(covarp))
   # {
@@ -1035,24 +1034,40 @@ estim_AV_as_eq_no_p1 <- function(Yobs,
   #   covarpSmr <- covarp[maskSmr, maskSmr, drop = FALSE]
   # }
   
-  piklStr <- pi_mat[1L, 2L]
-  samplingFractionStr <- pi[1L]
-  covpklStr <- -samplingFractionStr * (1.0 - samplingFractionStr) / (N - 1L) 
-  
-  p2Smr <- p2[maskSmr]
+  varpEst <- 0.0
+  for (stratum in unique(strata))
+  {
+    NStr <- sum(strata == stratum)
+    maskSampledStratum <- strata == stratum & I
+    nStr <- sum(maskSampledStratum)
+    
+    piklStr <- (nStr * (nStr - 1L)) / (NStr * (NStr - 1L))
+    samplingFractionStr <- nStr / NStr
+    
+    covpklStr <- -samplingFractionStr * (1.0 - samplingFractionStr) /
+      (NStr - 1L)
+    
+    maskResp1Str <- strata == stratum & modes == "m1" 
+    maskResp2Str <- strata == stratum & modes == "m2"
+    maskRespStr <- maskResp1Str | maskResp2Str
+    
+    weightedY1Str <- Yobs[maskResp1Str] / pi[maskResp1Str]
+    weightedY2Str <- Yobs[maskResp2Str] / (pi[maskResp2Str] * p2[maskResp2Str])
   
   # varpEst <- t(weightedYSr) %*% (covarpSr / piSr_mat) %*% weightedYSr + 
   #   t(weightedYSmr) %*% (covarpSmr / piSmr_mat) %*% weightedYSmr +
   #   sum((1.0 - piSmr) * weightedYSmr^2L * (p2Smr - 1.0))
   
   # SRS
-  varpEst <- (covpklStr / piklStr) * # sum(tcrossprod(weightedYSr)) +
-    sum(weightedYSr %*% t(weightedYSr)) + 
+  varpEst <- varpEst + 
+    (covpklStr / piklStr) * # sum(tcrossprod(weightedYSr)) +
+    sum(weightedY1Str %*% t(weightedY1Str)) + 
     # (covpklStr / piklStr) * sum(tcrossprod(weightedYSmr)) + 
     (covpklStr / piklStr) *
-    sum(weightedYSmr %*% t(weightedYSmr)) +
-    sum(((1.0 - samplingFractionStr) - (covpklStr / piklStr)) * weightedYSr^2L) +
-    sum(((1.0 - samplingFractionStr) * p2Smr - (covpklStr / piklStr)) * weightedYSmr^2L)
+    sum(weightedY2Str %*% t(weightedY2Str)) +
+    sum(((1.0 - samplingFractionStr) - (covpklStr / piklStr)) * weightedY1Str^2L) +
+    sum(((1.0 - samplingFractionStr) * p2Smr - (covpklStr / piklStr)) * weightedY2Str^2L)
+  }
   
   # m2 selection variability (q2, R2)
   if (correcEW2)
@@ -1874,8 +1889,8 @@ simulation_tphi <- function(Z,
 ## Simulation
 
 ```{r}
-Mchunk <- 1000
-Mtotal <- 1000
+Mchunk <- 10
+Mtotal <- 10
 ```
 
 The different lines of the grid have the same seed. It is useful to run in different orders the evaluations and because the results from different parameters are never mixed there is no independency issue.
