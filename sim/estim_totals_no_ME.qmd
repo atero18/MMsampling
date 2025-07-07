@@ -1012,7 +1012,7 @@ estim_AV_as_eq_no_p1 <- function(Yobs,
                                  covarp = NULL,
                                  strata = rep(1L, length(Yobs)))
 {
-  N <- length(pi)
+  N <- length(Yobs)
   
   maskSr <- modes == "m1"
   maskSmr <- modes == "m2"
@@ -1022,7 +1022,6 @@ estim_AV_as_eq_no_p1 <- function(Yobs,
   pi <- diag(pi_mat)
 
   weightedYSr <- Yobs[maskSr] / pi[maskSr]
-
   weightedYSmr <- Yobs[maskSmr] / (pi[maskSmr] * p2[maskSmr])
   
   # if (is.null(covarp))
@@ -1036,7 +1035,6 @@ estim_AV_as_eq_no_p1 <- function(Yobs,
   #   covarpSmr <- covarp[maskSmr, maskSmr, drop = FALSE]
   # }
   
-  browser()
   piklStr <- pi_mat[1L, 2L]
   samplingFractionStr <- pi[1L]
   covpklStr <- -samplingFractionStr * (1.0 - samplingFractionStr) / (N - 1L) 
@@ -1051,6 +1049,7 @@ estim_AV_as_eq_no_p1 <- function(Yobs,
   varpEst <- (covpklStr / piklStr) * # sum(tcrossprod(weightedYSr)) +
     sum(weightedYSr %*% t(weightedYSr)) + 
     # (covpklStr / piklStr) * sum(tcrossprod(weightedYSmr)) + 
+    (covpklStr / piklStr) *
     sum(weightedYSmr %*% t(weightedYSmr)) +
     sum(((1.0 - samplingFractionStr) - (covpklStr / piklStr)) * weightedYSr^2L) +
     sum(((1.0 - samplingFractionStr) * p2Smr - (covpklStr / piklStr)) * weightedYSmr^2L)
@@ -1875,8 +1874,8 @@ simulation_tphi <- function(Z,
 ## Simulation
 
 ```{r}
-Mchunk <- 10L
-Mtotal <- 10L
+Mchunk <- 1000
+Mtotal <- 1000
 ```
 
 The different lines of the grid have the same seed. It is useful to run in different orders the evaluations and because the results from different parameters are never mixed there is no independency issue.
@@ -1942,7 +1941,7 @@ for (chunk in seq_len(Mtotal / Mchunk))
                       strata = strats,
                       rho = 1.0,
                       seed = NULL,
-                      nCores = 0L,
+                      nCores = 40L,
                       calcVariance = calcVariance,
                       Y = Y)
     }
