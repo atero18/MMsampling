@@ -1066,10 +1066,11 @@ estim_AV_as_eq_no_p1 <- function(Yobs,
     (covpklStr / piklStr) *
     sum(weightedY2Str %*% t(weightedY2Str)) +
     sum(((1.0 - samplingFractionStr) - (covpklStr / piklStr)) * weightedY1Str^2L) +
-    sum(((1.0 - samplingFractionStr) * p2Smr - (covpklStr / piklStr)) * weightedY2Str^2L)
+    sum(((1.0 - samplingFractionStr) * p2[maskResp2Str] - (covpklStr / piklStr)) * weightedY2Str^2L)
   }
   
   # m2 selection variability (q2, R2)
+  weightedYSmr <- Yobs[maskSmr] / (pi[maskSmr] * p2Smr)
   if (correcEW2)
   {
     ZSmr <- Z[maskSmr, , drop = FALSE]
@@ -1889,8 +1890,8 @@ simulation_tphi <- function(Z,
 ## Simulation
 
 ```{r}
-Mchunk <- 10
-Mtotal <- 10
+Mchunk <- 2000
+Mtotal <- 2000
 ```
 
 The different lines of the grid have the same seed. It is useful to run in different orders the evaluations and because the results from different parameters are never mixed there is no independency issue.
@@ -1956,7 +1957,7 @@ for (chunk in seq_len(Mtotal / Mchunk))
                       strata = strats,
                       rho = 1.0,
                       seed = NULL,
-                      nCores = 40L,
+                      nCores = 0L,
                       calcVariance = calcVariance,
                       Y = Y)
     }
