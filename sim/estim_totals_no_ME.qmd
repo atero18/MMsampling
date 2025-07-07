@@ -559,7 +559,7 @@ estim_AV_seq_m1_m2 <- function(Yobs,
   if (!m1Only && !m2Only)
   {
     if (eqPotOut)
-      Y1Est <- Y2Est <- Yobs[maskSa]
+      Y1Est <- Y2Est <- Yobs
     else
     {
       YEst <- estim_counterfactuals(Yobs, modes, Z, ...)
@@ -1036,6 +1036,7 @@ estim_AV_as_eq_no_p1 <- function(Yobs,
   #   covarpSmr <- covarp[maskSmr, maskSmr, drop = FALSE]
   # }
   
+  browser()
   piklStr <- pi_mat[1L, 2L]
   samplingFractionStr <- pi[1L]
   covpklStr <- -samplingFractionStr * (1.0 - samplingFractionStr) / (N - 1L) 
@@ -1874,8 +1875,8 @@ simulation_tphi <- function(Z,
 ## Simulation
 
 ```{r}
-Mchunk <- 2500L
-Mtotal <- 7500L
+Mchunk <- 10L
+Mtotal <- 10L
 ```
 
 The different lines of the grid have the same seed. It is useful to run in different orders the evaluations and because the results from different parameters are never mixed there is no independency issue.
@@ -1899,7 +1900,7 @@ pb <- progress::progress_bar$new(format = "[:bar] :percent eta: :eta",
 pb$tick(0L)
 
 constPhi <- 0.5
-phi = rep(constPhi, N)
+phi <- rep(constPhi, N)
 
 for (chunk in seq_len(Mtotal / Mchunk))
 {
@@ -1941,7 +1942,7 @@ for (chunk in seq_len(Mtotal / Mchunk))
                       strata = strats,
                       rho = 1.0,
                       seed = NULL,
-                      nCores = 40L,
+                      nCores = 0L,
                       calcVariance = calcVariance,
                       Y = Y)
     }
