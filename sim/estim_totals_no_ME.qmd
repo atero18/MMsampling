@@ -1890,8 +1890,8 @@ simulation_tphi <- function(Z,
 ## Simulation
 
 ```{r}
-Mchunk <- 2000
-Mtotal <- 2000
+Mchunk <- 2500L
+Mtotal <- 2500L
 ```
 
 The different lines of the grid have the same seed. It is useful to run in different orders the evaluations and because the results from different parameters are never mixed there is no independency issue.
@@ -1957,7 +1957,7 @@ for (chunk in seq_len(Mtotal / Mchunk))
                       strata = strats,
                       rho = 1.0,
                       seed = NULL,
-                      nCores = 0L,
+                      nCores = 40L,
                       calcVariance = calcVariance,
                       Y = Y)
     }
@@ -1976,7 +1976,7 @@ for (chunk in seq_len(Mtotal / Mchunk))
   aws.s3::s3write_using(
     resSimulation,
     FUN = saveRDS,
-    object = glue("2025_07_04_{Mchunk}_1_to_{chunk}.rds"),
+    object = glue("2025_07_07_{Mchunk}_1_to_{chunk}.rds"),
     bucket = "ttassin/multimode/article_no_ME",
     opts = list("region" = "")
   )
@@ -1985,7 +1985,7 @@ for (chunk in seq_len(Mtotal / Mchunk))
   aws.s3::s3write_using(
     seedEndChunk,
     FUN = write,
-    object = glue("2025_07_04_{Mchunk}_seed_end_{chunk}.txt"),
+    object = glue("2025_07_07_{Mchunk}_seed_end_{chunk}.txt"),
     bucket = "ttassin/multimode/article_no_ME",
     opts = list("region" = "")
   )
@@ -2006,7 +2006,7 @@ resSimulation <-
 aws.s3::s3write_using(
     resSimulation,
     FUN = saveRDS,
-    object = glue("2025_07_04_{Mtotal}.rds"),
+    object = glue("2025_07_07_{Mtotal}.rds"),
     bucket = "ttassin/multimode/article_no_ME",
     opts = list("region" = "")
   )
