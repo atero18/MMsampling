@@ -216,7 +216,7 @@ piMat_SRS <- memoise::memoise(piMat_SRS)
 
 
 ```{r}
-f <- 1.6 / 10.0
+f <- 1.0 / 10.0
 n <- f * N
 expSizeSr <- f * sum(p1)
 
@@ -273,40 +273,45 @@ logit <- function(p) log(p / (1.0 - p))
 ```
 
 ```{r}
-score_logit_a <- function(alphaa, Z, p1, p2)
-{
-  paPrime <- p1 + (1.0 - p1) * p2
-  pa <- expit(Z %*% alphaa)
-  pabar <- 1.0 - pa
-  
-  2.0 * t(Z) %*% (pa * pabar * (pa - paPrime))
-}
+# score_logit_a <- function(alphaa, Z, p1, p2)
+# {
+#   paPrime <- p1 + (1.0 - p1) * p2
+#   pa <- expit(Z %*% alphaa)
+#   pabar <- 1.0 - pa
+#   
+#   2.0 * t(Z) %*% (pa * pabar * (pa - paPrime))
+# }
+# 
+# hessian_logit_a <- function(alphaa, Z, p1, p2)
+# {
+#   paPrime <- p1 + (1.0 - p1) * p2
+#   pa <- expit(Z %*% alphaa)
+#   pabar <- 1.0 - pa
+#   
+#   2.0 * diag(pa * pabar^2L * (pa - paPrime)) * t(Z) %*% Z + 
+#     2.0 * diag(pa^2L * pabar * (pa - paPrime)) * t(Z) %*% Z + 
+#     2.0 * diag(pa^2L * pabar^2L) * t(Z) %*% Z
+# }
+# 
+# # Initial vector
+# alphaa <- c(+1.3, -0.01, -0.35)
+# 
+# it <- 0L
+# 
+# while (it < 50L)
+# {
+#   it <- it + 1L
+#   alphaa <- alphaa - solve(hessian_logit_a(alphaa, Z, p1, p2)) %*% score_logit_a(alphaa, Z, p1, p2)
+# }
+# 
+# rm(it)
+# 
+# alphaa <- as.vector(alphaa)
+# pa <- gen_selection_probabilities(Z, alphaa)
+```
 
-hessian_logit_a <- function(alphaa, Z, p1, p2)
-{
-  paPrime <- p1 + (1.0 - p1) * p2
-  pa <- expit(Z %*% alphaa)
-  pabar <- 1.0 - pa
-  
-  2.0 * diag(pa * pabar^2L * (pa - paPrime)) * t(Z) %*% Z + 
-    2.0 * diag(pa^2L * pabar * (pa - paPrime)) * t(Z) %*% Z + 
-    2.0 * diag(pa^2L * pabar^2L) * t(Z) %*% Z
-}
-
-# Initial vector
-alphaa <- c(+1.3, -0.01, -0.35)
-
-it <- 0L
-
-while (it < 50L)
-{
-  it <- it + 1L
-  alphaa <- alphaa - solve(hessian_logit_a(alphaa, Z, p1, p2)) %*% score_logit_a(alphaa, Z, p1, p2)
-}
-
-rm(it)
-
-alphaa <- as.vector(alphaa)
+```{r}
+alphaa <- solve(t(Z) %*% Z) %*% colSums(logit(pRep) * Z)
 pa <- gen_selection_probabilities(Z, alphaa)
 ```
 
